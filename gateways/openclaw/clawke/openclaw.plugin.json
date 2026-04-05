@@ -1,0 +1,10 @@
+{
+  "id": "clawke",
+  "version": "1.0.2",
+  "channels": ["clawke"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

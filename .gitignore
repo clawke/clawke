@@ -1,0 +1,59 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Node.js
+node_modules/
+dist/
+
+# Flutter
+build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+*.g.dart
+
+# Server runtime
+server/.env
+server/clawke.db
+server/db.sqlite
+server/data/
+
+# iOS
+client/ios/Pods/
+client/ios/.symlinks/
+client/ios/ExportOptions.plist
+
+# macOS
+client/macos/Pods/
+client/macos/.symlinks/
+
+# Android
+client/android/key.properties
+client/android/keystore/
+client/android/.gradle/
+client/android/app/build/
+*.jks
+*.keystore
+
+# Relay (internal auth)
+relay-server/frp-auth/
+
+# Internal
+.agents/
+.claude/
+.superpowers/
+docs/
+CLAUDE.md
+bak/
+.worktrees/
+extends/
+dump.rdb
+scripts/
+client/test_download.dart

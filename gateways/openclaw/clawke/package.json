@@ -1,0 +1,8 @@
+{
+  "name": "clawke-gateway",
+  "version": "1.0.2",
+  "private": true,
+  "dependencies": {
+    "ws": "^8.19.0"
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "dist/index.js",
+  "bin": {
+    "clawke": "dist/cli/clawke.js"
+  },
+  "scripts": {
+    "start": "node dist/index.js",
+    "dev": "npm run build && node dist/index.js",
+    "dev:mock": "npm run build && MODE=mock node dist/index.js",
+    "clawke": "node dist/cli/clawke.js",
+    "build": "tsc",
+    "prepare": "npm run build",
+    "build:check": "tsc --noEmit",
+    "test": "node --test --test-concurrency=1 --test-force-exit 'test/**/*.test.js'"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "better-sqlite3": "^12.8.0",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "multer": "^2.1.1",
+    "sharp": "^0.34.5",
+    "ws": "^8.19.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.1.0",
+    "@types/node": "^25.5.2",
+    "@types/ws": "^8.18.1",
+    "nodemon": "^3.1.14",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2"
+  }
+}

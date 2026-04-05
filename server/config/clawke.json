@@ -1,0 +1,19 @@
+{
+  "server": {
+    "mode": "openclaw",
+    "clientPort": 8765,
+    "upstreamPort": 8766,
+    "mediaPort": 8781,
+    "fastMode": false,
+    "logLevel": "info"
+  },
+  "openclaw": {
+    "sharedFs": false,
+    "mediaBaseUrl": "http://127.0.0.1:8781"
+  },
+  "relay": {
+    "enable": true,
+    "serverAddr": "relay.clawke.ai",
+    "serverPort": 7000
+  }
+}

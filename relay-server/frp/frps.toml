@@ -1,0 +1,9 @@
+bindPort = 7000
+vhostHTTPPort = 8780
+subDomainHost = "relay.clawke.ai"
+
+[[httpPlugins]]
+name = "clawke-auth"
+addr = "127.0.0.1:9000"
+path = "/frp-auth"
+ops = ["Login", "NewProxy"]

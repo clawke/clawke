@@ -1,0 +1,4 @@
+{
+  "min_supported_version": "0.1.0",
+  "force_upgrade_below": "0.0.5"
+}
