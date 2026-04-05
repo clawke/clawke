@@ -32,6 +32,10 @@ jobs:
         working-directory: client
         run: flutter pub get
 
+      - name: Generate code (Drift ORM)
+        working-directory: client
+        run: dart run build_runner build --delete-conflicting-outputs
+
       - name: Build APK
         working-directory: client
         run: flutter build apk --release
@@ -56,6 +60,10 @@ jobs:
       - name: Install dependencies
         working-directory: client
         run: flutter pub get
+
+      - name: Generate code (Drift ORM)
+        working-directory: client
+        run: dart run build_runner build --delete-conflicting-outputs
 
       - name: Build macOS
         working-directory: client
@@ -91,6 +99,10 @@ jobs:
         working-directory: client
         run: flutter pub get
 
+      - name: Generate code (Drift ORM)
+        working-directory: client
+        run: dart run build_runner build --delete-conflicting-outputs
+
       - name: Build Windows
         working-directory: client
         run: flutter build windows --release
@@ -124,6 +136,10 @@ jobs:
       - name: Install dependencies
         working-directory: client
         run: flutter pub get
+
+      - name: Generate code (Drift ORM)
+        working-directory: client
+        run: dart run build_runner build --delete-conflicting-outputs
 
       - name: Build Linux
         working-directory: client
