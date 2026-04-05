@@ -57,3 +57,7 @@ extends/
 dump.rdb
 scripts/
 client/test_download.dart
+
+# Private (local only)
+internal-docs/
+tests/
