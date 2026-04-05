@@ -11,19 +11,22 @@ A secure, edge-cloud collaborative AI workspace. Clawke connects your local serv
 ┌─────────────┐        CUP/WS        ┌──────────────┐       WS        ┌──────────────┐
 │ Flutter App  │ ◄──────────────────► │ Clawke Server│ ◄─────────────► │   OpenClaw    │
 │  (iOS/Mac)   │    Downstream        │   (Node.js)  │    Upstream     │   Gateway     │
-└─────────────┘                       └──────────────┘                 └──────┬───────┘
-                                                                              │
-                                                                       ┌──────▼───────┐
-                                                                       │  AI Provider  │
+└─────────────┘                       └──────┬───────┘                 └──────┬───────┘
+                                              │                               │
+                                              │        WS              ┌──────▼───────┐
+                                              └──────────────────────► │  AI Provider  │
                                                                        │ (Claude, etc) │
-                                                                       └──────────────┘
+                                              ┌──────────────┐         └──────▲───────┘
+                                              │   nanobot     │               │
+                                              │   Gateway     │ ──────────────┘
+                                              └──────────────┘
 ```
 
 ## Features
 
 - **CUP Protocol** — Streaming AI responses with thinking blocks, tool calls, and usage tracking
 - **SDUI** — Server-driven UI: dashboards, forms, dialogs rendered from server instructions
-- **Multi-model** — Works with any AI provider via OpenClaw gateway
+- **Multi-gateway** — Pluggable AI backends: [OpenClaw](https://github.com/nicepkg/openclaw) and [nanobot](https://github.com/swuecho/nanobot) supported
 - **Media** — Image/PDF/text file upload and inline rendering
 - **Relay** — Built-in tunnel for remote access without port forwarding
 
@@ -74,7 +77,8 @@ clawke/
 └── relay-server/        # Relay server config
 ```
 
-> 📖 For advanced configuration, Mock Mode, testing, and build instructions, see [CONFIGURATION.md](docs/CONFIGURATION.md).
+> 📖 For advanced configuration, see [CONFIGURATION.md](docs/CONFIGURATION.md).  
+> 🔌 To build your own gateway, see [GATEWAY_INTEGRATION.md](docs/GATEWAY_INTEGRATION.md).
 
 ## Contributing
 

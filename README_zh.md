@@ -11,19 +11,22 @@
 ┌─────────────┐        CUP/WS        ┌──────────────┐       WS        ┌──────────────┐
 │ Flutter App  │ ◄──────────────────► │ Clawke Server│ ◄─────────────► │   OpenClaw    │
 │  (iOS/Mac)   │    下行链路           │   (Node.js)  │    上行链路     │   Gateway     │
-└─────────────┘                       └──────────────┘                 └──────┬───────┘
-                                                                              │
-                                                                       ┌──────▼───────┐
-                                                                       │  AI 提供商    │
+└─────────────┘                       └──────┬───────┘                 └──────┬───────┘
+                                              │                               │
+                                              │        WS              ┌──────▼───────┐
+                                              └──────────────────────► │  AI 提供商    │
                                                                        │ (Claude 等)   │
-                                                                       └──────────────┘
+                                              ┌──────────────┐         └──────▲───────┘
+                                              │   nanobot     │               │
+                                              │   Gateway     │ ──────────────┘
+                                              └──────────────┘
 ```
 
 ## 功能特性
 
 - **CUP 协议** — AI 流式响应，支持思考块、工具调用和用量统计
 - **SDUI** — 服务端驱动 UI：仪表盘、表单、对话框由服务端指令渲染
-- **多模型** — 通过 OpenClaw 网关支持任意 AI 提供商
+- **多网关** — 可插拔 AI 后端：已支持 [OpenClaw](https://github.com/nicepkg/openclaw) 和 [nanobot](https://github.com/swuecho/nanobot)
 - **媒体** — 图片/PDF/文本文件上传与内联渲染
 - **Relay** — 内置隧道，无需端口转发即可远程访问
 
@@ -74,7 +77,8 @@ clawke/
 └── relay-server/        # Relay 服务配置
 ```
 
-> 📖 高级配置、Mock 模式、测试和构建说明，请参阅 [CONFIGURATION_zh.md](docs/CONFIGURATION_zh.md)。
+> 📖 高级配置请参阅 [CONFIGURATION_zh.md](docs/CONFIGURATION_zh.md)。  
+> 🔌 自建网关接入请参阅 [GATEWAY_INTEGRATION.md](docs/GATEWAY_INTEGRATION.md)。
 
 ## 贡献
 
