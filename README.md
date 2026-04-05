@@ -25,7 +25,6 @@ A secure, edge-cloud collaborative AI workspace. Clawke connects your local serv
 - **Multi-model** — Works with any AI provider via OpenClaw gateway
 - **Media** — Image/PDF/text file upload and inline rendering
 - **Relay** — Built-in tunnel for remote access without port forwarding
-- **Mock Mode** — Full offline development with simulated AI responses
 
 ## Quick Start
 
@@ -49,13 +48,6 @@ The server will:
 3. Start WebSocket server on port 8765 (client) and 8766 (upstream)
 4. Start HTTP/media server on port 8781
 
-### Mock Mode (no AI provider needed)
-
-```bash
-cd server
-MODE=mock npm start
-```
-
 ### Start Client
 
 ```bash
@@ -76,33 +68,6 @@ clawke/
 ├── gateways/            # OpenClaw gateway plugin
 │   └── openclaw/clawke/
 └── relay-server/        # Relay server config
-```
-
-## Configuration
-
-Server config is stored at `~/.clawke/clawke.json` (auto-created from template on first run):
-
-```json
-{
-  "server": {
-    "mode": "openclaw",
-    "clientPort": 8765,
-    "upstreamPort": 8766,
-    "mediaPort": 8781
-  },
-  "relay": {
-    "enable": true,
-    "serverAddr": "relay.clawke.ai",
-    "serverPort": 7000
-  }
-}
-```
-
-## Testing
-
-```bash
-cd server
-npm test                 # Run all 42 test cases
 ```
 
 ## Contributing

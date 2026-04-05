@@ -25,7 +25,6 @@
 - **多模型** — 通过 OpenClaw 网关支持任意 AI 提供商
 - **媒体** — 图片/PDF/文本文件上传与内联渲染
 - **Relay** — 内置隧道，无需端口转发即可远程访问
-- **Mock 模式** — 完整的离线开发，模拟 AI 响应
 
 ## 快速开始
 
@@ -49,13 +48,6 @@ npx clawke server start      # 启动 Clawke 服务
 3. 启动 WebSocket 服务（8765 端口：客户端，8766 端口：上行）
 4. 启动 HTTP/媒体服务（8781 端口）
 
-### Mock 模式（无需 AI 提供商）
-
-```bash
-cd server
-MODE=mock npm start
-```
-
 ### 启动客户端
 
 ```bash
@@ -76,33 +68,6 @@ clawke/
 ├── gateways/            # OpenClaw Gateway 插件
 │   └── openclaw/clawke/
 └── relay-server/        # Relay 服务配置
-```
-
-## 配置
-
-服务端配置存储在 `~/.clawke/clawke.json`（首次运行时自动从模板创建）：
-
-```json
-{
-  "server": {
-    "mode": "openclaw",
-    "clientPort": 8765,
-    "upstreamPort": 8766,
-    "mediaPort": 8781
-  },
-  "relay": {
-    "enable": true,
-    "serverAddr": "relay.clawke.ai",
-    "serverPort": 7000
-  }
-}
-```
-
-## 测试
-
-```bash
-cd server
-npm test                 # 运行全部 42 个测试用例
 ```
 
 ## 贡献
