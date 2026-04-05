@@ -66,6 +66,8 @@ flutter pub get
 flutter run -d ios        # iOS
 flutter run -d macos      # macOS
 flutter run -d android    # Android
+flutter run -d windows    # Windows
+flutter run -d linux      # Linux
 ```
 
 ## 项目结构
