@@ -65,6 +65,15 @@ jobs:
         working-directory: client
         run: dart run build_runner build --delete-conflicting-outputs
 
+      - name: Disable code signing for CI
+        working-directory: client/macos
+        run: |
+          # Switch to ad-hoc signing for CI (no Apple Developer account needed)
+          sed -i '' 's/CODE_SIGN_STYLE = Manual/CODE_SIGN_STYLE = Automatic/' Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/PROVISIONING_PROFILE_SPECIFIER = .*/PROVISIONING_PROFILE_SPECIFIER = "";/' Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/CODE_SIGN_IDENTITY = .*/CODE_SIGN_IDENTITY = "-";/' Runner.xcodeproj/project.pbxproj
+          sed -i '' '/DEVELOPMENT_TEAM/d' Runner.xcodeproj/project.pbxproj
+
       - name: Build macOS
         working-directory: client
         run: flutter build macos --release
