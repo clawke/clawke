@@ -68,11 +68,15 @@ jobs:
       - name: Disable code signing for CI
         working-directory: client/macos
         run: |
-          # Switch to ad-hoc signing for CI (no Apple Developer account needed)
-          sed -i '' 's/CODE_SIGN_STYLE = Manual/CODE_SIGN_STYLE = Automatic/' Runner.xcodeproj/project.pbxproj
-          sed -i '' 's/PROVISIONING_PROFILE_SPECIFIER = .*/PROVISIONING_PROFILE_SPECIFIER = "";/' Runner.xcodeproj/project.pbxproj
-          sed -i '' 's/CODE_SIGN_IDENTITY = .*/CODE_SIGN_IDENTITY = "-";/' Runner.xcodeproj/project.pbxproj
-          sed -i '' '/DEVELOPMENT_TEAM/d' Runner.xcodeproj/project.pbxproj
+          # Completely disable code signing via xcconfig override
+          echo 'CODE_SIGNING_REQUIRED = NO' >> Flutter/Release.xcconfig
+          echo 'CODE_SIGNING_ALLOWED = NO' >> Flutter/Release.xcconfig
+          echo 'CODE_SIGN_IDENTITY = ""' >> Flutter/Release.xcconfig
+          echo 'DEVELOPMENT_TEAM = ""' >> Flutter/Release.xcconfig
+          echo 'PROVISIONING_PROFILE_SPECIFIER = ""' >> Flutter/Release.xcconfig
+          # Also disable for Debug config (used by some build steps)
+          echo 'CODE_SIGNING_REQUIRED = NO' >> Flutter/Debug.xcconfig
+          echo 'CODE_SIGNING_ALLOWED = NO' >> Flutter/Debug.xcconfig
 
       - name: Build macOS
         working-directory: client
