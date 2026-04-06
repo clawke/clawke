@@ -10,18 +10,30 @@
 ## 架构
 
 ```mermaid
-graph LR
-    Client["📱 Flutter 客户端\n(iOS / Mac / Android)"]
-    Server["⚙️ Clawke 服务端\n(Node.js)"]
-    OC["OpenClaw\nGateway"]
-    NB["nanobot\nGateway"]
-    AI["🤖 AI 提供商\n(Claude, GPT …)"]
+graph TD
+    subgraph Client ["📱 客户端"]
+        direction LR
+        C1["iOS"] ~~~ C2["Android"] ~~~ C3["Mac"] ~~~ C4["Windows"] ~~~ C5["Linux"]
+    end
 
-    Client <-->|"CUP / WebSocket\n(下行链路)"| Server
-    Server <-->|"WebSocket\n(上行链路)"| OC
-    Server <-->|"WebSocket\n(上行链路)"| NB
-    OC --> AI
-    NB --> AI
+    subgraph Core ["⚙️ Clawke 核心"]
+        direction LR
+        R["Relay"] ~~~ S["Clawke Server"] ~~~ G["Gateway"]
+    end
+
+    subgraph Agent ["🤖 Agent"]
+        direction LR
+        A1["OpenClaw"] ~~~ A2["Nanobot"] ~~~ A3["NemoClaw"]
+    end
+
+    subgraph LLM ["🧠 LLM"]
+        direction LR
+        L1["Minimax"] ~~~ L2["Codex"] ~~~ L3["Claude Code"]
+    end
+
+    Client -->|"CUP 协议"| Core
+    Core -->|"WebSocket"| Agent
+    Agent --> LLM
 ```
 
 ## 功能特性

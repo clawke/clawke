@@ -10,18 +10,30 @@ A secure, edge-cloud collaborative AI workspace. Clawke connects your local serv
 ## Architecture
 
 ```mermaid
-graph LR
-    Client["📱 Flutter App\n(iOS / Mac / Android)"]
-    Server["⚙️ Clawke Server\n(Node.js)"]
-    OC["OpenClaw\nGateway"]
-    NB["nanobot\nGateway"]
-    AI["🤖 AI Provider\n(Claude, GPT …)"]
+graph TD
+    subgraph Client ["📱 Client"]
+        direction LR
+        C1["iOS"] ~~~ C2["Android"] ~~~ C3["Mac"] ~~~ C4["Windows"] ~~~ C5["Linux"]
+    end
 
-    Client <-->|"CUP / WebSocket\n(Downstream)"| Server
-    Server <-->|"WebSocket\n(Upstream)"| OC
-    Server <-->|"WebSocket\n(Upstream)"| NB
-    OC --> AI
-    NB --> AI
+    subgraph Core ["⚙️ Clawke Core"]
+        direction LR
+        R["Relay"] ~~~ S["Clawke Server"] ~~~ G["Gateway"]
+    end
+
+    subgraph Agent ["🤖 Agent"]
+        direction LR
+        A1["OpenClaw"] ~~~ A2["Nanobot"] ~~~ A3["NemoClaw"]
+    end
+
+    subgraph LLM ["🧠 LLM"]
+        direction LR
+        L1["Minimax"] ~~~ L2["Codex"] ~~~ L3["Claude Code"]
+    end
+
+    Client -->|"CUP Protocol"| Core
+    Core -->|"WebSocket"| Agent
+    Agent --> LLM
 ```
 
 ## Features
