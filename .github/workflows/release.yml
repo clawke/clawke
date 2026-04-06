@@ -68,15 +68,15 @@ jobs:
       - name: Disable code signing for CI
         working-directory: client/macos
         run: |
-          # Completely disable code signing via xcconfig override
+          # Modify pbxproj directly (pbxproj settings override xcconfig)
+          sed -i '' 's/CODE_SIGN_STYLE = Automatic/CODE_SIGN_STYLE = Manual/g' Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/"CODE_SIGN_IDENTITY\[sdk=macosx\*\]" = "Apple Development"/"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-"/g' Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/CODE_SIGN_IDENTITY = "Apple Development"/CODE_SIGN_IDENTITY = "-"/g' Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/DEVELOPMENT_TEAM = .*;/DEVELOPMENT_TEAM = "";/g' Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/CODE_SIGN_ENTITLEMENTS = .*;//g' Runner.xcodeproj/project.pbxproj
+          # Also set via xcconfig as fallback
           echo 'CODE_SIGNING_REQUIRED = NO' >> Flutter/Release.xcconfig
           echo 'CODE_SIGNING_ALLOWED = NO' >> Flutter/Release.xcconfig
-          echo 'CODE_SIGN_IDENTITY = ""' >> Flutter/Release.xcconfig
-          echo 'DEVELOPMENT_TEAM = ""' >> Flutter/Release.xcconfig
-          echo 'PROVISIONING_PROFILE_SPECIFIER = ""' >> Flutter/Release.xcconfig
-          # Also disable for Debug config (used by some build steps)
-          echo 'CODE_SIGNING_REQUIRED = NO' >> Flutter/Debug.xcconfig
-          echo 'CODE_SIGNING_ALLOWED = NO' >> Flutter/Debug.xcconfig
 
       - name: Build macOS
         working-directory: client
