@@ -275,6 +275,109 @@ async function main() {
     process.on('SIGINT', shutdownOC);
     process.on('SIGTERM', shutdownOC);
     return; // 不走通用 shutdown
+  } else if (MODE === 'cli') {
+    // ━━━ CLI Gateway 模式：spawn Claude Code 子进程 ━━━
+    const { CliGateway } = await import('./cli-gateway/cli-gateway.js');
+
+    const cliCwd = process.env.CLI_CWD || process.cwd();
+    const cliSessionId = process.env.CLI_SESSION_ID || undefined;
+    const cliPermMode = process.env.CLI_PERMISSION_MODE || 'default';
+
+    const gateway = new CliGateway({
+      broadcast: (msg) => broadcastToClients(msg),
+    });
+
+    await gateway.start({
+      cwd: cliCwd,
+      sessionId: cliSessionId,
+      permissionMode: cliPermMode,
+    });
+
+    // 覆盖 ping / dashboard handler
+    registry.register('ping', createPingHandler({
+      getConnectedAccountIds: () => gateway.running ? ['cli'] : [],
+      agentName: 'Claude Code',
+    }));
+    registry.register('request_dashboard', createDashboardHandler({
+      getDashboardJson: (c: number, ai: boolean, l: string) => statsCollector.getDashboardJson(c, ai, l),
+      getClientCount: () => clientWss.clients.size,
+      isUpstreamConnected: () => gateway.running,
+    }));
+
+    // 用户消息 → 转发给 Claude Code
+    registry.register('user_message', (ctx) => {
+      const data = ctx.payload.data as Record<string, unknown> || {};
+      const text = (data.text as string) || (data.content as string) || '';
+      if (!text) {
+        console.warn('[CLI] Empty user message, ignoring');
+        return;
+      }
+
+      statsCollector.recordMessage();
+
+      // ACK
+      const ack = cupHandler.handleUserMessage(ctx.payload);
+      ctx.respond(ack);
+      ctx.respond(cupHandler.makeDeliveredAck(ctx.payload.id || null));
+
+      // Forward to Claude Code
+      gateway.handleUserMessage(text);
+    });
+
+    // 中止
+    registry.register('abort', (ctx) => {
+      gateway.handleAbort();
+    });
+
+    // 权限审批 — 通过 ActionRouter
+    actionRouter.register('cli_approve_tool', (payload) => {
+      const requestId = payload.action?.data?.request_id as string;
+      if (requestId) gateway.handleToolApproval(requestId, true);
+      return null;
+    });
+    actionRouter.register('cli_deny_tool', (payload) => {
+      const requestId = payload.action?.data?.request_id as string;
+      if (requestId) gateway.handleToolApproval(requestId, false);
+      return null;
+    });
+
+    // 客户端连接 → 补发状态
+    clientWss.on('connection', (ws: unknown) => {
+      if (gateway.running) {
+        sendToClient(ws, {
+          payload_type: 'system_status',
+          status: 'ai_connected',
+          agent_name: 'Claude Code',
+          account_id: 'cli',
+          session_id: gateway.sessionId,
+        });
+      }
+    });
+
+    // 注册 EventRegistry
+    startClientServer(clientWss, (ws: unknown, payload: Record<string, unknown>) => {
+      registry.dispatch(ws as any, payload as any);
+    });
+
+    console.log(`[Server] ✅ CLI Gateway mode — cwd: ${cliCwd}`);
+    console.log(`[Server] ✅ EventRegistry: ${registry.size} handlers registered`);
+
+    // 优雅退出
+    const shutdownCli = () => {
+      console.log('\n[Server] Shutting down CLI Gateway...');
+      gateway.stop();
+      if (frpcManager) frpcManager.stop();
+      statsCollector.saveNow();
+      statsCollector.stopPeriodicSave();
+      versionChecker.stopPeriodicCheck();
+      db.close();
+      clientWss.clients.forEach((ws: { close: () => void }) => ws.close());
+      unifiedServer.close();
+      mediaServer.close(() => process.exit(0));
+    };
+    process.on('SIGINT', shutdownCli);
+    process.on('SIGTERM', shutdownCli);
+    return;
   } else {
     console.error(`[Server] Unknown MODE: ${MODE}`);
     process.exit(1);

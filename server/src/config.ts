@@ -5,7 +5,7 @@ import * as os from 'os';
 // ────────────── 类型定义 ──────────────
 
 export interface ServerConfig {
-  mode: 'mock' | 'openclaw';
+  mode: 'mock' | 'openclaw' | 'cli';
   clientPort: number;
   httpPort: number;
   upstreamPort: number;
@@ -129,7 +129,7 @@ export function loadConfig(configPath?: string): ClawkeConfig {
       ...DEFAULTS.server,
       ...(fileConfig.server || {}),
       // 环境变量覆盖 mode（兼容 MODE=mock node dist/index.js）
-      ...(process.env.MODE ? { mode: process.env.MODE as 'mock' | 'openclaw' } : {}),
+      ...(process.env.MODE ? { mode: process.env.MODE as 'mock' | 'openclaw' | 'cli' } : {}),
     },
     openclaw: {
       ...DEFAULTS.openclaw,
