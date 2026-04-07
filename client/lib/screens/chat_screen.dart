@@ -1566,8 +1566,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final ok = await speechService.init();
     if (!ok) {
       if (mounted) {
+        final msg = speechService.lastError ?? '语音识别不可用，请检查权限设置';
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('语音识别不可用，请检查权限设置')),
+          SnackBar(content: Text(msg)),
         );
       }
       return;
@@ -1576,6 +1577,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     // 根据 App 当前语言设置识别 locale
     final langCode = Localizations.localeOf(context).languageCode;
     await speechService.updateLocale(langCode);
+
+    // 当引擎自动停止时（超时/错误），同步 UI 状态
+    speechService.onListeningChanged = (listening) {
+      if (!listening && mounted) {
+        ref.read(isListeningProvider.notifier).state = false;
+      }
+    };
 
     // 记录当前输入框文字，用于拼接
     _textBeforeSpeech = _controller.text;
