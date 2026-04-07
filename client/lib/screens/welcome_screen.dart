@@ -1,3 +1,4 @@
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -206,7 +207,11 @@ class WelcomeScreen extends ConsumerWidget {
   Future<void> _handleOpenUrl(String url) async {
     final uri = Uri.parse(url);
     if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
+      final isDesktop = Platform.isMacOS || Platform.isWindows || Platform.isLinux;
+      final mode = isDesktop
+          ? LaunchMode.externalApplication
+          : LaunchMode.inAppBrowserView;
+      await launchUrl(uri, mode: mode);
     }
   }
 }

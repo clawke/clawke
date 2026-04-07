@@ -60,7 +60,8 @@ export class ClaudeProcess extends EventEmitter {
 
   /**
    * 构建 clean env（参考 Happy: sdk/utils.ts getCleanEnv()）
-   * 移除 local node_modules/.bin 避免冲突
+   * 1. 移除 local node_modules/.bin 避免冲突
+   * 2. 如果 ANTHROPIC_API_KEY 不在当前 env，尝试从 shell profile 读取
    */
   private getCleanEnv(): NodeJS.ProcessEnv {
     const env = { ...process.env };
@@ -72,7 +73,44 @@ export class ClaudeProcess extends EventEmitter {
       .filter(p => !p.includes(join(cwd, 'node_modules')))
       .join(':');
 
+    // 确保 claude 在 PATH 中
+    const localBin = join(homedir(), '.local', 'bin');
+    if (!env.PATH!.includes(localBin)) {
+      env.PATH = `${localBin}:${env.PATH}`;
+    }
+
+    // 如果 ANTHROPIC_API_KEY 不存在，尝试从 shell profile 读取
+    if (!env.ANTHROPIC_API_KEY) {
+      const key = this.loadApiKeyFromProfile();
+      if (key) {
+        env.ANTHROPIC_API_KEY = key;
+        console.log('[ClaudeProcess] Loaded ANTHROPIC_API_KEY from shell profile');
+      }
+    }
+
     return env;
+  }
+
+  /**
+   * 从 ~/.bash_profile / ~/.zshrc 中提取 ANTHROPIC_API_KEY
+   */
+  private loadApiKeyFromProfile(): string | null {
+    const profilePaths = [
+      join(homedir(), '.bash_profile'),
+      join(homedir(), '.zshrc'),
+      join(homedir(), '.bashrc'),
+      join(homedir(), '.profile'),
+    ];
+    for (const p of profilePaths) {
+      try {
+        if (!existsSync(p)) continue;
+        const content = require('fs').readFileSync(p, 'utf-8') as string;
+        // 匹配 export ANTHROPIC_API_KEY=xxx 或 ANTHROPIC_API_KEY=xxx
+        const match = content.match(/(?:export\s+)?ANTHROPIC_API_KEY=["']?([^"'\s\n]+)["']?/);
+        if (match?.[1]) return match[1];
+      } catch {}
+    }
+    return null;
   }
 
   /**

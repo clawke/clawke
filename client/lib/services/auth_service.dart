@@ -153,6 +153,9 @@ class AuthService {
     try {
       final googleSignIn = GoogleSignIn(
         scopes: ['email'],
+        serverClientId: Platform.isAndroid
+            ? '23102636739-6apnqqtmctp83d852uc9ri73nbecg372.apps.googleusercontent.com'
+            : null,
       );
 
       debugPrint('[Auth] Google signIn starting...');

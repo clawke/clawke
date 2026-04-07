@@ -28,7 +28,11 @@ void main() async {
     }
   };
 
-  await NotificationService.init();
+  try {
+    await NotificationService.init();
+  } catch (e) {
+    debugPrint('[main] NotificationService.init() failed: $e');
+  }
   runApp(const ProviderScope(child: ClawkeApp()));
 }
 

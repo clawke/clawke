@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "23102636739",
+    "project_id": "clawke",
+    "storage_bucket": "clawke.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:23102636739:android:939c31c11bbf7bbbed9876",
+        "android_client_info": {
+          "package_name": "ai.clawke.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "23102636739-o7dabpoje82ic3b1lk4q5vgrdklh4s63.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "ai.clawke.app",
+            "certificate_hash": "7f4844164ef2af0556f4afb4ef56ef9a9ba75dd2"
+          }
+        },
+        {
+          "client_id": "23102636739-6apnqqtmctp83d852uc9ri73nbecg372.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDps_yIOleDc0wUQARKDQSTcg3TKC2zJq8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "23102636739-6apnqqtmctp83d852uc9ri73nbecg372.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "23102636739-er837gga0f0ip3re2lpk0f5dmu0pehf9.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "ai.clawke.app"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
