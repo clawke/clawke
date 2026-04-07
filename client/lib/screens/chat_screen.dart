@@ -1551,6 +1551,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   /// 切换语音识别
   Future<void> _handleToggleSpeech() async {
+    debugPrint('[Speech] 🎤 Button tapped!');
+
     final speechService = ref.read(speechServiceProvider);
     final isListening = ref.read(isListeningProvider);
 
@@ -1563,12 +1565,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
 
     // 开始监听
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('🎤 正在初始化语音识别...'), duration: Duration(seconds: 1)),
+      );
+    }
+
     final ok = await speechService.init();
+    debugPrint('[Speech] init result: $ok, lastError: ${speechService.lastError}');
+
     if (!ok) {
       if (mounted) {
         final msg = speechService.lastError ?? '语音识别不可用，请检查权限设置';
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(msg)),
+          SnackBar(content: Text('❌ $msg'), duration: const Duration(seconds: 3)),
         );
       }
       return;
