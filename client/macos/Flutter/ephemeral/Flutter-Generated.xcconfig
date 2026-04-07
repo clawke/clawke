@@ -2,7 +2,7 @@
 FLUTTER_ROOT=/Users/samy/java/flutter
 FLUTTER_APPLICATION_PATH=/Users/samy/MyProject/ai/clawke/client
 COCOAPODS_PARALLEL_CODE_SIGN=true
-FLUTTER_TARGET=/Users/samy/MyProject/ai/clawke/client/lib/main.dart
+FLUTTER_TARGET=lib/main.dart
 FLUTTER_BUILD_DIR=build
 FLUTTER_BUILD_NAME=1.0.38
 FLUTTER_BUILD_NUMBER=39

@@ -35,6 +35,7 @@ import 'package:gpt_markdown/gpt_markdown.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:client/widgets/highlighted_code_builder.dart';
 import 'package:client/providers/mermaid_provider.dart';
+import 'package:client/providers/speech_provider.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key});
@@ -52,6 +53,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final List<String> _messageHistory = [];
   int _historyIndex = 0;
   String? _draftText;
+  /// 语音识别前输入框中已有的文字（用于拼接）
+  String _textBeforeSpeech = '';
 
   @override
   void initState() {
@@ -1498,6 +1501,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   ),
                 ),
               ),
+              // 🎤 语音输入按钮 — 仅 iOS/Android 显示
+              if (Platform.isIOS || Platform.isAndroid) ...[
+                const SizedBox(width: 4),
+                _buildMicButton(connected, colorScheme),
+              ],
               const SizedBox(width: 8),
               IconButton.filled(
                 onPressed: connected
@@ -1525,6 +1533,75 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  /// 麦克风按钮
+  Widget _buildMicButton(bool connected, ColorScheme colorScheme) {
+    final isListening = ref.watch(isListeningProvider);
+    return IconButton(
+      onPressed: connected ? _handleToggleSpeech : null,
+      icon: Icon(
+        isListening ? Icons.mic : Icons.mic_none,
+        color: isListening ? colorScheme.error : null,
+      ),
+      tooltip: isListening ? '停止语音' : '语音输入',
+    );
+  }
+
+  /// 切换语音识别
+  Future<void> _handleToggleSpeech() async {
+    final speechService = ref.read(speechServiceProvider);
+    final isListening = ref.read(isListeningProvider);
+
+    if (isListening) {
+      // 停止监听
+      await speechService.stopListening();
+      ref.read(isListeningProvider.notifier).state = false;
+      ref.read(speechPartialTextProvider.notifier).state = '';
+      return;
+    }
+
+    // 开始监听
+    final ok = await speechService.init();
+    if (!ok) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('语音识别不可用，请检查权限设置')),
+        );
+      }
+      return;
+    }
+
+    // 根据 App 当前语言设置识别 locale
+    final langCode = Localizations.localeOf(context).languageCode;
+    await speechService.updateLocale(langCode);
+
+    // 记录当前输入框文字，用于拼接
+    _textBeforeSpeech = _controller.text;
+    ref.read(isListeningProvider.notifier).state = true;
+
+    await speechService.startListening(
+      onResult: (result) {
+        // 将识别文字追加到输入框
+        final recognized = result.recognizedWords;
+        if (recognized.isNotEmpty) {
+          final prefix = _textBeforeSpeech.isNotEmpty
+              ? '$_textBeforeSpeech '
+              : '';
+          _controller.text = '$prefix$recognized';
+          _controller.selection = TextSelection.collapsed(
+            offset: _controller.text.length,
+          );
+        }
+        ref.read(speechPartialTextProvider.notifier).state = recognized;
+
+        // 如果是最终结果，自动停止
+        if (result.finalResult) {
+          ref.read(isListeningProvider.notifier).state = false;
+          _textBeforeSpeech = _controller.text;
+        }
+      },
     );
   }
 }

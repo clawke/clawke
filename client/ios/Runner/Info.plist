@@ -49,6 +49,8 @@
 	<string>Clawke needs access to your camera to take photos and videos.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Clawke needs access to your microphone for voice input.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Clawke uses speech recognition to convert your voice to text for messaging.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
