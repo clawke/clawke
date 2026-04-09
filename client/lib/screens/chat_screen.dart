@@ -53,8 +53,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final List<String> _messageHistory = [];
   int _historyIndex = 0;
   String? _draftText;
-  /// 语音识别前输入框中已有的文字（用于拼接）
-  String _textBeforeSpeech = '';
 
   @override
   void initState() {
@@ -1504,7 +1502,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               // 🎤 语音输入按钮 — 仅 iOS/Android 显示
               if (Platform.isIOS || Platform.isAndroid) ...[
                 const SizedBox(width: 4),
-                _buildMicButton(connected, colorScheme),
+                _buildMicButton(state == WsState.connected, colorScheme),
               ],
               const SizedBox(width: 8),
               IconButton.filled(
@@ -1538,89 +1536,100 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   /// 麦克风按钮
   Widget _buildMicButton(bool connected, ColorScheme colorScheme) {
-    final isListening = ref.watch(isListeningProvider);
+    final isRecording = ref.watch(isListeningProvider);
+    final isTranscribing = ref.watch(isTranscribingProvider);
     return IconButton(
-      onPressed: connected ? _handleToggleSpeech : null,
-      icon: Icon(
-        isListening ? Icons.mic : Icons.mic_none,
-        color: isListening ? colorScheme.error : null,
-      ),
-      tooltip: isListening ? '停止语音' : '语音输入',
+      onPressed: (connected && !isTranscribing) ? _handleToggleSpeech : null,
+      icon: isTranscribing
+          ? SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: colorScheme.primary,
+              ),
+            )
+          : Icon(
+              isRecording ? Icons.stop_circle : Icons.mic_none,
+              color: isRecording ? colorScheme.error : null,
+            ),
+      tooltip: isTranscribing
+          ? '转写中...'
+          : (isRecording ? '停止录音' : '语音输入'),
     );
   }
 
-  /// 切换语音识别
+  /// 切换录音
   Future<void> _handleToggleSpeech() async {
-    debugPrint('[Speech] 🎤 Button tapped!');
-
     final speechService = ref.read(speechServiceProvider);
-    final isListening = ref.read(isListeningProvider);
+    final isRecording = ref.read(isListeningProvider);
 
-    if (isListening) {
-      // 停止监听
-      await speechService.stopListening();
+    if (isRecording) {
+      // ── 停止录音 → 上传转写 ──
       ref.read(isListeningProvider.notifier).state = false;
-      ref.read(speechPartialTextProvider.notifier).state = '';
-      return;
-    }
+      ref.read(isTranscribingProvider.notifier).state = true;
 
-    // 开始监听
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('🎤 正在初始化语音识别...'), duration: Duration(seconds: 1)),
-      );
-    }
-
-    final ok = await speechService.init();
-    debugPrint('[Speech] init result: $ok, lastError: ${speechService.lastError}');
-
-    if (!ok) {
       if (mounted) {
-        final msg = speechService.lastError ?? '语音识别不可用，请检查权限设置';
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('❌ $msg'), duration: const Duration(seconds: 3)),
+          const SnackBar(content: Text('⏳ 正在转写...'), duration: Duration(seconds: 5)),
+        );
+      }
+
+      final audioPath = await speechService.stopRecording();
+      if (audioPath == null) {
+        ref.read(isTranscribingProvider.notifier).state = false;
+        return;
+      }
+
+      // 上传到服务器转写
+      final text = await speechService.transcribe(
+        audioPath: audioPath,
+        serverUrl: MediaResolver.baseUrl,
+        token: MediaResolver.authHeaders['Authorization']?.replaceFirst('Bearer ', '') ?? '',
+      );
+
+      ref.read(isTranscribingProvider.notifier).state = false;
+
+      if (text != null && text.isNotEmpty && mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        // 追加到输入框
+        final prefix = _controller.text.isNotEmpty ? '${_controller.text} ' : '';
+        _controller.text = '$prefix$text';
+        _controller.selection = TextSelection.collapsed(
+          offset: _controller.text.length,
+        );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ ${speechService.lastError ?? "未识别到内容"}'),
+            duration: const Duration(seconds: 2),
+          ),
         );
       }
       return;
     }
 
-    // 根据 App 当前语言设置识别 locale
-    final langCode = Localizations.localeOf(context).languageCode;
-    await speechService.updateLocale(langCode);
-
-    // 当引擎自动停止时（超时/错误），同步 UI 状态
-    speechService.onListeningChanged = (listening) {
-      if (!listening && mounted) {
-        ref.read(isListeningProvider.notifier).state = false;
+    // ── 开始录音 ──
+    final ok = await speechService.startRecording();
+    if (!ok) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ ${speechService.lastError ?? "录音启动失败"}'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
       }
-    };
+      return;
+    }
 
-    // 记录当前输入框文字，用于拼接
-    _textBeforeSpeech = _controller.text;
     ref.read(isListeningProvider.notifier).state = true;
-
-    await speechService.startListening(
-      onResult: (result) {
-        // 将识别文字追加到输入框
-        final recognized = result.recognizedWords;
-        if (recognized.isNotEmpty) {
-          final prefix = _textBeforeSpeech.isNotEmpty
-              ? '$_textBeforeSpeech '
-              : '';
-          _controller.text = '$prefix$recognized';
-          _controller.selection = TextSelection.collapsed(
-            offset: _controller.text.length,
-          );
-        }
-        ref.read(speechPartialTextProvider.notifier).state = recognized;
-
-        // 如果是最终结果，自动停止
-        if (result.finalResult) {
-          ref.read(isListeningProvider.notifier).state = false;
-          _textBeforeSpeech = _controller.text;
-        }
-      },
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('🎤 正在录音，点击停止...'), duration: Duration(seconds: 30)),
+      );
+    }
   }
 }
 

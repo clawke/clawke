@@ -10,6 +10,7 @@ import express from 'express';
 import { WebSocketServer } from 'ws';
 import multer from 'multer';
 import { mediaUpload, serveMedia, serveThumbnail } from './routes/media-routes.js';
+import { sttTranscribe } from './routes/stt-route.js';
 import { loadConfig } from './config.js';
 import type { Server } from 'http';
 
@@ -87,6 +88,9 @@ export function startUnifiedServer(port: number = 8780): { server: Server; wss: 
   app.post('/api/media/upload', upload.single('file'), mediaUpload as any);
   app.get('/api/media/thumb/:filename', serveThumbnail as any);
   app.get('/api/media/:filename', serveMedia as any);
+
+  // STT - 语音转文字
+  app.post('/api/stt', upload.single('audio'), sttTranscribe as any);
 
   // Health check
   app.get('/health', (_req, res) => {

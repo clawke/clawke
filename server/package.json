@@ -24,6 +24,7 @@
     "better-sqlite3": "^12.8.0",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
+    "form-data": "^4.0.5",
     "multer": "^2.1.1",
     "sharp": "^0.34.5",
     "ws": "^8.19.0"
