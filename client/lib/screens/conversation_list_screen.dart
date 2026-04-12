@@ -521,7 +521,7 @@ class NewConversationButton extends ConsumerWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      a.agentName,
+                      a.accountId,
                       style: Theme.of(ctx).textTheme.bodyLarge,
                     ),
                   ),
