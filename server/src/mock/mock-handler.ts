@@ -69,14 +69,14 @@ export async function handleMessage(
 
   // Text done
   const finalText = aborted ? textOutput : text;
-  const { serverMsgId, seq, ts } = cupHandler.storeAgentMessage(convId, finalText, 'text', msgId);
+  const { serverMsgId, seq, ts } = cupHandler.storeAgentMessage(convId, convId, finalText, 'text', msgId);
   const doneMsg = { message_id: serverMsgId, account_id: convId, payload_type: 'text_done', seq, created_at: ts };
   console.log(`[Tunnel] ⬇️ Sent text_done${aborted ? ' (Aborted)' : ''}:`, JSON.stringify(doneMsg));
   sendToClient(ws, doneMsg);
 
   // UI component
   if (scenario.component && !aborted) {
-    const { serverMsgId: compMsgId, seq: compSeq, ts: compTs } = cupHandler.storeAgentMessage(convId, JSON.stringify(scenario.component), 'cup_component');
+    const { serverMsgId: compMsgId, seq: compSeq, ts: compTs } = cupHandler.storeAgentMessage(convId, convId, JSON.stringify(scenario.component), 'cup_component');
     sendToClient(ws, {
       role: 'agent', agent_id: 'mock_agent', message_id: compMsgId,
       account_id: convId, payload_type: 'ui_component', seq: compSeq, created_at: compTs,

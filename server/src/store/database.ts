@@ -88,6 +88,31 @@ export class Database {
       this.db.pragma('user_version = 3');
       console.log('[DB] Migration v2→v3: added unique index on client_msg_id');
     }
+
+    // v3 → v4 迁移：conversations 表增加 updated_at, is_pinned, is_muted
+    try {
+      this.db.exec(`ALTER TABLE conversations ADD COLUMN updated_at INTEGER;`);
+    } catch { /* 列已存在 */ }
+    try {
+      this.db.exec(`ALTER TABLE conversations ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0;`);
+    } catch { /* 列已存在 */ }
+    try {
+      this.db.exec(`ALTER TABLE conversations ADD COLUMN is_muted INTEGER NOT NULL DEFAULT 0;`);
+    } catch { /* 列已存在 */ }
+    try {
+      this.db.exec(`ALTER TABLE conversations ADD COLUMN account_id TEXT;`);
+    } catch { /* 列已存在 */ }
+    // 回填 updated_at（旧数据用 created_at）
+    this.db.exec(`UPDATE conversations SET updated_at = created_at WHERE updated_at IS NULL;`);
+
+    // v4 → v5 迁移：messages 表增加 conversation_id（多会话路由）
+    try {
+      this.db.exec(`ALTER TABLE messages ADD COLUMN conversation_id TEXT;`);
+      console.log('[DB] Migration v4→v5: added conversation_id to messages');
+    } catch { /* 列已存在 */ }
+    // 回填：旧数据 conversation_id = account_id
+    this.db.exec(`UPDATE messages SET conversation_id = account_id WHERE conversation_id IS NULL;`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, seq);`);
   }
 
   /** 立即执行 7 天消息清理 */

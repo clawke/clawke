@@ -46,9 +46,12 @@ export class CupV2Handler {
       content = (data?.content as string) || '';
     }
 
-    this.conversationStore.ensure(accountId);
+    const conversationId = (payload.context?.conversation_id as string) || accountId;
+
+    this.conversationStore.ensure(conversationId);
+    this.conversationStore.touch(conversationId);
     const { serverMsgId, seq } = this.messageStore.append(
-      accountId, clientMsgId, 'local_user', type, content
+      accountId, conversationId, clientMsgId, 'local_user', type, content
     );
 
     return {
@@ -89,6 +92,7 @@ export class CupV2Handler {
         message_id: m.serverMsgId,
         client_msg_id: m.clientMsgId,
         account_id: m.accountId,
+        conversation_id: m.conversationId,
         sender_id: m.senderId,
         type: m.type,
         content: m.content,
@@ -102,12 +106,14 @@ export class CupV2Handler {
    */
   storeAgentMessage(
     accountId: string,
+    conversationId: string,
     content: string,
     type: string = 'text',
     upstreamMsgId: string | null = null
   ): StoreResult {
-    this.conversationStore.ensure(accountId);
-    return this.messageStore.append(accountId, upstreamMsgId, 'agent', type, content);
+    this.conversationStore.ensure(conversationId);
+    this.conversationStore.touch(conversationId);
+    return this.messageStore.append(accountId, conversationId, upstreamMsgId, 'agent', type, content);
   }
 
   /**

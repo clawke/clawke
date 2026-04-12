@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:client/data/database/app_database.dart';
 import 'package:client/providers/conversation_provider.dart';
 import 'package:client/providers/database_providers.dart';
+import 'package:client/providers/ws_state_provider.dart';
 import 'package:client/l10n/l10n.dart';
+import 'package:client/screens/conversation_settings_sheet.dart';
 
 class ConversationListScreen extends ConsumerWidget {
   final void Function(String accountId)? onConversationTap;
@@ -18,7 +20,7 @@ class ConversationListScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final conversationsAsync = ref.watch(conversationListProvider);
-    final selectedId = ref.watch(selectedAccountIdProvider);
+    final selectedId = ref.watch(selectedConversationIdProvider);
     final colorScheme = Theme.of(context).colorScheme;
 
     return Column(
@@ -50,6 +52,12 @@ class ConversationListScreen extends ConsumerWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                NewConversationButton(
+                  onCreated: (convId) {
+                    ref.read(selectedConversationIdProvider.notifier).state = convId;
+                    onConversationTap?.call(convId);
+                  },
+                ),
               ],
             ),
           ),
@@ -69,14 +77,30 @@ class ConversationListScreen extends ConsumerWidget {
                 itemCount: conversations.length,
                 itemBuilder: (context, index) {
                   final conv = conversations[index];
-                  return _ConversationTile(
-                    conversation: conv,
-                    isSelected: conv.accountId == selectedId,
-                    onTap: () {
-                      ref.read(selectedAccountIdProvider.notifier).state =
-                          conv.accountId;
-                      onConversationTap?.call(conv.accountId);
+                  return Dismissible(
+                    key: Key(conv.conversationId),
+                    direction: DismissDirection.endToStart,
+                    confirmDismiss: (_) async {
+                      return await _showDeleteConfirm(context, ref, conv);
                     },
+                    background: Container(
+                      alignment: Alignment.centerRight,
+                      padding: const EdgeInsets.only(right: 20),
+                      color: colorScheme.error,
+                      child: Icon(
+                        Icons.delete_outline,
+                        color: colorScheme.onError,
+                      ),
+                    ),
+                    child: _ConversationTile(
+                      conversation: conv,
+                      isSelected: conv.conversationId == selectedId,
+                      onTap: () {
+                        ref.read(selectedConversationIdProvider.notifier).state =
+                            conv.conversationId;
+                        onConversationTap?.call(conv.conversationId);
+                      },
+                    ),
                   );
                 },
               );
@@ -88,6 +112,50 @@ class ConversationListScreen extends ConsumerWidget {
         ),
       ],
     );
+  }
+
+  /// 滑动删除确认弹窗（返回 true 表示确认删除）
+  Future<bool> _showDeleteConfirm(
+    BuildContext context,
+    WidgetRef ref,
+    Conversation conv,
+  ) async {
+    final l10n = context.l10n;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.deleteConversation),
+        content: Text(l10n.deleteConversationConfirm),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(l10n.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(
+              l10n.delete,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final convId = conv.conversationId;
+      if (ref.read(selectedConversationIdProvider) == convId) {
+        ref.read(selectedConversationIdProvider.notifier).state = null;
+      }
+      await ref
+          .read(conversationRepositoryProvider)
+          .deleteConversation(convId);
+      await ref
+          .read(messageRepositoryProvider)
+          .clearConversation(convId);
+      return true;
+    }
+    return false;
   }
 }
 
@@ -253,6 +321,7 @@ class _ConversationTile extends ConsumerWidget {
             ],
           ),
         ),
+
       ],
     ).then((value) {
       if (value == null) return;
@@ -284,7 +353,7 @@ class _ConversationTile extends ConsumerWidget {
             if (newName.isNotEmpty) {
               ref
                   .read(conversationRepositoryProvider)
-                  .renameConversation(conversation.accountId, newName);
+                  .renameConversation(conversation.conversationId, newName);
               Navigator.of(ctx).pop();
             }
           },
@@ -300,7 +369,7 @@ class _ConversationTile extends ConsumerWidget {
               if (newName.isNotEmpty) {
                 ref
                     .read(conversationRepositoryProvider)
-                    .renameConversation(conversation.accountId, newName);
+                    .renameConversation(conversation.conversationId, newName);
                 Navigator.of(ctx).pop();
               }
             },
@@ -328,7 +397,7 @@ class _ConversationTile extends ConsumerWidget {
               Navigator.of(ctx).pop();
               ref
                   .read(messageRepositoryProvider)
-                  .clearConversation(conversation.accountId);
+                  .clearConversation(conversation.conversationId);
             },
             child: Text(
               l10n.delete,
@@ -355,18 +424,19 @@ class _ConversationTile extends ConsumerWidget {
           TextButton(
             onPressed: () async {
               Navigator.of(ctx).pop();
-              final convId = conversation.accountId;
+              final convId = conversation.conversationId;
               // 如果当前选中的是这个会话，先取消选中
-              if (ref.read(selectedAccountIdProvider) == convId) {
-                ref.read(selectedAccountIdProvider.notifier).state = null;
+              if (ref.read(selectedConversationIdProvider) == convId) {
+                ref.read(selectedConversationIdProvider.notifier).state = null;
               }
-              // 先清空消息，再删除会话条目
-              await ref
-                  .read(messageRepositoryProvider)
-                  .clearConversation(convId);
+              // 先删除会话条目（避免 clearConversation 更新 lastMessageAt 导致列表抖动）
               await ref
                   .read(conversationRepositoryProvider)
                   .deleteConversation(convId);
+              // 再清消息（会话条目已删，不会触发列表重排）
+              await ref
+                  .read(messageRepositoryProvider)
+                  .clearConversation(convId);
             },
             child: Text(
               l10n.delete,
@@ -375,6 +445,14 @@ class _ConversationTile extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+
+  void _showSettings(BuildContext context) {
+    ConversationSettingsSheet.show(
+      context,
+      conversationId: conversation.conversationId,
+      accountId: conversation.accountId,
     );
   }
 
@@ -390,5 +468,80 @@ class _ConversationTile extends ConsumerWidget {
     }
     if (diff.inDays < 7) return l10n.daysAgo(diff.inDays);
     return '${dt.month}/${dt.day}';
+  }
+}
+
+/// "+" 按钮：新建会话
+class NewConversationButton extends ConsumerWidget {
+  final void Function(String conversationId)? onCreated;
+  final double iconSize;
+
+  const NewConversationButton({super.key, this.onCreated, this.iconSize = 22});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final accounts = ref.watch(connectedAccountsProvider);
+    final minDim = iconSize + 14;
+    // 没有在线后端时也显示按钮（但禁用）
+    return IconButton(
+      icon: Icon(Icons.add, size: iconSize),
+      tooltip: context.l10n.newConversation,
+      onPressed: accounts.isEmpty ? null : () => _onTap(context, ref, accounts),
+      padding: EdgeInsets.zero,
+      constraints: BoxConstraints(minWidth: minDim, minHeight: minDim),
+    );
+  }
+
+  Future<void> _onTap(
+    BuildContext context,
+    WidgetRef ref,
+    List<ConnectedAccount> accounts,
+  ) async {
+    String accountId;
+
+    if (accounts.length == 1) {
+      // 单后端：直接创建
+      accountId = accounts.first.accountId;
+    } else {
+      // 多后端：弹出选择器
+      final selected = await showDialog<ConnectedAccount>(
+        context: context,
+        builder: (ctx) => SimpleDialog(
+          title: Text(context.l10n.newConversation),
+          children: accounts.map((a) {
+            return SimpleDialogOption(
+              onPressed: () => Navigator.of(ctx).pop(a),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.smart_toy_outlined,
+                    color: Theme.of(ctx).colorScheme.primary,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      a.agentName,
+                      style: Theme.of(ctx).textTheme.bodyLarge,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        ),
+      );
+      if (selected == null) return; // 取消
+      accountId = selected.accountId;
+    }
+
+    // 打开创建模式设置面板（点创建才生成 ID，取消则不创建）
+    if (context.mounted) {
+      ConversationSettingsSheet.showCreate(
+        context,
+        accountId: accountId,
+        onCreated: (id) => onCreated?.call(id),
+      );
+    }
   }
 }

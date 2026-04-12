@@ -27,7 +27,8 @@ final streamingThinkingProvider = StateProvider<ThinkingMessage?>(
 );
 
 // 等待 AI 回复的中间状态（发送后、首个 delta 到达前）
-final waitingForReplyProvider = StateProvider<bool>((ref) => false);
+// 存储正在等待回复的 conversationId（null = 不在等待）
+final waitingForReplyProvider = StateProvider<String?>((ref) => null);
 
 // 全局 SDUI 弹窗组件（如 Dashboard, CronList 等），通过 ref.listen 在 UI 顶层展示
 final globalSduiProvider = StateProvider<SduiMessage?>((ref) => null);
@@ -93,8 +94,14 @@ class WsMessageHandler with WidgetsBindingObserver {
   /// 待确认的请求：requestId → clientMsgId
   final Map<String, String> _pendingRequests = {};
 
+  /// 待确认请求的会话路由：requestId → conversationId
+  final Map<String, String> _pendingConversationIds = {};
+
   /// 当前流式消息关联的 accountId
   String? _streamingAccountId;
+
+  /// 当前流式消息关联的 conversationId
+  String? _streamingConversationId;
 
   // ── 流式 debounce 缓冲 ──────────────────────────
   // 累积 delta 到缓冲区，定时刷新到 provider，减少 GptMarkdown 重建次数
@@ -136,6 +143,8 @@ class WsMessageHandler with WidgetsBindingObserver {
       if (_ws.state == WsState.connected) {
         // WS 还连着（短暂息屏），直接发 sync 拉增量
         _sendSync();
+        // 同步会话列表
+        _ref.read(conversationRepositoryProvider).syncFromServer();
       } else {
         // WS 已断，触发重连（重连成功后 onReconnected 会自动 sync）
         _ws.reconnect();
@@ -144,16 +153,26 @@ class WsMessageHandler with WidgetsBindingObserver {
   }
 
   /// 注册待确认请求
-  void trackRequest(String requestId, String clientMsgId) {
+  void trackRequest(String requestId, String clientMsgId, {String? conversationId}) {
     _pendingRequests[requestId] = clientMsgId;
+    if (conversationId != null) {
+      _pendingConversationIds[requestId] = conversationId;
+    }
     debugPrint(
-      '[WsHandler] 📤 trackRequest: reqId=$requestId, clientMsgId=$clientMsgId',
+      '[WsHandler] 📤 trackRequest: reqId=$requestId, clientMsgId=$clientMsgId, convId=$conversationId',
     );
   }
 
   void _onConnected() {
     debugPrint('[WsMessageHandler] Connected, sending sync request');
+    // 重连时清除流式状态，防止跨会话路由错误
+    _streamingAccountId = null;
+    _streamingConversationId = null;
+    // 重连时清空在线后端列表，等 ai_connected 消息重建
+    _ref.read(connectedAccountsProvider.notifier).state = [];
     _sendSync();
+    // 同步会话列表（Server 权威 → 本地对齐）
+    _ref.read(conversationRepositoryProvider).syncFromServer();
   }
 
   /// SharedPreferences key for independently tracked sync seq.
@@ -223,18 +242,24 @@ class WsMessageHandler with WidgetsBindingObserver {
   }
 
   void sendAbort() {
-    final convId = _ref.read(selectedAccountIdProvider) ?? 'default';
+    final convId = _ref.read(selectedConversationIdProvider) ?? 'default';
+    // 使用流式期间记录的 accountId（如 "OpenClaw"），确保 abort 能路由到正确的 upstream
+    final accountId = _streamingAccountId ?? 'default';
 
     _ws.sendJson({
       'event_type': 'abort',
+      'context': {
+        'account_id': accountId,
+        'conversation_id': convId,
+      },
       'data': {'account_id': convId},
     });
-    debugPrint('[WsMessageHandler] Sent abort for $convId');
+    debugPrint('[WsMessageHandler] Sent abort for conv=$convId, account=$accountId');
 
     // 立即清除客户端流式状态（不等服务端确认）
     // text_done 到达后 _finalizeStreaming 会 upsert（同 ID 覆盖），不会重复
     _finalizeStreaming({'account_id': convId});
-    _ref.read(waitingForReplyProvider.notifier).state = false;
+    _ref.read(waitingForReplyProvider.notifier).state = null;
     _ref.read(streamingThinkingProvider.notifier).state = null;
   }
 
@@ -289,6 +314,10 @@ class WsMessageHandler with WidgetsBindingObserver {
       case 'usage_report':
         _handleUsageReport(json);
         return;
+      case 'conv_changed':
+        debugPrint('[WsMessageHandler] 收到 conv_changed，同步会话列表');
+        _ref.read(conversationRepositoryProvider).syncFromServer();
+        return;
     }
 
     // thinking 处理
@@ -309,6 +338,7 @@ class WsMessageHandler with WidgetsBindingObserver {
         json['message_id'] as String? ?? 'unknown',
         json['content'] as String? ?? '',
         json['account_id'] as String?,
+        json['conversation_id'] as String?,
       );
     } else if (CupParser.isTextDone(json)) {
       _finalizeStreaming(json);
@@ -345,12 +375,18 @@ class WsMessageHandler with WidgetsBindingObserver {
       final seq = params?['seq'] as int?;
       msgDao.updateStatus(clientMsgId, 'sent', serverId: serverMsgId, seq: seq);
       if (seq != null) _advanceSyncSeq(seq);
+      // 在回复到达前锁定 conversationId → 确保多会话路由正确
+      final trackedConvId = _pendingConversationIds[requestId];
+      if (trackedConvId != null) {
+        _streamingConversationId = trackedConvId;
+      }
       debugPrint(
-        '[WsMessageHandler] ACK sent: $clientMsgId → $serverMsgId, seq=$seq',
+        '[WsMessageHandler] ACK sent: $clientMsgId → $serverMsgId, seq=$seq, convId=$trackedConvId',
       );
     } else if (code == 201) {
       // delivered — OpenClaw Gateway 收到
       msgDao.updateStatus(clientMsgId, 'delivered');
+      _pendingConversationIds.remove(requestId);
       _pendingRequests.remove(requestId);
       debugPrint('[WsMessageHandler] ACK delivered: $clientMsgId');
     }
@@ -375,6 +411,7 @@ class WsMessageHandler with WidgetsBindingObserver {
     }
 
     final accountId = json['account_id'] as String? ?? 'default';
+    final conversationId = json['conversation_id'] as String? ?? accountId;
     final type = data['type'] as String? ?? 'text';
     // 对于 image/file 类型：序列化 media 元数据为 JSON（发送方存的是本地路径，但接收方需要 URL 信息）
     final String content;
@@ -408,12 +445,13 @@ class WsMessageHandler with WidgetsBindingObserver {
       return;
     }
 
-    debugPrint('[WsMessageHandler] message_echo WRITE: $finalMsgId → convId=$accountId');
+    debugPrint('[WsMessageHandler] message_echo WRITE: $finalMsgId → convId=$conversationId');
 
     final repo = _ref.read(messageRepositoryProvider);
     await repo.receiveMessage(
       messageId: finalMsgId,
       accountId: accountId,
+      conversationId: conversationId,
       senderId: 'local_user',
       type: type,
       content: content,
@@ -422,8 +460,8 @@ class WsMessageHandler with WidgetsBindingObserver {
     );
 
     // 当前选中会话则清零未读
-    if (accountId == _ref.read(selectedAccountIdProvider)) {
-      _ref.read(conversationRepositoryProvider).markAsRead(accountId);
+    if (conversationId == _ref.read(selectedConversationIdProvider)) {
+      _ref.read(conversationRepositoryProvider).markAsRead(conversationId);
     }
   }
 
@@ -433,7 +471,7 @@ class WsMessageHandler with WidgetsBindingObserver {
     debugPrint('[WsMessageHandler] sync_response: ${messages.length} messages, current_seq=$currentSeq');
 
     final repo = _ref.read(messageRepositoryProvider);
-    final selectedConvId = _ref.read(selectedAccountIdProvider);
+    final selectedConvId = _ref.read(selectedConversationIdProvider);
     final touchedConvIds = <String>{};
 
     for (final m in messages) {
@@ -448,8 +486,9 @@ class WsMessageHandler with WidgetsBindingObserver {
       if (clientMsgId != null && await dao.getMessage(clientMsgId) != null) continue;
       if (serverMsgId != null && await dao.getMessage(serverMsgId) != null) continue;
 
-      final convId = map['account_id'] as String? ?? 'default';
-      touchedConvIds.add(convId);
+      final accountId = map['account_id'] as String? ?? 'default';
+      final conversationId = map['conversation_id'] as String? ?? accountId;
+      touchedConvIds.add(conversationId);
 
       final msgType = map['type'] as String? ?? 'text';
       final String msgContent;
@@ -475,7 +514,8 @@ class WsMessageHandler with WidgetsBindingObserver {
 
       await repo.receiveMessage(
         messageId: msgId,
-        accountId: convId,
+        accountId: accountId,
+        conversationId: conversationId,
         senderId: map['sender_id'] as String? ?? 'agent',
         type: msgType,
         content: msgContent,
@@ -507,7 +547,7 @@ class WsMessageHandler with WidgetsBindingObserver {
   }
 
   void _handleUsageReport(Map<String, dynamic> json) {
-    final convId = json['account_id'] as String? ?? 'default';
+    final convId = json['conversation_id'] as String? ?? json['account_id'] as String? ?? 'default';
     final msgId = json['message_id'] as String?;
     final usage = json['usage'] as Map<String, dynamic>?;
     if (usage == null) return;
@@ -552,23 +592,41 @@ class WsMessageHandler with WidgetsBindingObserver {
         debugPrint(
           '[WsMessageHandler] ✅ AI connected: $name, accountId=${msg.accountId}',
         );
-        // 自动创建该 accountId 对应的会话（如果不存在）
+        // 追踪在线后端
         if (msg.accountId != null && msg.accountId!.isNotEmpty) {
+          final accounts = _ref.read(connectedAccountsProvider);
+          final exists = accounts.any((a) => a.accountId == msg.accountId);
+          if (!exists) {
+            _ref.read(connectedAccountsProvider.notifier).state = [
+              ...accounts,
+              ConnectedAccount(accountId: msg.accountId!, agentName: name),
+            ];
+          }
+          // 自动创建该 accountId 对应的会话（如果不存在）
           final convRepo = _ref.read(conversationRepositoryProvider);
           await convRepo.ensureConversation(
             accountId: msg.accountId!,
             type: 'ai',
             name: msg.accountId!,
           );
-          // 如果当前没有选中会话，自动选中
-          if (_ref.read(selectedAccountIdProvider) == null) {
-            _ref.read(selectedAccountIdProvider.notifier).state = msg.accountId;
+          // 如果当前没有选中会话，自动选中该 accountId 的第一个会话
+          if (_ref.read(selectedConversationIdProvider) == null) {
+            final convs = await convRepo.getConversationsByAccount(msg.accountId!);
+            if (convs.isNotEmpty) {
+              _ref.read(selectedConversationIdProvider.notifier).state = convs.first.conversationId;
+            }
           }
         }
       case 'ai_disconnected':
         _ref.read(aiBackendStateProvider.notifier).state =
             AiBackendState.disconnected;
-        debugPrint('[WsMessageHandler] ❌ OpenClaw Gateway disconnected');
+        // 从在线列表移除
+        if (msg.accountId != null) {
+          final accounts = _ref.read(connectedAccountsProvider);
+          _ref.read(connectedAccountsProvider.notifier).state =
+              accounts.where((a) => a.accountId != msg.accountId).toList();
+        }
+        debugPrint('[WsMessageHandler] ❌ AI backend disconnected: ${msg.accountId}');
       case 'stream_interrupted':
         _finalizeStreaming({});
         final detail = msg.message ?? 'Output may be incomplete';
@@ -578,9 +636,9 @@ class WsMessageHandler with WidgetsBindingObserver {
     }
   }
 
-  void _appendTextDelta(String messageId, String delta, String? accountId) {
+  void _appendTextDelta(String messageId, String delta, String? accountId, String? conversationId) {
     debugPrint(
-      '[WsHandler] 📥 text_delta: msgId=$messageId, len=${delta.length}, convId=$accountId',
+      '[WsHandler] 📥 text_delta: msgId=$messageId, len=${delta.length}, convId=${conversationId ?? accountId}',
     );
     final current = _ref.read(streamingMessageProvider);
     if (current != null && current.messageId != messageId) {
@@ -588,18 +646,24 @@ class WsMessageHandler with WidgetsBindingObserver {
     }
     if (current == null || current.messageId != messageId) {
       // 首个 delta — 立即显示（不等 debounce）
-      _ref.read(waitingForReplyProvider.notifier).state = false;
+      _ref.read(waitingForReplyProvider.notifier).state = null;
       _streamingAccountId = accountId;
+      _streamingConversationId = conversationId;
       _textBuffer = delta;
       _textBufferMsgId = messageId;
+      final convId = conversationId ?? _streamingConversationId ?? accountId;
       _ref.read(streamingMessageProvider.notifier).state = TextMessage(
         messageId: messageId,
         role: 'agent',
         content: delta,
+        conversationId: convId,
       );
     } else {
       if (accountId != null) {
         _streamingAccountId = accountId;
+      }
+      if (conversationId != null) {
+        _streamingConversationId = conversationId;
       }
       _textBuffer += delta;
       _textBufferMsgId = messageId;
@@ -619,10 +683,12 @@ class WsMessageHandler with WidgetsBindingObserver {
 
   void _flushTextBuffer() {
     if (_textBufferMsgId == null) return;
+    final existing = _ref.read(streamingMessageProvider);
     _ref.read(streamingMessageProvider.notifier).state = TextMessage(
       messageId: _textBufferMsgId!,
       role: 'agent',
       content: _textBuffer,
+      conversationId: existing?.conversationId ?? _streamingConversationId,
     );
   }
 
@@ -633,13 +699,14 @@ class WsMessageHandler with WidgetsBindingObserver {
     final current = _ref.read(streamingThinkingProvider);
     if (current == null || current.messageId != messageId) {
       // 首个 delta — 立即显示
-      _ref.read(waitingForReplyProvider.notifier).state = false;
+      _ref.read(waitingForReplyProvider.notifier).state = null;
       _thinkingBuffer = delta;
       _thinkingBufferMsgId = messageId;
       _ref.read(streamingThinkingProvider.notifier).state = ThinkingMessage(
         messageId: messageId,
         role: 'agent',
         content: delta,
+        conversationId: _streamingConversationId,
       );
     } else {
       _thinkingBuffer += delta;
@@ -658,10 +725,12 @@ class WsMessageHandler with WidgetsBindingObserver {
 
   void _flushThinkingBuffer() {
     if (_thinkingBufferMsgId == null) return;
+    final existing = _ref.read(streamingThinkingProvider);
     _ref.read(streamingThinkingProvider.notifier).state = ThinkingMessage(
       messageId: _thinkingBufferMsgId!,
       role: 'agent',
       content: _thinkingBuffer,
+      conversationId: existing?.conversationId ?? _streamingConversationId,
     );
   }
 
@@ -670,7 +739,18 @@ class WsMessageHandler with WidgetsBindingObserver {
     // 这样 thinking 块会一直展示直到整条消息完成
   }
 
+  /// 去重：上一次 finalize 的 serverMsgId（防止 Gateway 多轮 deliver 导致重复）
+  String? _lastFinalizedServerMsgId;
+
   Future<void> _finalizeStreaming(Map<String, dynamic> json) async {
+    // 去重：同一个 serverMsgId 只 finalize 一次
+    final serverMsgId = json['message_id'] as String?;
+    if (serverMsgId != null && serverMsgId == _lastFinalizedServerMsgId) {
+      debugPrint('[WsHandler] ⏭️ _finalizeStreaming SKIP duplicate: $serverMsgId');
+      return;
+    }
+    _lastFinalizedServerMsgId = serverMsgId;
+
     debugPrint(
       '[WsHandler] ✅ _finalizeStreaming called, json keys: ${json.keys}',
     );
@@ -685,11 +765,18 @@ class WsMessageHandler with WidgetsBindingObserver {
 
     if (msg != null || thinkingMsg != null) {
       final convId =
+          json['conversation_id'] as String? ??
+          _streamingConversationId ??
           _streamingAccountId ??
           json['account_id'] as String? ??
-          _ref.read(selectedAccountIdProvider) ??
+          _ref.read(selectedConversationIdProvider) ??
           'default';
+      final accountId =
+          json['account_id'] as String? ??
+          _streamingAccountId ??
+          convId;
       _streamingAccountId = null;
+      _streamingConversationId = null;
 
       // 尝试从 provider 提取回退的 messageId
       final safeMessageId =
@@ -706,7 +793,8 @@ class WsMessageHandler with WidgetsBindingObserver {
           .read(messageRepositoryProvider)
           .receiveMessage(
             messageId: safeMessageId,
-            accountId: convId,
+            accountId: accountId,
+            conversationId: convId,
             senderId: 'agent',
             type: 'text',
             content: msg?.content ?? '',
@@ -715,12 +803,12 @@ class WsMessageHandler with WidgetsBindingObserver {
             seq: seq,
             createdAt: json['created_at'] as int?,
           );
-      if (convId == _ref.read(selectedAccountIdProvider)) {
+      if (convId == _ref.read(selectedConversationIdProvider)) {
         _ref.read(conversationRepositoryProvider).markAsRead(convId);
       }
 
       // DB 写入完成后清除流式状态
-      _ref.read(waitingForReplyProvider.notifier).state = false;
+      _ref.read(waitingForReplyProvider.notifier).state = null;
       _ref.read(streamingMessageProvider.notifier).state = null;
       // 让出事件循环，等 Drift watchMessages 流通知 UI 刷新后再清 thinking → 无闪烁
       await Future<void>.delayed(Duration.zero);
@@ -736,9 +824,12 @@ class WsMessageHandler with WidgetsBindingObserver {
 
   Future<void> _writeToDb(MessageModel model, Map<String, dynamic> json) async {
     final convId =
+        json['conversation_id'] as String? ??
         json['account_id'] as String? ??
-        _ref.read(selectedAccountIdProvider) ??
+        _ref.read(selectedConversationIdProvider) ??
         'default';
+    final accountId =
+        json['account_id'] as String? ?? convId;
     final serverMsgId = json['message_id'] as String?;
     final seq = json['seq'] as int? ?? 0;
     if (seq > 0) _advanceSyncSeq(seq);
@@ -748,7 +839,8 @@ class WsMessageHandler with WidgetsBindingObserver {
       case TextMessage m:
         await repo.receiveMessage(
           messageId: m.messageId,
-          accountId: convId,
+          accountId: accountId,
+          conversationId: convId,
           senderId: 'agent',
           type: 'text',
           content: m.content,
@@ -772,7 +864,8 @@ class WsMessageHandler with WidgetsBindingObserver {
 
         await repo.receiveMessage(
           messageId: m.messageId,
-          accountId: convId,
+          accountId: accountId,
+          conversationId: convId,
           senderId: 'agent',
           type: 'cup_component',
           content: jsonEncode(m.component.toJson()),
@@ -783,7 +876,8 @@ class WsMessageHandler with WidgetsBindingObserver {
       case ErrorMessage m:
         await repo.receiveMessage(
           messageId: m.messageId,
-          accountId: convId,
+          accountId: accountId,
+          conversationId: convId,
           senderId: 'system',
           type: 'system',
           content: 'Unknown widget: ${m.widgetName}',
@@ -797,10 +891,10 @@ class WsMessageHandler with WidgetsBindingObserver {
         break; // thinking 内容不持久化到 DB
     }
 
-    if (convId == _ref.read(selectedAccountIdProvider)) {
+    if (convId == _ref.read(selectedConversationIdProvider)) {
       _ref.read(conversationRepositoryProvider).markAsRead(convId);
     }
-    if (convId != _ref.read(selectedAccountIdProvider)) {
+    if (convId != _ref.read(selectedConversationIdProvider)) {
       NotificationService.showMessageNotification(
         title: '新消息',
         body: _getNotificationBody(model),
@@ -838,6 +932,8 @@ class WsMessageHandler with WidgetsBindingObserver {
     _sub?.cancel();
     _textFlushTimer?.cancel();
     _thinkingFlushTimer?.cancel();
+    _streamingAccountId = null;
+    _streamingConversationId = null;
     _ws.onConnected = null;
   }
 }

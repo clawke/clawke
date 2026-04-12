@@ -19,6 +19,7 @@ export interface StoredMessage {
   serverMsgId: string;
   clientMsgId: string | null;
   accountId: string;
+  conversationId: string;
   senderId: string;
   type: string;
   content: string;
@@ -38,8 +39,8 @@ export class MessageStore {
 
     // Prepared statements
     this.insertStmt = db.prepare(`
-      INSERT INTO messages (id, account_id, client_msg_id, sender_id, type, content, created_at, seq)
-      VALUES (@id, @account_id, @client_msg_id, @sender_id, @type, @content, @created_at, @seq)
+      INSERT INTO messages (id, account_id, conversation_id, client_msg_id, sender_id, type, content, created_at, seq)
+      VALUES (@id, @account_id, @conversation_id, @client_msg_id, @sender_id, @type, @content, @created_at, @seq)
     `);
     this.updateSeqStmt = db.prepare(
       "INSERT OR REPLACE INTO metadata (key, value) VALUES ('globalSeq', ?)"
@@ -83,6 +84,7 @@ export class MessageStore {
       serverMsgId: row.id as string,
       clientMsgId: row.client_msg_id as string | null,
       accountId: row.account_id as string,
+      conversationId: (row.conversation_id as string) || (row.account_id as string),
       senderId: row.sender_id as string,
       type: row.type as string,
       content: row.content as string,
@@ -91,13 +93,14 @@ export class MessageStore {
   }
 
   /** 追加消息 */
-  append(convId: string, clientMsgId: string | null, senderId: string, type: string, content: string): StoreResult {
+  append(accountId: string, conversationId: string, clientMsgId: string | null, senderId: string, type: string, content: string): StoreResult {
     this.globalSeq++;
     const serverMsgId = `smsg_${crypto.randomUUID().slice(0, 8)}`;
     const ts = Date.now();
     const row = {
       id: serverMsgId,
-      account_id: convId,
+      account_id: accountId,
+      conversation_id: conversationId,
       client_msg_id: clientMsgId || null,
       sender_id: senderId,
       type: type || 'text',

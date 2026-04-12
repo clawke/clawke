@@ -8,6 +8,7 @@ import type { CupV2Handler } from '../protocol/cup-v2-handler.js';
 import type { StatsCollectorLike, MessageRouter } from '../upstream/message-router.js';
 import type { UpstreamMessage } from '../types/upstream.js';
 import { toUpstreamMessage } from '../types/upstream.js';
+import type { ConversationConfigStore } from '../store/conversation-config-store.js';
 
 interface UserMessageDeps {
   cupHandler: CupV2Handler;
@@ -22,13 +23,15 @@ interface UserMessageDeps {
   messageRouter?: MessageRouter | null;
   /** 媒体处理 */
   processMessageMedia?: (data: Record<string, unknown>) => Promise<unknown>;
+  /** 会话配置存储 */
+  configStore?: ConversationConfigStore | null;
 }
 
 export function createUserMessageHandler(deps: UserMessageDeps) {
   const seenAccounts = new Set<string>();
 
   return async (ctx: HandlerContext) => {
-    const { cupHandler, stats, mockHandler, forwardToUpstream, broadcastToClients, messageRouter, processMessageMedia } = deps;
+    const { cupHandler, stats, mockHandler, forwardToUpstream, broadcastToClients, messageRouter, processMessageMedia, configStore } = deps;
 
     // 0. 附件处理
     const data = ctx.payload.data as Record<string, unknown> || {};
@@ -44,8 +47,9 @@ export function createUserMessageHandler(deps: UserMessageDeps) {
       stats.recordConversation();
     }
 
-    // 清除 abort 标记
-    messageRouter?.clearAbort(ctx.accountId);
+    // 清除 abort 标记（以 conversationId 为 key）
+    const conversationId = (ctx.payload.context?.conversation_id as string) || ctx.accountId;
+    messageRouter?.clearAbort(conversationId);
 
     // 1. ACK
     const ack = cupHandler.handleUserMessage(ctx.payload);
@@ -63,6 +67,7 @@ export function createUserMessageHandler(deps: UserMessageDeps) {
           payload_type: 'message_echo',
           message_id: ctx.payload.context?.client_msg_id || ctx.payload.id,
           account_id: ctx.accountId,
+          conversation_id: conversationId,
           sender_device_id: ctx.payload.context?.device_id || 'unknown',
           is_echo: true,
           data: ctx.payload.data,
@@ -75,6 +80,21 @@ export function createUserMessageHandler(deps: UserMessageDeps) {
         'chat',
         media as import('../types/upstream.js').UpstreamMediaInfo | null,
       );
+
+      // 注入会话配置（模型、skill、系统提示词）
+      if (configStore) {
+        const convConfig = configStore.get(upstreamMsg.conversation_id);
+        if (convConfig) {
+          if (convConfig.modelId) upstreamMsg.model_override = convConfig.modelId;
+          if (convConfig.skills) {
+            try { upstreamMsg.skills_hint = JSON.parse(convConfig.skills); } catch {}
+          }
+          if (convConfig.skillMode) upstreamMsg.skill_mode = convConfig.skillMode as 'priority' | 'exclusive';
+          if (convConfig.systemPrompt) upstreamMsg.system_prompt = convConfig.systemPrompt;
+          if (convConfig.workDir) upstreamMsg.work_dir = convConfig.workDir;
+        }
+      }
+
       forwardToUpstream(ctx.accountId, upstreamMsg);
       ctx.respond(cupHandler.makeDeliveredAck(ctx.payload.id || null));
     }

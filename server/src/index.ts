@@ -6,11 +6,13 @@
  */
 import * as path from 'path';
 import * as fs from 'fs';
+import * as os from 'os';
 import { loadConfig, getConfigPath } from './config.js';
 import { ensureDirectories, DATA_DIR } from './store/clawke-home.js';
 import { Database } from './store/database.js';
 import { MessageStore } from './store/message-store.js';
 import { ConversationStore } from './store/conversation-store.js';
+import { ConversationConfigStore } from './store/conversation-config-store.js';
 import { CupV2Handler } from './protocol/cup-v2-handler.js';
 import { StatsCollector } from './services/stats-collector.js';
 import { VersionChecker } from './services/version-checker.js';
@@ -121,6 +123,7 @@ async function main() {
   const db = new Database(dbPath);
   const messageStore = new MessageStore(db);
   const conversationStore = new ConversationStore(db);
+  const configStore = new ConversationConfigStore(db);
   db.startCleanupScheduler();
 
   // ━━━ Protocol 层 ━━━
@@ -193,8 +196,25 @@ async function main() {
     console.log(`[Server] Mock FAST_MODE=${config.server.fastMode || false}`);
 
   } else if (MODE === 'openclaw') {
-    const { startOpenClawListener, sendToOpenClaw, isUpstreamConnected, getConnectedAccountIds } =
+    const { startOpenClawListener, sendToOpenClaw, isUpstreamConnected, getConnectedAccountIds, queryGatewayModels } =
       await import('./upstream/openclaw-listener.js');
+    const { initConfigRoutes } = await import('./routes/config-routes.js');
+    const { initConversationRoutes } = await import('./routes/conversation-routes.js');
+
+    // Skills 目录（clawhub 安装目录）
+    const openclawSkillsDirs = [
+      path.join(os.homedir(), '.openclaw/workspace/skills'),
+    ];
+
+    // 初始化配置路由
+    initConfigRoutes({
+      configStore,
+      queryModels: queryGatewayModels,
+      skillsDirs: openclawSkillsDirs,
+    });
+
+    // 初始化会话路由
+    initConversationRoutes({ conversationStore });
 
     // MessageRouter — 上游消息 → 翻译 → 存储 → 统计 → 广播
     const messageRouter = new MessageRouter(
@@ -223,10 +243,13 @@ async function main() {
       broadcastToClients,
       messageRouter,
       processMessageMedia,
+      configStore,
     }));
     registry.register('abort', createAbortHandler({
-      forwardToUpstream: (accountId: string, _msg: unknown) => {
-        sendToOpenClaw(accountId, { action: 'chat.abort', sessionKey: accountId });
+      forwardToUpstream: (accountId: string, msg: unknown) => {
+        const m = msg as Record<string, unknown>;
+        const sessionKey = (m.conversation_id as string) || accountId;
+        sendToOpenClaw(accountId, { action: 'chat.abort', sessionKey });
       },
       messageRouter,
     }));

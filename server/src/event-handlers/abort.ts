@@ -16,7 +16,10 @@ interface AbortDeps {
 
 export function createAbortHandler(deps: AbortDeps) {
   return (ctx: HandlerContext) => {
-    const accountId = (ctx.payload.data as Record<string, unknown>)?.account_id as string || ctx.accountId;
+    const data = ctx.payload.data as Record<string, unknown> | undefined;
+    const conversationId = (ctx.payload.context?.conversation_id as string)
+      || (data?.account_id as string)
+      || ctx.accountId;
 
     if (deps.mockAbort) {
       // Mock 模式
@@ -25,15 +28,15 @@ export function createAbortHandler(deps: AbortDeps) {
         status: 'stream_interrupted',
         message: '用户已中止',
       });
-      deps.mockAbort(accountId);
-      console.log(`[Tunnel] Mock aborted conversation ${accountId}`);
+      deps.mockAbort(conversationId);
+      console.log(`[Tunnel] Mock aborted conversation ${conversationId}`);
     } else if (deps.forwardToUpstream) {
       // OpenClaw 模式
-      deps.messageRouter?.abortSession(accountId);
-      deps.forwardToUpstream(accountId, {
+      deps.messageRouter?.abortSession(conversationId);
+      deps.forwardToUpstream(ctx.accountId, {
         type: 'abort',
-        conversation_id: accountId,
-        message_id: (ctx.payload.data as Record<string, unknown>)?.message_id as string,
+        conversation_id: conversationId,
+        message_id: data?.message_id as string,
       });
     }
   };

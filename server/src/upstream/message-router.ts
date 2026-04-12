@@ -23,10 +23,10 @@ type TranslateFn = (msg: OpenClawMessage, accountId: string) => TranslatedResult
 type BroadcastFn = (msg: Record<string, unknown>) => void;
 
 export class MessageRouter {
-  /** 每个 account 最近的 text_done serverMsgId（agent_usage 关联用） */
+  /** 每个 conversation 最近的 text_done serverMsgId（agent_usage 关联用） */
   private lastTextDoneIds = new Map<string, string>();
 
-  /** 已中止的会话 */
+  /** 已中止的会话（以 conversationId 为 key） */
   private abortedSessions = new Set<string>();
 
   constructor(
@@ -36,17 +36,17 @@ export class MessageRouter {
     private broadcast: BroadcastFn,
   ) {}
 
-  /** 标记会话为已中止 */
-  abortSession(accountId: string): void {
-    this.abortedSessions.add(accountId);
-    console.log(`[MessageRouter] Account ${accountId} aborted`);
+  /** 标记会话为已中止（以 conversationId 为 key） */
+  abortSession(conversationId: string): void {
+    this.abortedSessions.add(conversationId);
+    console.log(`[MessageRouter] Conversation ${conversationId} aborted`);
   }
 
   /** 清除中止标记（新消息时调用） */
-  clearAbort(accountId: string): void {
-    if (this.abortedSessions.has(accountId)) {
-      this.abortedSessions.delete(accountId);
-      console.log(`[MessageRouter] Cleared abort for account=${accountId}`);
+  clearAbort(conversationId: string): void {
+    if (this.abortedSessions.has(conversationId)) {
+      this.abortedSessions.delete(conversationId);
+      console.log(`[MessageRouter] Cleared abort for conversation=${conversationId}`);
     }
   }
 
@@ -54,13 +54,15 @@ export class MessageRouter {
    * 处理上游消息
    */
   handleUpstreamMessage(msg: OpenClawMessage, accountId: string): void {
-    // 中止拦截
-    if (this.abortedSessions.has(accountId)) {
+    const conversationId = msg.conversation_id || accountId;
+
+    // 中止拦截（以 conversationId 为 key）
+    if (this.abortedSessions.has(conversationId)) {
       if (msg.type === 'agent_text_done' || msg.type === ('agent_turn_done' as string)) {
-        this.abortedSessions.delete(accountId);
-        console.log(`[MessageRouter] Cleared abort for account=${accountId} (upstream done)`);
+        this.abortedSessions.delete(conversationId);
+        console.log(`[MessageRouter] Cleared abort for conversation=${conversationId} (upstream done)`);
       } else {
-        console.log(`[MessageRouter] Discarded message for aborted account=${accountId}`);
+        console.log(`[MessageRouter] Discarded message for aborted conversation=${conversationId}`);
       }
       return;
     }
@@ -90,7 +92,7 @@ export class MessageRouter {
     if (metadata.needsStore) {
       const { fullText, type, upstreamMsgId } = metadata.needsStore;
       const { serverMsgId, seq, ts } = this.cupHandler.storeAgentMessage(
-        accountId, fullText, type, upstreamMsgId
+        accountId, conversationId, fullText, type, upstreamMsgId
       );
       // 用实际 serverMsgId 和 seq 替换 cupMessages 中的占位
       for (const m of cupMessages) {
@@ -104,12 +106,12 @@ export class MessageRouter {
         }
       }
       // 记录最近的 text_done serverMsgId（agent_usage 关联用）
-      this.lastTextDoneIds.set(accountId, serverMsgId);
+      this.lastTextDoneIds.set(conversationId, serverMsgId);
     }
 
     // 独立 agent_usage 关联到最近的 text_done
     if (msg.type === 'agent_usage' && cupMessages.length > 0) {
-      const lastId = this.lastTextDoneIds.get(accountId);
+      const lastId = this.lastTextDoneIds.get(conversationId);
       if (lastId) {
         cupMessages[0].message_id = lastId;
       }
@@ -128,9 +130,10 @@ export class MessageRouter {
       this.stats.recordToolCall(metadata.toolCall.name, metadata.toolCall.durationMs);
     }
 
-    // 广播
+    // 广播（conversation_id 已在方法开头解析）
     console.log(`[MessageRouter] ✅ Translated to ${cupMessages.length} CUP messages`);
     for (const m of cupMessages) {
+      if (conversationId) m.conversation_id = conversationId;
       this.broadcast(m);
     }
   }
