@@ -40,7 +40,7 @@ export function startOpenClawListener(
         upstreamConnections.set(accountId!, ws);
         const remote = (ws as any)._socket?.remoteAddress || 'unknown';
         const remotePort = (ws as any)._socket?.remotePort || '?';
-        console.log(`[Gateway] OpenClaw Gateway identified: account=${accountId} remote=${remote}:${remotePort} (total: ${upstreamConnections.size})`);
+        console.log(`[Gateway] ✅ Gateway connected by account_id=${accountId} remote=${remote}:${remotePort} (total: ${upstreamConnections.size})`);
 
         // 通知 server 层处理自动创建会话等逻辑
         if (onGatewayIdentified) {
