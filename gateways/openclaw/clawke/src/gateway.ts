@@ -65,6 +65,42 @@ function getAvailableModels(ctx: ChannelGatewayContext<ResolvedClawkeAccount>): 
   return [];
 }
 
+/** 扫描 .openclaw/workspace/skills/ 目录获取可用 Skills */
+function getAvailableSkills(): Array<{ name: string; description: string }> {
+  try {
+    const fs = require("fs");
+    const path = require("path");
+    const os = require("os");
+    const skillsDir = path.join(os.homedir(), ".openclaw", "workspace", "skills");
+    if (!fs.existsSync(skillsDir)) return [];
+
+    const entries = fs.readdirSync(skillsDir, { withFileTypes: true });
+    const skills: Array<{ name: string; description: string }> = [];
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const skillMd = path.join(skillsDir, entry.name, "SKILL.md");
+      if (!fs.existsSync(skillMd)) continue;
+      const content = fs.readFileSync(skillMd, "utf-8");
+      // Extract description from YAML frontmatter or first non-header line
+      let desc = entry.name;
+      const fmMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
+      if (fmMatch) {
+        const descMatch = fmMatch[1].match(/description:\s*(.+)/i);
+        if (descMatch) desc = descMatch[1].trim();
+      } else {
+        const firstLine = content.split("\n").find(
+          (l: string) => l.trim() && !l.startsWith("#") && !l.startsWith("---")
+        );
+        if (firstLine) desc = firstLine.trim().slice(0, 120);
+      }
+      skills.push({ name: entry.name, description: desc });
+    }
+    return skills;
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Gateway 启动入口：建立 WebSocket 连接到 Clawke Server，断线自动重连。
  *
@@ -159,6 +195,11 @@ export async function startClawkeGateway(
             const models = getAvailableModels(ctx);
             ws!.send(JSON.stringify({ type: "models_response", models }));
             ctx.log?.info(`📤 Models response: ${models.length} models`);
+          } else if (msg.type === "query_skills") {
+            // 查询可用 Skills 列表
+            const skills = getAvailableSkills();
+            ws!.send(JSON.stringify({ type: "skills_response", skills }));
+            ctx.log?.info(`📤 Skills response: ${skills.length} skills`);
           }
         } catch {
           /* 非 JSON 消息忽略 */

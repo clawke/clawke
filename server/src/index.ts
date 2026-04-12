@@ -220,21 +220,16 @@ async function main() {
     console.log(`[Server] Mock FAST_MODE=${config.server.fastMode || false}`);
 
   } else if (MODE === 'openclaw') {
-    const { startOpenClawListener, sendToOpenClaw, isUpstreamConnected, getConnectedAccountIds, queryGatewayModels } =
+    const { startOpenClawListener, sendToOpenClaw, isUpstreamConnected, getConnectedAccountIds, queryGatewayModels, queryGatewaySkills } =
       await import('./upstream/openclaw-listener.js');
     const { initConfigRoutes } = await import('./routes/config-routes.js');
     const { initConversationRoutes } = await import('./routes/conversation-routes.js');
 
-    // Skills 目录（clawhub 安装目录）
-    const openclawSkillsDirs = [
-      path.join(os.homedir(), '.openclaw/workspace/skills'),
-    ];
-
-    // 初始化配置路由
+    // 初始化配置路由（models/skills 查询路由到对应 Gateway）
     initConfigRoutes({
       configStore,
       queryModels: queryGatewayModels,
-      skillsDirs: openclawSkillsDirs,
+      querySkills: queryGatewaySkills,
     });
 
     // 初始化会话路由

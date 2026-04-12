@@ -144,47 +144,65 @@ export function untrackStreamingId(msgId: string): void {
 }
 
 /**
- * 通过 WS 查询 Gateway 的可用模型列表
+ * 通过 WS 查询指定 Gateway 的可用模型列表
  *
  * 发送 { type: "query_models" }，等待 { type: "models_response", models: [...] }
  * 超时 5 秒返回空数组。
  */
-export function queryGatewayModels(): Promise<string[]> {
+export function queryGatewayModels(accountId: string): Promise<string[]> {
+  return _queryGateway<string[]>(accountId, 'query_models', 'models_response', 'models', []);
+}
+
+/**
+ * 通过 WS 查询指定 Gateway 的可用 Skills 列表
+ *
+ * 发送 { type: "query_skills" }，等待 { type: "skills_response", skills: [...] }
+ * 超时 5 秒返回空数组。
+ */
+export function queryGatewaySkills(accountId: string): Promise<Array<{ name: string; description: string }>> {
+  return _queryGateway(accountId, 'query_skills', 'skills_response', 'skills', []);
+}
+
+/** 通用 Gateway WS 查询 */
+function _queryGateway<T>(
+  accountId: string,
+  queryType: string,
+  responseType: string,
+  dataKey: string,
+  fallback: T,
+): Promise<T> {
   return new Promise((resolve) => {
-    // 找到第一个活跃的 upstream 连接
-    let targetWs: WebSocket | null = null;
-    for (const ws of upstreamConnections.values()) {
-      if (ws.readyState === 1) { targetWs = ws; break; }
-    }
-    if (!targetWs) {
-      console.warn('[Gateway] queryGatewayModels: no upstream connected');
-      resolve([]);
+    const ws = upstreamConnections.get(accountId);
+    if (!ws || ws.readyState !== 1) {
+      console.warn(`[Gateway] ${queryType}: no upstream for account=${accountId}`);
+      resolve(fallback);
       return;
     }
 
     const timeout = setTimeout(() => {
-      console.warn('[Gateway] queryGatewayModels: timeout (5s)');
+      console.warn(`[Gateway] ${queryType}: timeout (5s) for account=${accountId}`);
       cleanup();
-      resolve([]);
+      resolve(fallback);
     }, 5000);
 
     const handler = (raw: Buffer) => {
       try {
         const msg = JSON.parse(raw.toString());
-        if (msg.type === 'models_response') {
+        if (msg.type === responseType) {
           cleanup();
-          resolve(msg.models || []);
+          resolve(msg[dataKey] || fallback);
         }
       } catch { /* ignore non-JSON */ }
     };
 
     const cleanup = () => {
       clearTimeout(timeout);
-      targetWs?.removeListener('message', handler);
+      ws?.removeListener('message', handler);
     };
 
-    targetWs.on('message', handler);
-    targetWs.send(JSON.stringify({ type: 'query_models' }));
+    ws.on('message', handler);
+    ws.send(JSON.stringify({ type: queryType }));
   });
 }
+
 

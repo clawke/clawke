@@ -97,8 +97,8 @@ class _ConversationSettingsSheetState
 
     if (_isCreateMode && !refresh) {
       final results = await Future.wait([
-        _api.getModels(refresh: refresh),
-        _api.getSkills(refresh: refresh),
+        _api.getModels(accountId: widget.accountId, refresh: refresh),
+        _api.getSkills(accountId: widget.accountId, refresh: refresh),
       ]);
       if (!mounted) return;
       setState(() {
@@ -111,8 +111,8 @@ class _ConversationSettingsSheetState
     }
 
     final results = await Future.wait([
-      _api.getModels(refresh: refresh),
-      _api.getSkills(refresh: refresh),
+      _api.getModels(accountId: widget.accountId, refresh: refresh),
+      _api.getSkills(accountId: widget.accountId, refresh: refresh),
       _api.getConvConfig(widget.conversationId!),
       ref.read(conversationRepositoryProvider)
           .getConversationName(widget.conversationId!),
@@ -240,9 +240,11 @@ class _ConversationSettingsSheetState
                   const SizedBox(height: 24),
 
                   // ── Skills ──
-                  _sectionLabel('Skills'),
-                  _buildSkillPanel(colorScheme),
-                  const SizedBox(height: 24),
+                  if (_availableSkills.isNotEmpty) ...[
+                    _sectionLabel('Skills'),
+                    _buildSkillPanel(colorScheme),
+                    const SizedBox(height: 24),
+                  ],
 
                   // ── 系统提示词 ──
                   _sectionLabel('系统提示词'),
@@ -348,7 +350,10 @@ class _ConversationSettingsSheetState
   // 配置组 — 模型选择
   // ═══════════════════════════════════════
   Widget _buildConfigGroup(ColorScheme colorScheme) {
-    final displayModel = _selectedModel ?? '默认模型';
+    final hasModels = _availableModels.isNotEmpty;
+    final displayModel = hasModels
+        ? (_selectedModel ?? '默认模型')
+        : '不支持指定模型';
 
     return Container(
       decoration: BoxDecoration(
@@ -356,7 +361,7 @@ class _ConversationSettingsSheetState
         borderRadius: BorderRadius.circular(12),
       ),
       child: InkWell(
-        onTap: () => _openModelPicker(colorScheme),
+        onTap: hasModels ? () => _openModelPicker(colorScheme) : null,
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -365,11 +370,11 @@ class _ConversationSettingsSheetState
               Container(
                 width: 30, height: 30,
                 decoration: BoxDecoration(
-                  color: colorScheme.primary.withOpacity(0.12),
+                  color: colorScheme.primary.withOpacity(hasModels ? 0.12 : 0.06),
                   borderRadius: BorderRadius.circular(7),
                 ),
                 child: Icon(Icons.layers_rounded,
-                    size: 16, color: colorScheme.primary),
+                    size: 16, color: hasModels ? colorScheme.primary : colorScheme.onSurfaceVariant.withOpacity(0.4)),
               ),
               const SizedBox(width: 12),
               Text(
@@ -377,7 +382,7 @@ class _ConversationSettingsSheetState
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w500,
-                  color: colorScheme.onSurface,
+                  color: hasModels ? colorScheme.onSurface : colorScheme.onSurfaceVariant.withOpacity(0.5),
                 ),
               ),
               const SizedBox(width: 8),
@@ -388,14 +393,15 @@ class _ConversationSettingsSheetState
                   textAlign: TextAlign.right,
                   style: TextStyle(
                     fontSize: 14,
-                    color: colorScheme.onSurfaceVariant,
+                    color: hasModels ? colorScheme.onSurfaceVariant : colorScheme.onSurfaceVariant.withOpacity(0.4),
                   ),
                 ),
               ),
               const SizedBox(width: 6),
-              Icon(Icons.chevron_right_rounded,
-                  size: 18,
-                  color: colorScheme.onSurfaceVariant.withOpacity(0.4)),
+              if (hasModels)
+                Icon(Icons.chevron_right_rounded,
+                    size: 18,
+                    color: colorScheme.onSurfaceVariant.withOpacity(0.4)),
             ],
           ),
         ),

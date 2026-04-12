@@ -25,12 +25,14 @@ class ConfigApiService {
     ));
   }
 
-  /// 查询可用模型列表
-  Future<List<String>> getModels({bool refresh = false}) async {
+  /// 查询指定 Gateway 的可用模型列表
+  Future<List<String>> getModels({required String accountId, bool refresh = false}) async {
     try {
+      final params = <String, String>{'account_id': accountId};
+      if (refresh) params['refresh'] = '1';
       final response = await _dio.get(
         '/api/config/models',
-        queryParameters: refresh ? {'refresh': '1'} : null,
+        queryParameters: params,
       );
       final data = response.data as Map<String, dynamic>;
       return (data['models'] as List?)?.cast<String>() ?? [];
@@ -40,12 +42,14 @@ class ConfigApiService {
     }
   }
 
-  /// 查询可用 Skill 列表
-  Future<List<SkillInfo>> getSkills({bool refresh = false}) async {
+  /// 查询指定 Gateway 的可用 Skill 列表
+  Future<List<SkillInfo>> getSkills({required String accountId, bool refresh = false}) async {
     try {
+      final params = <String, String>{'account_id': accountId};
+      if (refresh) params['refresh'] = '1';
       final response = await _dio.get(
         '/api/config/skills',
-        queryParameters: refresh ? {'refresh': '1'} : null,
+        queryParameters: params,
       );
       final data = response.data as Map<String, dynamic>;
       final list = data['skills'] as List? ?? [];

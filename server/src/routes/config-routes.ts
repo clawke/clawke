@@ -1,75 +1,57 @@
 /**
  * 会话配置 REST API
  *
- * - GET  /api/config/models  → 查询可用模型（通过 WS 查 Gateway）
- * - GET  /api/config/skills  → 扫描 skills 目录
+ * - GET  /api/config/models?account_id=xxx  → 查询 Gateway 可用模型
+ * - GET  /api/config/skills?account_id=xxx  → 查询 Gateway 可用 Skills
  * - GET  /api/conv/:id/config → 读取会话配置
  * - PUT  /api/conv/:id/config → 保存会话配置
  */
 import type { Request, Response } from 'express';
-import * as fs from 'fs';
-import * as path from 'path';
 import type { ConversationConfigStore } from '../store/conversation-config-store.js';
 
 // ─── 依赖注入 ───
 
 let configStore: ConversationConfigStore | null = null;
-let queryModelsFunc: (() => Promise<string[]>) | null = null;
-let skillsDirs: string[] = [];
+let queryModelsFunc: ((accountId: string) => Promise<string[]>) | null = null;
+let querySkillsFunc: ((accountId: string) => Promise<Array<{ name: string; description: string }>>) | null = null;
 
 export function initConfigRoutes(deps: {
   configStore: ConversationConfigStore;
-  queryModels: () => Promise<string[]>;
-  skillsDirs: string[];
+  queryModels: (accountId: string) => Promise<string[]>;
+  querySkills: (accountId: string) => Promise<Array<{ name: string; description: string }>>;
 }): void {
   configStore = deps.configStore;
   queryModelsFunc = deps.queryModels;
-  skillsDirs = deps.skillsDirs;
+  querySkillsFunc = deps.querySkills;
 }
 
 // ─── Models ───
 
-let modelCache: { models: string[]; expiresAt: number } | null = null;
+// 按 accountId 分 key 缓存
+const modelCache = new Map<string, { models: string[]; expiresAt: number }>();
 const MODEL_CACHE_TTL = 30 * 60 * 1000; // 30 分钟
-
-/** 从 OpenClaw models.json 文件直接读取可用模型 */
-function readModelsFromFile(): string[] {
-  try {
-    const os = require('os');
-    const modelsPath = path.join(os.homedir(), '.openclaw', 'agents', 'main', 'agent', 'models.json');
-    if (!fs.existsSync(modelsPath)) return [];
-    const data = JSON.parse(fs.readFileSync(modelsPath, 'utf-8'));
-    const models: string[] = [];
-    if (data.providers && typeof data.providers === 'object') {
-      for (const [providerName, provider] of Object.entries(data.providers)) {
-        const p = provider as any;
-        if (Array.isArray(p.models)) {
-          for (const m of p.models) {
-            if (m.id) models.push(`${providerName}/${m.id}`);
-          }
-        }
-      }
-    }
-    return models;
-  } catch {
-    return [];
-  }
-}
 
 export async function getModels(req: Request, res: Response): Promise<void> {
   try {
-    const forceRefresh = req.query.refresh === '1';
-    if (!forceRefresh && modelCache && Date.now() < modelCache.expiresAt) {
-      res.json({ models: modelCache.models });
+    const accountId = (req.query.account_id as string) || '';
+    if (!accountId) {
+      res.status(400).json({ error: 'account_id is required' });
       return;
     }
-    // 策略 1：直接读 OpenClaw models.json（零延迟）
-    let models = readModelsFromFile();
-    // 策略 2：WS 查询 Gateway（fallback）
-    if (models.length === 0 && queryModelsFunc) {
-      models = await queryModelsFunc();
+
+    const forceRefresh = req.query.refresh === '1';
+    const cached = modelCache.get(accountId);
+    if (!forceRefresh && cached && Date.now() < cached.expiresAt) {
+      res.json({ models: cached.models });
+      return;
     }
-    modelCache = { models, expiresAt: Date.now() + MODEL_CACHE_TTL };
+
+    let models: string[] = [];
+    if (queryModelsFunc) {
+      models = await queryModelsFunc(accountId);
+    }
+
+    modelCache.set(accountId, { models, expiresAt: Date.now() + MODEL_CACHE_TTL });
     res.json({ models });
   } catch (err: any) {
     console.error('[ConfigAPI] getModels error:', err.message);
@@ -79,49 +61,35 @@ export async function getModels(req: Request, res: Response): Promise<void> {
 
 // ─── Skills ───
 
-let skillsCache: { skills: Array<{ name: string; description: string }>; expiresAt: number } | null = null;
+const skillsCache = new Map<string, { skills: Array<{ name: string; description: string }>; expiresAt: number }>();
 const SKILLS_CACHE_TTL = 30 * 60 * 1000; // 30 分钟
 
-export function getSkills(req: Request, res: Response): void {
+export async function getSkills(req: Request, res: Response): Promise<void> {
   try {
-    const forceRefresh = req.query.refresh === '1';
-    if (!forceRefresh && skillsCache && Date.now() < skillsCache.expiresAt) {
-      res.json({ skills: skillsCache.skills });
+    const accountId = (req.query.account_id as string) || '';
+    if (!accountId) {
+      res.status(400).json({ error: 'account_id is required' });
       return;
     }
-    const seen = new Set<string>();
-    const skills: Array<{ name: string; description: string }> = [];
-    for (const dir of skillsDirs) {
-      if (!dir || !fs.existsSync(dir)) continue;
-      const entries = fs.readdirSync(dir, { withFileTypes: true });
-      for (const entry of entries) {
-        if (!entry.isDirectory() || seen.has(entry.name)) continue;
-        const skillMd = path.join(dir, entry.name, 'SKILL.md');
-        if (!fs.existsSync(skillMd)) continue;
-        const content = fs.readFileSync(skillMd, 'utf-8');
-        const desc = extractSkillDescription(content, entry.name);
-        skills.push({ name: entry.name, description: desc });
-        seen.add(entry.name);
-      }
+
+    const forceRefresh = req.query.refresh === '1';
+    const cached = skillsCache.get(accountId);
+    if (!forceRefresh && cached && Date.now() < cached.expiresAt) {
+      res.json({ skills: cached.skills });
+      return;
     }
-    skillsCache = { skills, expiresAt: Date.now() + SKILLS_CACHE_TTL };
+
+    let skills: Array<{ name: string; description: string }> = [];
+    if (querySkillsFunc) {
+      skills = await querySkillsFunc(accountId);
+    }
+
+    skillsCache.set(accountId, { skills, expiresAt: Date.now() + SKILLS_CACHE_TTL });
     res.json({ skills });
   } catch (err: any) {
     console.error('[ConfigAPI] getSkills error:', err.message);
     res.status(500).json({ error: err.message });
   }
-}
-
-function extractSkillDescription(content: string, fallbackName: string): string {
-  // 先尝试 YAML frontmatter
-  const fmMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
-  if (fmMatch) {
-    const descMatch = fmMatch[1].match(/description:\s*(.+)/i);
-    if (descMatch) return descMatch[1].trim();
-  }
-  // 退而求其次：取第一个非空行
-  const firstLine = content.split('\n').find(l => l.trim() && !l.startsWith('#') && !l.startsWith('---'));
-  return firstLine?.trim().slice(0, 120) || fallbackName;
 }
 
 // ─── Conversation Config ───
