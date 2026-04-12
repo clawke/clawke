@@ -76,7 +76,7 @@ class ConversationRepository {
     // 新建：始终使用 UUID 作为 conversation_id
     final convId = _uuid.v4();
     // Server 创建
-    await _api.createConversation(id: convId, name: name, type: type);
+    await _api.createConversation(id: convId, name: name, type: type, accountId: accountId);
     // 本地创建
     return _dao.upsertConversation(
       ConversationsCompanion(
