@@ -289,7 +289,7 @@ async function main() {
       if (existing.length === 0) {
         const crypto = require('crypto');
         const convId = crypto.randomUUID();
-        conversationStore.create(convId, 'ai', agentName, accountId);
+        conversationStore.create(convId, 'ai', accountId, accountId);
         console.log(`[Server] Auto-created default conversation for account=${accountId}: ${convId}`);
         broadcastToClients({ payload_type: 'conv_changed' });
       }

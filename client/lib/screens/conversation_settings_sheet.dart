@@ -153,7 +153,7 @@ class _ConversationSettingsSheetState
         conversationId: convId,
         accountId: widget.accountId,
         type: 'ai',
-        name: newName.isNotEmpty ? newName : 'New Chat',
+        name: newName.isNotEmpty ? newName : widget.accountId,
       );
     } else {
       convId = widget.conversationId!;
