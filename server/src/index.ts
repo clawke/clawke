@@ -122,8 +122,8 @@ async function main() {
   const dbPath = process.env.NODE_TEST ? ':memory:' : path.join(DATA_DIR, 'clawke.db');
   const db = new Database(dbPath);
   const messageStore = new MessageStore(db);
+  const configStore = new ConversationConfigStore(db);  // 必须先于 ConversationStore（后者引用 conversation_configs 表）
   const conversationStore = new ConversationStore(db);
-  const configStore = new ConversationConfigStore(db);
   db.startCleanupScheduler();
 
   // ━━━ Protocol 层 ━━━
