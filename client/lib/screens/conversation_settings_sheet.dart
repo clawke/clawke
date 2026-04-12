@@ -267,32 +267,30 @@ class _ConversationSettingsSheetState
                     onTap: () => _openWorkDirEditor(colorScheme),
                   ),
                   // ── 调试信息 ──
-                  if (!_isCreateMode) ...[
-                    const Divider(height: 32),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '其他信息',
-                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant.withOpacity(0.5),
-                            ),
+                  const Divider(height: 32),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '其他信息',
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant.withOpacity(0.5),
                           ),
-                          const SizedBox(height: 8),
-                          SelectableText(
-                            'Gateway: ${widget.accountId}\n会话 ID: ${widget.conversationId ?? "-"}',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant.withOpacity(0.5),
-                              fontFamily: 'monospace',
-                              fontSize: 11,
-                            ),
+                        ),
+                        const SizedBox(height: 8),
+                        SelectableText(
+                          'Gateway: ${widget.accountId}\n会话 ID: ${widget.conversationId ?? "（创建后生成）"}',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant.withOpacity(0.5),
+                            fontFamily: 'monospace',
+                            fontSize: 11,
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                   const SizedBox(height: 40),
                 ],
               ),
