@@ -325,6 +325,8 @@ class WsMessageHandler with WidgetsBindingObserver {
       _appendThinkingDelta(
         json['message_id'] as String? ?? 'unknown',
         json['content'] as String? ?? '',
+        json['account_id'] as String?,
+        json['conversation_id'] as String?,
       );
       return;
     } else if (CupParser.isThinkingDone(json)) {
@@ -692,10 +694,15 @@ class WsMessageHandler with WidgetsBindingObserver {
     );
   }
 
-  void _appendThinkingDelta(String messageId, String delta) {
+  void _appendThinkingDelta(String messageId, String delta, String? accountId, String? conversationId) {
     debugPrint(
-      '[WsHandler] 🧠 thinking_delta: msgId=$messageId, len=${delta.length}',
+      '[WsHandler] 🧠 thinking_delta: msgId=$messageId, len=${delta.length}, convId=${conversationId ?? accountId}',
     );
+    // 设置流式会话标识（thinking 通常先于 text_delta 到达）
+    if (accountId != null) _streamingAccountId = accountId;
+    if (conversationId != null) _streamingConversationId = conversationId;
+    final convId = conversationId ?? _streamingConversationId ?? accountId;
+
     final current = _ref.read(streamingThinkingProvider);
     if (current == null || current.messageId != messageId) {
       // 首个 delta — 立即显示
@@ -706,7 +713,7 @@ class WsMessageHandler with WidgetsBindingObserver {
         messageId: messageId,
         role: 'agent',
         content: delta,
-        conversationId: _streamingConversationId,
+        conversationId: convId,
       );
     } else {
       _thinkingBuffer += delta;
