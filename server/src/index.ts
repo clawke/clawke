@@ -259,6 +259,16 @@ async function main() {
       console.log('[Gateway] Upstream message:', JSON.stringify(payload).slice(0, 200));
       const accountId = (payload.account_id as string) || 'default';
       messageRouter.handleUpstreamMessage(payload as any, accountId);
+    }, (accountId: string, agentName: string) => {
+      // Gateway 连接时自动创建默认会话（如果该 account 还没有会话）
+      const existing = conversationStore.listByAccount(accountId);
+      if (existing.length === 0) {
+        const crypto = require('crypto');
+        const convId = crypto.randomUUID();
+        conversationStore.create(convId, 'ai', agentName, accountId);
+        console.log(`[Server] Auto-created default conversation for account=${accountId}: ${convId}`);
+        broadcastToClients({ payload_type: 'conv_changed' });
+      }
     });
 
     // 客户端连接 → 补发 ai_connected

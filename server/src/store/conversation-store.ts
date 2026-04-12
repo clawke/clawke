@@ -27,6 +27,7 @@ export class ConversationStore {
   private deleteConfigStmt: BetterSqlite3.Statement;
   private touchStmt: BetterSqlite3.Statement;
   private renameStmt: BetterSqlite3.Statement;
+  private listByAccountStmt: BetterSqlite3.Statement;
 
   constructor(private database: Database) {
     const db = database.raw;
@@ -58,6 +59,9 @@ export class ConversationStore {
     );
     this.renameStmt = db.prepare(
       'UPDATE conversations SET name = @name WHERE id = @id'
+    );
+    this.listByAccountStmt = db.prepare(
+      'SELECT * FROM conversations WHERE account_id = ? ORDER BY updated_at DESC'
     );
   }
 
@@ -109,6 +113,11 @@ export class ConversationStore {
   /** 列出所有会话（置顶优先，最新消息倒序） */
   list(): Conversation[] {
     return (this.listStmt.all() as Record<string, unknown>[]).map(r => this.toConv(r)!);
+  }
+
+  /** 按 accountId 列出会话 */
+  listByAccount(accountId: string): Conversation[] {
+    return (this.listByAccountStmt.all(accountId) as Record<string, unknown>[]).map(r => this.toConv(r)!);
   }
 
   /** 更新会话属性（name, isPinned, isMuted） */

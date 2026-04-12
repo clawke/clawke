@@ -13,6 +13,7 @@ const activeStreamingIds = new Set<string>();
 export function startOpenClawListener(
   port: number,
   messageHandler: (payload: Record<string, unknown>) => void,
+  onGatewayIdentified?: (accountId: string, agentName: string) => void,
 ): WebSocketServer {
   const wss = new WebSocketServer({ port });
   console.log(`[Gateway] Upstream OpenClaw listener started, waiting on ws://127.0.0.1:${port}`);
@@ -40,6 +41,11 @@ export function startOpenClawListener(
         const remote = (ws as any)._socket?.remoteAddress || 'unknown';
         const remotePort = (ws as any)._socket?.remotePort || '?';
         console.log(`[Gateway] OpenClaw Gateway identified: account=${accountId} remote=${remote}:${remotePort} (total: ${upstreamConnections.size})`);
+
+        // 通知 server 层处理自动创建会话等逻辑
+        if (onGatewayIdentified) {
+          onGatewayIdentified(accountId!, 'OpenClaw');
+        }
 
         broadcastToClients({
           payload_type: 'system_status',

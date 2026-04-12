@@ -604,13 +604,9 @@ class WsMessageHandler with WidgetsBindingObserver {
               ConnectedAccount(accountId: msg.accountId!, agentName: name),
             ];
           }
-          // 自动创建该 accountId 对应的会话（如果不存在）
+          // 会话由 Server 自动创建，客户端只需同步
           final convRepo = _ref.read(conversationRepositoryProvider);
-          await convRepo.ensureConversation(
-            accountId: msg.accountId!,
-            type: 'ai',
-            name: msg.accountId!,
-          );
+          await convRepo.syncFromServer();
           // 如果当前没有选中会话，自动选中该 accountId 的第一个会话
           if (_ref.read(selectedConversationIdProvider) == null) {
             final convs = await convRepo.getConversationsByAccount(msg.accountId!);
