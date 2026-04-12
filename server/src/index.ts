@@ -44,12 +44,36 @@ const serverDir = path.join(__dirname, '..');
 process.on('uncaughtException', (err) => console.error('[Server] Uncaught exception:', err.message));
 process.on('unhandledRejection', (reason) => console.error('[Server] Unhandled rejection:', reason));
 
+/** 检查端口是否被占用，如果占用则立即退出 */
+function checkPortConflict(port: number, label: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const net = require('net');
+    const tester = net.createServer();
+    tester.once('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EADDRINUSE') {
+        console.error(`[Server] ❌ Fatal: ${label} port ${port} is already in use.`);
+        console.error(`[Server] Another Clawke Server instance may be running.`);
+        console.error(`[Server] Use "lsof -i :${port}" to find the process, or "kill $(lsof -ti :${port})" to stop it.`);
+        process.exit(1);
+      }
+      reject(err);
+    });
+    tester.once('listening', () => {
+      tester.close(() => resolve());
+    });
+    tester.listen(port);
+  });
+}
+
 async function main() {
   const config = loadConfig();
   const MODE = config.server.mode;
   const HTTP_PORT = config.server.httpPort;
   const MEDIA_PORT = config.server.mediaPort;
   const UPSTREAM_PORT = config.server.upstreamPort;
+
+  // 启动前检查端口冲突
+  await checkPortConflict(HTTP_PORT, 'HTTP');
 
   console.log(`[Server] 🚀 Mode: ${MODE}`);
 
