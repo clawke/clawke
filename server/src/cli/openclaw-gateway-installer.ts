@@ -99,6 +99,16 @@ function mergeOpenClawConfig(): void {
   config.plugins.entries.clawke = { enabled: true };
   console.log('[clawke] ✅ Enabled plugins.entries.clawke');
 
+  // 合并 session.dmScope — 多会话隔离需要 per-account-channel-peer
+  if (!config.session) config.session = {};
+  const currentScope = config.session.dmScope;
+  if (!currentScope || currentScope === 'main') {
+    config.session.dmScope = 'per-account-channel-peer';
+    console.log('[clawke] ✅ Set session.dmScope = "per-account-channel-peer" (multi-session isolation)');
+  } else if (currentScope !== 'per-account-channel-peer') {
+    console.log(`[clawke] ℹ️  session.dmScope already set to "${currentScope}" — keeping user config`);
+  }
+
   fs.writeFileSync(OPENCLAW_CONFIG, JSON.stringify(config, null, 2) + '\n');
   console.log(`[clawke] ✅ Config updated: ${OPENCLAW_CONFIG}`);
 }
@@ -129,6 +139,9 @@ If OpenClaw is installed on a remote server, install the gateway manually:
 
   2. Configure OpenClaw (edit ~/.openclaw/openclaw.json on the remote server):
      {
+       "session": {
+         "dmScope": "per-account-channel-peer"
+       },
        "channels": {
          "clawke": {
            "enabled": true,

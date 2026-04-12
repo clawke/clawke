@@ -33,6 +33,8 @@ export interface TokenUsage {
 export interface OpenClawMessage {
   type: OpenClawMessageType;
   message_id?: string;
+  /** 会话 ID（多会话隔离路由用） */
+  conversation_id?: string;
 
   // text 相关
   delta?: string;

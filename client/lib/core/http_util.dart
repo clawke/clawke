@@ -24,8 +24,8 @@ class HttpUtil {
   static const String _kSecuritKey = 'clawke_auth_securit';
 
   static final Dio _dio = Dio(BaseOptions(
-    connectTimeout: const Duration(seconds: 10),
-    receiveTimeout: const Duration(seconds: 20),
+    connectTimeout: const Duration(seconds: 15),
+    receiveTimeout: const Duration(seconds: 30),
     // 不让 Dio 自动抛异常，我们自己解析响应
     validateStatus: (status) => true,
   ));

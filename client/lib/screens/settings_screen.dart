@@ -31,7 +31,7 @@ class SettingsScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: colorScheme.surface,
       appBar: AppBar(
-        title: Text(t.settings),
+        title: Text(t.settings, style: Theme.of(context).textTheme.titleMedium),
         backgroundColor: colorScheme.surface,
         surfaceTintColor: Colors.transparent,
       ),

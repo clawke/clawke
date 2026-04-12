@@ -39,14 +39,15 @@ class MessageRepository {
        _ws = ws;
 
   /// 监听流 — UI 用这个
-  Stream<List<Message>> watchMessages(String accountId, {int limit = 50}) {
-    return _messageDao.watchMessages(accountId, limit: limit);
+  Stream<List<Message>> watchMessages(String conversationId, {int limit = 50}) {
+    return _messageDao.watchMessages(conversationId, limit: limit);
   }
 
   /// 写入流 — 收到消息时调用
   Future<void> receiveMessage({
     required String messageId,
     required String accountId,
+    String? conversationId,
     required String senderId,
     required String type,
     required String content,
@@ -56,6 +57,7 @@ class MessageRepository {
     int seq = 0,
     int? createdAt,
   }) async {
+    final convId = conversationId ?? accountId;
     final now = createdAt ?? DateTime.now().millisecondsSinceEpoch;
 
     await _messageDao.insertMessage(
@@ -63,6 +65,7 @@ class MessageRepository {
         messageId: Value(messageId),
         serverId: Value(serverId),
         accountId: Value(accountId),
+        conversationId: Value(convId),
         senderId: Value(senderId),
         type: Value(type),
         content: Value(content),
@@ -76,20 +79,21 @@ class MessageRepository {
 
     // 更新会话的最后一条消息
     await _conversationDao.updateLastMessage(
-      accountId: accountId,
+      conversationId: convId,
       messageId: messageId,
       messageAt: now,
       preview: _generatePreview(type, content),
     );
 
     // 未读 +1（不是自己发的才加）
-    await _conversationDao.incrementUnseenCount(accountId);
+    await _conversationDao.incrementUnseenCount(convId);
   }
 
   /// 发消息 — 等服务端 ACK 后才标记 sent
   /// 返回 SendResult，用于关联 ACK
   SendResult sendMessage({
     required String accountId,
+    required String conversationId,
     required String content,
     required String senderId,
     String type = 'text',
@@ -104,6 +108,7 @@ class MessageRepository {
       MessagesCompanion(
         messageId: Value(messageId),
         accountId: Value(accountId),
+        conversationId: Value(conversationId),
         senderId: Value(senderId),
         type: Value(type),
         content: Value(content),
@@ -115,7 +120,7 @@ class MessageRepository {
 
     // 更新会话预览
     _conversationDao.updateLastMessage(
-      accountId: accountId,
+      conversationId: conversationId,
       messageId: messageId,
       messageAt: now,
       preview: _generatePreview(type, content),
@@ -129,6 +134,7 @@ class MessageRepository {
         'event_type': 'user_message',
         'context': {
           'account_id': accountId,
+          'conversation_id': conversationId,
           'client_msg_id': messageId,
         },
         'data': {
@@ -159,6 +165,7 @@ class MessageRepository {
         'event_type': 'user_message',
         'context': {
           'account_id': msg.accountId,
+          'conversation_id': msg.conversationId,
           'client_msg_id': messageId,
         },
         'data': {'content': msg.content ?? '', 'type': msg.type},
@@ -184,11 +191,11 @@ class MessageRepository {
   }
 
   /// 清空会话中的所有消息
-  Future<void> clearConversation(String accountId) async {
-    await _messageDao.deleteByConversation(accountId);
+  Future<void> clearConversation(String conversationId) async {
+    await _messageDao.deleteByConversation(conversationId);
     // 重置会话的最后消息信息
     await _conversationDao.updateLastMessage(
-      accountId: accountId,
+      conversationId: conversationId,
       messageId: '',
       messageAt: DateTime.now().millisecondsSinceEpoch,
       preview: '',
@@ -202,6 +209,7 @@ class MessageRepository {
   /// 2. WS 发送轻量消息引用 URL（不含文件内容）
   Future<SendResult> sendImageMessage({
     required String accountId,
+    required String conversationId,
     required String senderId,
     required String filePath,
     void Function(String messageId, double progress)? onProgress,
@@ -223,6 +231,7 @@ class MessageRepository {
       MessagesCompanion(
         messageId: Value(messageId),
         accountId: Value(accountId),
+        conversationId: Value(conversationId),
         senderId: Value(senderId),
         type: const Value('image'),
         content: Value(cachedPath),
@@ -232,7 +241,7 @@ class MessageRepository {
     );
 
     _conversationDao.updateLastMessage(
-      accountId: accountId,
+      conversationId: conversationId,
       messageId: messageId,
       messageAt: now,
       preview: '[图片]',
@@ -267,6 +276,7 @@ class MessageRepository {
         'event_type': 'user_message',
         'context': {
           'account_id': accountId,
+          'conversation_id': conversationId,
           'client_msg_id': messageId,
           'device_id': deviceId,
         },
@@ -296,6 +306,7 @@ class MessageRepository {
   /// 2. WS 发送轻量消息引用 URL（不含文件内容）
   Future<SendResult> sendFileMessage({
     required String accountId,
+    required String conversationId,
     required String senderId,
     required String filePath,
     required String fileName,
@@ -323,6 +334,7 @@ class MessageRepository {
       MessagesCompanion(
         messageId: Value(messageId),
         accountId: Value(accountId),
+        conversationId: Value(conversationId),
         senderId: Value(senderId),
         type: const Value('file'),
         content: Value(contentJson),
@@ -332,7 +344,7 @@ class MessageRepository {
     );
 
     _conversationDao.updateLastMessage(
-      accountId: accountId,
+      conversationId: conversationId,
       messageId: messageId,
       messageAt: now,
       preview: '[文件] $fileName',
@@ -364,6 +376,7 @@ class MessageRepository {
         'event_type': 'user_message',
         'context': {
           'account_id': accountId,
+          'conversation_id': conversationId,
           'client_msg_id': messageId,
           'device_id': deviceId,
         },
@@ -389,6 +402,7 @@ class MessageRepository {
   /// 返回 SendResult，调用方后续用 [finalizeMixed] 更新为上传后的内容并发送 WS。
   SendResult insertMixedLocal({
     required String accountId,
+    required String conversationId,
     required String senderId,
     required String contentJson,
     String? quoteId,
@@ -401,6 +415,7 @@ class MessageRepository {
       MessagesCompanion(
         messageId: Value(messageId),
         accountId: Value(accountId),
+        conversationId: Value(conversationId),
         senderId: Value(senderId),
         type: const Value('mixed'),
         content: Value(contentJson),
@@ -411,7 +426,7 @@ class MessageRepository {
     );
 
     _conversationDao.updateLastMessage(
-      accountId: accountId,
+      conversationId: conversationId,
       messageId: messageId,
       messageAt: now,
       preview: _generatePreview('mixed', contentJson),
@@ -425,6 +440,7 @@ class MessageRepository {
     required String messageId,
     required String requestId,
     required String accountId,
+    required String conversationId,
     required String contentJson,
     String? quoteId,
   }) {
@@ -441,6 +457,7 @@ class MessageRepository {
         'event_type': 'user_message',
         'context': {
           'account_id': accountId,
+          'conversation_id': conversationId,
           'client_msg_id': messageId,
           'device_id': deviceId,
         },

@@ -21,7 +21,7 @@ void main() {
   group('ConversationDao', () {
     test('upsert and watchAll returns conversations', () async {
       await convDao.upsertConversation(
-        ConversationsCompanion(
+        ConversationsCompanion(conversationId: const Value('conv_1'), 
           accountId: const Value('conv_1'),
           type: const Value('dm'),
           name: const Value('Test Chat'),
@@ -36,7 +36,7 @@ void main() {
 
     test('unseen count increments and resets', () async {
       await convDao.upsertConversation(
-        ConversationsCompanion(
+        ConversationsCompanion(conversationId: const Value('conv_1'), 
           accountId: const Value('conv_1'),
           type: const Value('dm'),
           createdAt: Value(DateTime.now().millisecondsSinceEpoch),
@@ -59,7 +59,7 @@ void main() {
     test('insert and watch messages', () async {
       // 先创建会话
       await convDao.upsertConversation(
-        ConversationsCompanion(
+        ConversationsCompanion(conversationId: const Value('conv_1'), 
           accountId: const Value('conv_1'),
           type: const Value('dm'),
           createdAt: Value(DateTime.now().millisecondsSinceEpoch),
@@ -67,7 +67,7 @@ void main() {
       );
 
       await msgDao.insertMessage(
-        MessagesCompanion(
+        MessagesCompanion(conversationId: const Value('conv_1'), 
           messageId: const Value('msg_1'),
           accountId: const Value('conv_1'),
           senderId: const Value('user_1'),
@@ -85,7 +85,7 @@ void main() {
 
     test('soft delete keeps message with deleted status', () async {
       await convDao.upsertConversation(
-        ConversationsCompanion(
+        ConversationsCompanion(conversationId: const Value('conv_1'), 
           accountId: const Value('conv_1'),
           type: const Value('dm'),
           createdAt: Value(DateTime.now().millisecondsSinceEpoch),
@@ -93,7 +93,7 @@ void main() {
       );
 
       await msgDao.insertMessage(
-        MessagesCompanion(
+        MessagesCompanion(conversationId: const Value('conv_1'), 
           messageId: const Value('msg_1'),
           accountId: const Value('conv_1'),
           senderId: const Value('user_1'),
@@ -113,7 +113,7 @@ void main() {
 
     test('update status from sending to failed', () async {
       await convDao.upsertConversation(
-        ConversationsCompanion(
+        ConversationsCompanion(conversationId: const Value('conv_1'), 
           accountId: const Value('conv_1'),
           type: const Value('dm'),
           createdAt: Value(DateTime.now().millisecondsSinceEpoch),
@@ -121,7 +121,7 @@ void main() {
       );
 
       await msgDao.insertMessage(
-        MessagesCompanion(
+        MessagesCompanion(conversationId: const Value('conv_1'), 
           messageId: const Value('msg_1'),
           accountId: const Value('conv_1'),
           senderId: const Value('user_1'),
@@ -140,7 +140,7 @@ void main() {
 
     test('edit message updates content and editedAt', () async {
       await convDao.upsertConversation(
-        ConversationsCompanion(
+        ConversationsCompanion(conversationId: const Value('conv_1'), 
           accountId: const Value('conv_1'),
           type: const Value('dm'),
           createdAt: Value(DateTime.now().millisecondsSinceEpoch),
@@ -148,7 +148,7 @@ void main() {
       );
 
       await msgDao.insertMessage(
-        MessagesCompanion(
+        MessagesCompanion(conversationId: const Value('conv_1'), 
           messageId: const Value('msg_edit'),
           accountId: const Value('conv_1'),
           senderId: const Value('user_1'),
@@ -172,7 +172,7 @@ void main() {
 
     test('getMaxSeq returns highest seq', () async {
       await convDao.upsertConversation(
-        ConversationsCompanion(
+        ConversationsCompanion(conversationId: const Value('conv_1'), 
           accountId: const Value('conv_1'),
           type: const Value('dm'),
           createdAt: Value(DateTime.now().millisecondsSinceEpoch),
@@ -180,7 +180,7 @@ void main() {
       );
 
       await msgDao.insertMessage(
-        MessagesCompanion(
+        MessagesCompanion(conversationId: const Value('conv_1'), 
           messageId: const Value('msg_seq1'),
           accountId: const Value('conv_1'),
           senderId: const Value('user_1'),
@@ -193,7 +193,7 @@ void main() {
       );
 
       await msgDao.insertMessage(
-        MessagesCompanion(
+        MessagesCompanion(conversationId: const Value('conv_1'), 
           messageId: const Value('msg_seq2'),
           accountId: const Value('conv_1'),
           senderId: const Value('user_1'),
@@ -211,7 +211,7 @@ void main() {
 
     test('updateStatus with serverId and seq', () async {
       await convDao.upsertConversation(
-        ConversationsCompanion(
+        ConversationsCompanion(conversationId: const Value('conv_1'), 
           accountId: const Value('conv_1'),
           type: const Value('dm'),
           createdAt: Value(DateTime.now().millisecondsSinceEpoch),
@@ -219,7 +219,7 @@ void main() {
       );
 
       await msgDao.insertMessage(
-        MessagesCompanion(
+        MessagesCompanion(conversationId: const Value('conv_1'), 
           messageId: const Value('msg_ack'),
           accountId: const Value('conv_1'),
           senderId: const Value('user_1'),
@@ -244,7 +244,7 @@ void main() {
 
     test('insert message with quoteId', () async {
       await convDao.upsertConversation(
-        ConversationsCompanion(
+        ConversationsCompanion(conversationId: const Value('conv_1'), 
           accountId: const Value('conv_1'),
           type: const Value('dm'),
           createdAt: Value(DateTime.now().millisecondsSinceEpoch),
@@ -252,7 +252,7 @@ void main() {
       );
 
       await msgDao.insertMessage(
-        MessagesCompanion(
+        MessagesCompanion(conversationId: const Value('conv_1'), 
           messageId: const Value('msg_original'),
           accountId: const Value('conv_1'),
           senderId: const Value('user_1'),
@@ -264,7 +264,7 @@ void main() {
       );
 
       await msgDao.insertMessage(
-        MessagesCompanion(
+        MessagesCompanion(conversationId: const Value('conv_1'), 
           messageId: const Value('msg_reply'),
           accountId: const Value('conv_1'),
           senderId: const Value('user_2'),

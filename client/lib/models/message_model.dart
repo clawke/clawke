@@ -8,16 +8,20 @@ sealed class MessageModel {
 
 class TextMessage extends MessageModel {
   final String content;
+  /// 多会话路由：流式消息所属的 conversationId
+  final String? conversationId;
   const TextMessage({
     required super.messageId,
     required super.role,
     required this.content,
+    this.conversationId,
   });
 
-  TextMessage copyWith({String? content}) => TextMessage(
+  TextMessage copyWith({String? content, String? conversationId}) => TextMessage(
     messageId: messageId,
     role: role,
     content: content ?? this.content,
+    conversationId: conversationId ?? this.conversationId,
   );
 }
 
@@ -58,15 +62,18 @@ class SystemMessage extends MessageModel {
 
 class ThinkingMessage extends MessageModel {
   final String content;
+  final String? conversationId;
   const ThinkingMessage({
     required super.messageId,
     required super.role,
     required this.content,
+    this.conversationId,
   });
 
-  ThinkingMessage copyWith({String? content}) => ThinkingMessage(
+  ThinkingMessage copyWith({String? content, String? conversationId}) => ThinkingMessage(
     messageId: messageId,
     role: role,
     content: content ?? this.content,
+    conversationId: conversationId ?? this.conversationId,
   );
 }

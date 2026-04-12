@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clawke — 会话设置 Drawer Demo</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f0f12;
+    --surface: #1a1a22;
+    --surface-2: #22222e;
+    --surface-3: #2a2a38;
+    --border: rgba(255,255,255,0.06);
+    --border-light: rgba(255,255,255,0.1);
+    --text: #e8e8ed;
+    --text-secondary: #8888a0;
+    --text-tertiary: #5a5a72;
+    --accent: #6c63ff;
+    --accent-soft: rgba(108,99,255,0.12);
+    --accent-hover: rgba(108,99,255,0.2);
+    --green: #34d399;
+    --green-soft: rgba(52,211,153,0.12);
+    --red: #f87171;
+    --red-soft: rgba(248,113,113,0.12);
+    --orange: #fb923c;
+    --orange-soft: rgba(251,146,60,0.12);
+    --radius: 12px;
+    --radius-sm: 8px;
+    --radius-xs: 6px;
+    --transition: 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+  }
+
+  /* ─── Phone Frame ─── */
+  .phone {
+    width: 393px;
+    height: 852px;
+    background: var(--bg);
+    border-radius: 44px;
+    border: 3px solid #333;
+    overflow: hidden;
+    position: relative;
+    margin-top: 20px;
+    box-shadow: 0 20px 80px rgba(0,0,0,0.5);
+  }
+
+  /* ─── Chat Screen (Backdrop) ─── */
+  .chat-screen {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    padding-top: env(safe-area-inset-top, 50px);
+  }
+
+  .chat-header {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    gap: 12px;
+    flex-shrink: 0;
+  }
+
+  .chat-header .back-btn {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: background var(--transition);
+  }
+  .chat-header .back-btn:hover { background: var(--surface-2); }
+  .chat-header .back-btn svg { width: 20px; height: 20px; }
+
+  .chat-title-area { flex: 1; }
+  .chat-title {
+    font-size: 15px; font-weight: 600; color: var(--text);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .chat-title .status-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--green);
+  }
+  .chat-subtitle { font-size: 11px; color: var(--text-tertiary); margin-top: 1px; }
+
+  .gear-btn {
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: all var(--transition);
+    position: relative;
+  }
+  .gear-btn:hover { background: var(--accent-soft); color: var(--accent); }
+  .gear-btn svg { width: 20px; height: 20px; transition: transform 0.4s ease; }
+  .gear-btn:hover svg { transform: rotate(60deg); }
+
+  .chat-body {
+    flex: 1; padding: 16px;
+    display: flex; flex-direction: column; justify-content: flex-end; gap: 12px;
+    opacity: 0.5;
+  }
+  .msg {
+    max-width: 75%;
+    padding: 10px 14px;
+    border-radius: 16px;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .msg.user {
+    align-self: flex-end;
+    background: var(--accent);
+    color: white;
+    border-bottom-right-radius: 4px;
+  }
+  .msg.ai {
+    align-self: flex-start;
+    background: var(--surface-2);
+    color: var(--text);
+    border-bottom-left-radius: 4px;
+  }
+
+  /* ─── Drawer System ─── */
+  .drawer-overlay {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 90;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.3s ease;
+    border-radius: 44px;
+  }
+  .drawer-overlay.active { opacity: 1; pointer-events: auto; }
+
+  .drawer {
+    position: absolute;
+    right: -100%;
+    top: 0; bottom: 0;
+    width: 100%;
+    background: var(--surface);
+    z-index: 100;
+    transition: right 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+    display: flex;
+    flex-direction: column;
+    border-radius: 44px;
+  }
+  .drawer.active { right: 0; }
+
+  /* Sub-drawer slides on top */
+  .sub-drawer {
+    position: absolute;
+    right: -100%;
+    top: 0; bottom: 0;
+    width: 100%;
+    background: var(--surface);
+    z-index: 110;
+    transition: right 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+    display: flex;
+    flex-direction: column;
+    border-radius: 44px;
+  }
+  .sub-drawer.active { right: 0; }
+
+  /* ─── Drawer Header ─── */
+  .drawer-header {
+    display: flex;
+    align-items: center;
+    padding: 56px 16px 12px 16px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .drawer-header .back-nav {
+    display: flex; align-items: center; gap: 4px;
+    cursor: pointer;
+    color: var(--accent);
+    font-size: 15px;
+    font-weight: 500;
+    transition: opacity 0.2s;
+    flex-shrink: 0;
+  }
+  .drawer-header .back-nav:hover { opacity: 0.7; }
+  .drawer-header .back-nav svg { width: 20px; height: 20px; }
+  .drawer-header .title {
+    flex: 1;
+    text-align: center;
+    font-size: 16px;
+    font-weight: 600;
+    margin-right: 60px; /* balance the back button */
+  }
+  .drawer-header.has-action .title { margin-right: 0; }
+  .drawer-header .action-btn {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--accent);
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: background var(--transition);
+  }
+  .drawer-header .action-btn:hover { background: var(--accent-soft); }
+
+  /* ─── Settings Content ─── */
+  .drawer-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    padding-bottom: 60px;
+  }
+
+  .settings-group {
+    background: var(--surface-2);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+
+  .settings-item {
+    display: flex;
+    align-items: center;
+    padding: 14px 16px;
+    cursor: pointer;
+    transition: background 0.15s;
+    border-bottom: 1px solid var(--border);
+    gap: 12px;
+  }
+  .settings-item:last-child { border-bottom: none; }
+  .settings-item:hover { background: var(--surface-3); }
+
+  .settings-item .icon-box {
+    width: 30px; height: 30px;
+    border-radius: var(--radius-xs);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .settings-item .icon-box svg { width: 16px; height: 16px; }
+
+  .settings-item .label-area { flex: 1; min-width: 0; }
+  .settings-item .label {
+    font-size: 15px; font-weight: 500; color: var(--text);
+  }
+  .settings-item .sublabel {
+    font-size: 12px; color: var(--text-tertiary); margin-top: 2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .settings-item .value {
+    font-size: 14px; color: var(--text-secondary);
+    max-width: 150px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    text-align: right;
+  }
+  .settings-item .chevron {
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+  }
+  .settings-item .chevron svg { width: 16px; height: 16px; }
+
+  /* ─── Name Input ─── */
+  .name-input-group { margin-bottom: 20px; }
+  .name-input {
+    width: 100%;
+    background: var(--surface-2);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    font-size: 16px;
+    color: var(--text);
+    outline: none;
+    transition: border-color var(--transition);
+    font-family: inherit;
+  }
+  .name-input:focus { border-color: var(--accent); }
+  .name-input::placeholder { color: var(--text-tertiary); }
+
+  /* ─── Section Label ─── */
+  .section-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+    padding-left: 4px;
+  }
+
+  /* ─── Chip / Tag system ─── */
+  .chips-area {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    min-height: 38px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+    animation: chipIn 0.25s ease;
+  }
+  @keyframes chipIn {
+    from { transform: scale(0.8); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+  .chip .chip-x {
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    background: rgba(108,99,255,0.2);
+    transition: background 0.15s;
+  }
+  .chip .chip-x:hover { background: rgba(108,99,255,0.4); }
+  .chip .chip-x svg { width: 10px; height: 10px; }
+
+  .chip-empty {
+    font-size: 13px;
+    color: var(--text-tertiary);
+    padding: 5px 0;
+    font-style: italic;
+  }
+
+  /* ─── Model Picker List ─── */
+  .model-list { padding: 0; }
+  .model-item {
+    display: flex;
+    align-items: center;
+    padding: 14px 16px;
+    cursor: pointer;
+    transition: background 0.15s;
+    border-bottom: 1px solid var(--border);
+    gap: 12px;
+  }
+  .model-item:last-child { border-bottom: none; }
+  .model-item:hover { background: var(--surface-3); }
+  .model-item.selected { background: var(--accent-soft); }
+
+  .model-item .model-name {
+    flex: 1;
+    font-size: 15px;
+    font-weight: 500;
+  }
+  .model-item .model-provider {
+    font-size: 12px;
+    color: var(--text-tertiary);
+  }
+  .model-item .check {
+    width: 22px; height: 22px;
+    color: var(--accent);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .model-item.selected .check { opacity: 1; }
+  .model-item .check svg { width: 22px; height: 22px; }
+
+  /* ─── Skill Search & List ─── */
+  .search-bar {
+    position: sticky;
+    top: 0;
+    background: var(--surface);
+    padding: 12px 16px;
+    z-index: 5;
+  }
+  .search-input {
+    width: 100%;
+    background: var(--surface-2);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px 10px 38px;
+    font-size: 15px;
+    color: var(--text);
+    outline: none;
+    font-family: inherit;
+    transition: border-color var(--transition);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235a5a72' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: 12px center;
+  }
+  .search-input:focus { border-color: var(--accent); }
+  .search-input::placeholder { color: var(--text-tertiary); }
+
+  .skill-item {
+    display: flex;
+    align-items: center;
+    padding: 14px 16px;
+    cursor: pointer;
+    transition: background 0.15s;
+    border-bottom: 1px solid var(--border);
+    gap: 12px;
+  }
+  .skill-item:hover { background: var(--surface-3); }
+
+  .skill-item .skill-info { flex: 1; min-width: 0; }
+  .skill-item .skill-name {
+    font-size: 14px; font-weight: 500; color: var(--text);
+  }
+  .skill-item .skill-desc {
+    font-size: 12px; color: var(--text-tertiary); margin-top: 2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .skill-toggle {
+    width: 44px; height: 26px;
+    border-radius: 13px;
+    background: var(--surface-3);
+    cursor: pointer;
+    position: relative;
+    transition: background 0.25s;
+    flex-shrink: 0;
+  }
+  .skill-toggle.on { background: var(--accent); }
+  .skill-toggle .knob {
+    position: absolute;
+    top: 3px; left: 3px;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: white;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+  .skill-toggle.on .knob { transform: translateX(18px); }
+
+  /* ─── Skill Mode Toggle ─── */
+  .mode-toggle {
+    display: flex;
+    background: var(--surface-2);
+    border-radius: var(--radius-sm);
+    padding: 3px;
+    margin: 12px 16px;
+    gap: 2px;
+  }
+  .mode-btn {
+    flex: 1;
+    padding: 8px 12px;
+    border-radius: var(--radius-xs);
+    text-align: center;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .mode-btn.active {
+    background: var(--accent);
+    color: white;
+    box-shadow: 0 2px 8px rgba(108,99,255,0.3);
+  }
+
+  /* ─── System Prompt ─── */
+  .prompt-textarea {
+    width: 100%;
+    background: var(--surface-2);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    font-size: 14px;
+    color: var(--text);
+    outline: none;
+    resize: vertical;
+    min-height: 100px;
+    line-height: 1.6;
+    font-family: inherit;
+    transition: border-color var(--transition);
+  }
+  .prompt-textarea:focus { border-color: var(--accent); }
+  .prompt-textarea::placeholder { color: var(--text-tertiary); }
+
+  /* ─── Save Button ─── */
+  .save-btn-area {
+    padding: 12px 16px;
+    padding-bottom: 40px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+  .save-btn {
+    width: 100%;
+    padding: 14px;
+    border-radius: var(--radius);
+    background: var(--accent);
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+    letter-spacing: 0.2px;
+  }
+  .save-btn:hover { background: #7c73ff; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(108,99,255,0.4); }
+  .save-btn:active { transform: translateY(0); }
+
+  /* ─── Danger Zone ─── */
+  .danger-item {
+    color: var(--red) !important;
+  }
+  .danger-item .label { color: var(--red); }
+  .danger-item .icon-box { background: var(--red-soft); }
+
+  /* ── Annotations for demo ── */
+  .demo-label {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(108,99,255,0.15);
+    color: var(--accent);
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    border: 1px solid rgba(108,99,255,0.2);
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+
+<div class="phone" id="phone">
+  <!-- ═══════ Chat Screen (背景) ═══════ -->
+  <div class="chat-screen">
+    <div class="chat-header">
+      <div class="back-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </div>
+      <div class="chat-title-area">
+        <div class="chat-title">
+          <span class="status-dot"></span>
+          New Chat (CEO)
+        </div>
+        <div class="chat-subtitle">MiniMax-M2.7 · 2 skills</div>
+      </div>
+      <!-- ★ 齿轮按钮 ★ -->
+      <div class="gear-btn" onclick="openSettings()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="chat-body">
+      <div class="msg user">你好，介绍一下自己</div>
+      <div class="msg ai">嘿！👋 我是你的 AI 助手。我使用 MiniMax-M2.7 模型，装备了 CEO Review 技能。有什么可以帮你的吗？</div>
+      <div class="msg user">帮我审查一下这个产品方案</div>
+    </div>
+  </div>
+
+  <!-- ═══════ Drawer Overlay ═══════ -->
+  <div class="drawer-overlay" id="overlay" onclick="closeSettings()"></div>
+
+  <!-- ═══════ Settings Drawer (主页) ═══════ -->
+  <div class="drawer" id="settingsDrawer">
+    <div class="drawer-header has-action">
+      <div class="back-nav" onclick="closeSettings()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+        返回
+      </div>
+      <div class="title">会话设置</div>
+      <div class="action-btn" onclick="closeSettings()">完成</div>
+    </div>
+
+    <div class="drawer-body">
+      <!-- 会话名称 -->
+      <div class="section-label">会话名称</div>
+      <div class="name-input-group">
+        <input class="name-input" type="text" value="New Chat (CEO)" placeholder="输入会话名称">
+      </div>
+
+      <!-- 配置组 -->
+      <div class="section-label">配置</div>
+      <div class="settings-group">
+        <!-- 模型选择 -->
+        <div class="settings-item" onclick="openModelPicker()">
+          <div class="icon-box" style="background:var(--accent-soft); color:var(--accent);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+          </div>
+          <div class="label-area">
+            <div class="label">模型</div>
+          </div>
+          <div class="value">MiniMax-M2.7</div>
+          <div class="chevron">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+          </div>
+        </div>
+
+        <!-- Skills -->
+        <div class="settings-item" onclick="openSkillPicker()">
+          <div class="icon-box" style="background:var(--green-soft); color:var(--green);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+          </div>
+          <div class="label-area">
+            <div class="label">Skills</div>
+            <div class="sublabel">2 已启用</div>
+          </div>
+          <div class="chevron">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+          </div>
+        </div>
+
+        <!-- Skill Mode -->
+        <div class="settings-item" style="cursor:default;">
+          <div class="icon-box" style="background:var(--orange-soft); color:var(--orange);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12h8m-8 6h16M4 6h16"/></svg>
+          </div>
+          <div class="label-area">
+            <div class="label">Skill 模式</div>
+          </div>
+          <div class="value">优先</div>
+        </div>
+      </div>
+
+      <!-- 已选 Skills Chips -->
+      <div class="section-label">已选 Skills</div>
+      <div class="settings-group" style="padding: 12px 16px;">
+        <div style="display:flex; flex-wrap:wrap; gap:8px;" id="selectedChips">
+          <div class="chip">
+            <span>ceo-review</span>
+            <div class="chip-x" onclick="removeSkill(this)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </div>
+          </div>
+          <div class="chip">
+            <span>eng-review</span>
+            <div class="chip-x" onclick="removeSkill(this)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="height:20px"></div>
+
+      <!-- 高级设置 -->
+      <div class="section-label">高级</div>
+      <div class="settings-group">
+        <div class="settings-item" onclick="togglePrompt()">
+          <div class="icon-box" style="background:var(--accent-soft); color:var(--accent);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M16 13H8 M16 17H8 M10 9H8"/></svg>
+          </div>
+          <div class="label-area">
+            <div class="label">系统提示词</div>
+            <div class="sublabel">自定义 AI 行为和角色</div>
+          </div>
+          <div class="chevron">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+          </div>
+        </div>
+        <div class="settings-item">
+          <div class="icon-box" style="background:var(--surface-3); color:var(--text-secondary);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"/></svg>
+          </div>
+          <div class="label-area">
+            <div class="label">工作目录</div>
+          </div>
+          <div class="value">default</div>
+          <div class="chevron">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- 危险区域 -->
+      <div class="section-label" style="color:var(--red);">危险操作</div>
+      <div class="settings-group">
+        <div class="settings-item danger-item">
+          <div class="icon-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m-9 0v14h10V6H7z M10 11v6 M14 11v6"/></svg>
+          </div>
+          <div class="label-area">
+            <div class="label">删除会话</div>
+            <div class="sublabel" style="color:var(--red); opacity:0.6;">删除后不可恢复</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="save-btn-area">
+      <button class="save-btn" onclick="closeSettings()">保存</button>
+    </div>
+  </div>
+
+  <!-- ═══════ Model Picker Sub-Drawer ═══════ -->
+  <div class="sub-drawer" id="modelDrawer">
+    <div class="drawer-header">
+      <div class="back-nav" onclick="closeModelPicker()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+        设置
+      </div>
+      <div class="title">选择模型</div>
+    </div>
+    <div class="drawer-body" style="padding:0;">
+      <div class="settings-group" style="margin:0; border-radius:0;">
+        <div class="model-item" onclick="selectModel(this, 'MiniMax-M2.7')">
+          <div>
+            <div class="model-name">MiniMax-M2.7</div>
+            <div class="model-provider">minimax · Anthropic API</div>
+          </div>
+          <div class="check">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+        </div>
+        <div class="model-item selected" onclick="selectModel(this, 'MiniMax-M2.7')">
+          <div>
+            <div class="model-name" style="color:var(--accent);">MiniMax-M2.7</div>
+            <div class="model-provider">minimax · Anthropic API</div>
+          </div>
+          <div class="check">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+        </div>
+        <div class="model-item" onclick="selectModel(this, 'claude-sonnet-4-20250514')">
+          <div>
+            <div class="model-name">Claude Sonnet 4</div>
+            <div class="model-provider">anthropic · Messages API</div>
+          </div>
+          <div class="check">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+        </div>
+        <div class="model-item" onclick="selectModel(this, 'deepseek-r1')">
+          <div>
+            <div class="model-name">DeepSeek-R1</div>
+            <div class="model-provider">deepseek · OpenAI API</div>
+          </div>
+          <div class="check">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+        </div>
+        <div class="model-item" onclick="selectModel(this, 'gpt-4o')">
+          <div>
+            <div class="model-name">GPT-4o</div>
+            <div class="model-provider">openai · OpenAI API</div>
+          </div>
+          <div class="check">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+        </div>
+        <div class="model-item" onclick="selectModel(this, 'gemini-2.5-pro')">
+          <div>
+            <div class="model-name">Gemini 2.5 Pro</div>
+            <div class="model-provider">google · Gemini API</div>
+          </div>
+          <div class="check">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ Skill Picker Sub-Drawer ═══════ -->
+  <div class="sub-drawer" id="skillDrawer">
+    <div class="drawer-header has-action">
+      <div class="back-nav" onclick="closeSkillPicker()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+        设置
+      </div>
+      <div class="title">选择 Skills</div>
+      <div class="action-btn" onclick="closeSkillPicker()">完成</div>
+    </div>
+
+    <!-- Selected chips at top -->
+    <div class="chips-area" id="skillChipsTop">
+      <div class="chip">
+        <span>ceo-review</span>
+        <div class="chip-x" onclick="toggleSkillOff('ceo-review')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </div>
+      </div>
+      <div class="chip">
+        <span>eng-review</span>
+        <div class="chip-x" onclick="toggleSkillOff('eng-review')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mode toggle -->
+    <div class="mode-toggle">
+      <div class="mode-btn active">优先 Priority</div>
+      <div class="mode-btn" onclick="this.parentElement.querySelector('.active')?.classList.remove('active'); this.classList.add('active')">独占 Exclusive</div>
+    </div>
+
+    <div class="drawer-body" style="padding:0;">
+      <!-- Search -->
+      <div class="search-bar">
+        <input class="search-input" type="text" placeholder="搜索 Skills...">
+      </div>
+
+      <!-- Skill List -->
+      <div>
+        <div class="skill-item">
+          <div class="skill-info">
+            <div class="skill-name">gstack-openclaw-ceo-review</div>
+            <div class="skill-desc">CEO/founder-mode plan review, rethink problems</div>
+          </div>
+          <div class="skill-toggle on" onclick="this.classList.toggle('on')"><div class="knob"></div></div>
+        </div>
+        <div class="skill-item">
+          <div class="skill-info">
+            <div class="skill-name">gstack-openclaw-eng-review</div>
+            <div class="skill-desc">Engineering manager-mode plan review</div>
+          </div>
+          <div class="skill-toggle on" onclick="this.classList.toggle('on')"><div class="knob"></div></div>
+        </div>
+        <div class="skill-item">
+          <div class="skill-info">
+            <div class="skill-name">gstack-openclaw-design-review</div>
+            <div class="skill-desc">Designer's eye: visual QA and polish</div>
+          </div>
+          <div class="skill-toggle" onclick="this.classList.toggle('on')"><div class="knob"></div></div>
+        </div>
+        <div class="skill-item">
+          <div class="skill-info">
+            <div class="skill-name">gstack-openclaw-ship</div>
+            <div class="skill-desc">Ship workflow: test, review, PR, deploy</div>
+          </div>
+          <div class="skill-toggle" onclick="this.classList.toggle('on')"><div class="knob"></div></div>
+        </div>
+        <div class="skill-item">
+          <div class="skill-info">
+            <div class="skill-name">gstack-openclaw-investigate</div>
+            <div class="skill-desc">Systematic debugging with root cause analysis</div>
+          </div>
+          <div class="skill-toggle" onclick="this.classList.toggle('on')"><div class="knob"></div></div>
+        </div>
+        <div class="skill-item">
+          <div class="skill-info">
+            <div class="skill-name">gstack-openclaw-qa</div>
+            <div class="skill-desc">QA test a web app and fix bugs found</div>
+          </div>
+          <div class="skill-toggle" onclick="this.classList.toggle('on')"><div class="knob"></div></div>
+        </div>
+        <div class="skill-item">
+          <div class="skill-info">
+            <div class="skill-name">gstack-openclaw-browse</div>
+            <div class="skill-desc">Fast headless browser for testing</div>
+          </div>
+          <div class="skill-toggle" onclick="this.classList.toggle('on')"><div class="knob"></div></div>
+        </div>
+        <div class="skill-item">
+          <div class="skill-info">
+            <div class="skill-name">gstack-openclaw-health</div>
+            <div class="skill-desc">Code quality dashboard and metrics</div>
+          </div>
+          <div class="skill-toggle" onclick="this.classList.toggle('on')"><div class="knob"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="demo-label">点击右上角 ⚙️ 齿轮按钮打开设置</div>
+
+<script>
+  function openSettings() {
+    document.getElementById('overlay').classList.add('active');
+    document.getElementById('settingsDrawer').classList.add('active');
+  }
+  function closeSettings() {
+    document.getElementById('overlay').classList.remove('active');
+    document.getElementById('settingsDrawer').classList.remove('active');
+    document.getElementById('modelDrawer').classList.remove('active');
+    document.getElementById('skillDrawer').classList.remove('active');
+  }
+  function openModelPicker() {
+    document.getElementById('modelDrawer').classList.add('active');
+  }
+  function closeModelPicker() {
+    document.getElementById('modelDrawer').classList.remove('active');
+  }
+  function selectModel(el, name) {
+    el.parentElement.querySelectorAll('.model-item').forEach(i => {
+      i.classList.remove('selected');
+      i.querySelector('.model-name').style.color = '';
+    });
+    el.classList.add('selected');
+    el.querySelector('.model-name').style.color = 'var(--accent)';
+    setTimeout(() => closeModelPicker(), 200);
+  }
+  function openSkillPicker() {
+    document.getElementById('skillDrawer').classList.add('active');
+  }
+  function closeSkillPicker() {
+    document.getElementById('skillDrawer').classList.remove('active');
+  }
+  function removeSkill(el) {
+    el.closest('.chip').style.transform = 'scale(0.8)';
+    el.closest('.chip').style.opacity = '0';
+    setTimeout(() => el.closest('.chip').remove(), 200);
+  }
+  function toggleSkillOff(name) {
+    // just demo animation
+    event.target.closest('.chip').style.transform = 'scale(0.8)';
+    event.target.closest('.chip').style.opacity = '0';
+    setTimeout(() => event.target.closest('.chip')?.remove(), 200);
+  }
+  function togglePrompt() {
+    // could open a sub-drawer for prompt editing
+    alert('打开系统提示词编辑页面（同样抽屉式）');
+  }
+</script>
+</body>
+</html>

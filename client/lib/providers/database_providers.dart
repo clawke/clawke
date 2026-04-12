@@ -5,12 +5,18 @@ import 'package:client/data/database/dao/message_dao.dart';
 import 'package:client/data/repositories/message_repository.dart';
 import 'package:client/data/repositories/conversation_repository.dart';
 import 'package:client/providers/ws_state_provider.dart';
+import 'package:client/services/config_api_service.dart';
 
 /// 数据库单例
 final databaseProvider = Provider<AppDatabase>((ref) {
   final db = AppDatabase();
   ref.onDispose(db.close);
   return db;
+});
+
+/// ConfigApiService 单例
+final configApiServiceProvider = Provider<ConfigApiService>((ref) {
+  return ConfigApiService();
 });
 
 /// DAO Providers
@@ -24,7 +30,10 @@ final messageDaoProvider = Provider<MessageDao>((ref) {
 
 /// Repository Providers
 final conversationRepositoryProvider = Provider<ConversationRepository>((ref) {
-  return ConversationRepository(dao: ref.watch(conversationDaoProvider));
+  return ConversationRepository(
+    dao: ref.watch(conversationDaoProvider),
+    api: ref.watch(configApiServiceProvider),
+  );
 });
 
 final messageRepositoryProvider = Provider<MessageRepository>((ref) {

@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clawke Settings — 5 Variants</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f0f12;
+    --surface: #1a1a22;
+    --surface-2: #22222e;
+    --surface-3: #2a2a38;
+    --surface-4: #323242;
+    --border: rgba(255,255,255,0.06);
+    --border-light: rgba(255,255,255,0.1);
+    --text: #e8e8ed;
+    --text-secondary: #8888a0;
+    --text-tertiary: #5a5a72;
+    --accent: #6c63ff;
+    --accent-soft: rgba(108,99,255,0.12);
+    --green: #34d399;
+    --green-soft: rgba(52,211,153,0.12);
+    --orange: #fb923c;
+    --orange-soft: rgba(251,146,60,0.12);
+    --blue: #60a5fa;
+    --blue-soft: rgba(96,165,250,0.12);
+    --pink: #f472b6;
+    --pink-soft: rgba(244,114,182,0.12);
+    --radius: 12px;
+    --radius-sm: 8px;
+    --transition: 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family:'Inter',-apple-system,sans-serif;
+    background:#08080c;
+    color:var(--text);
+    min-height:100vh;
+    overflow-x:hidden;
+  }
+
+  /* ─── Tab Switcher ─── */
+  .tabs {
+    position:sticky; top:0; z-index:200;
+    display:flex; justify-content:center; gap:6px;
+    padding:16px 16px 12px;
+    background:rgba(8,8,12,0.92);
+    backdrop-filter:blur(12px);
+    border-bottom:1px solid var(--border);
+  }
+  .tab {
+    padding:8px 20px;
+    border-radius:20px;
+    font-size:14px; font-weight:500;
+    color:var(--text-secondary);
+    cursor:pointer;
+    transition:all 0.2s;
+    border:1px solid transparent;
+  }
+  .tab:hover { background:var(--surface-2); }
+  .tab.active {
+    background:var(--accent);
+    color:white;
+    box-shadow:0 2px 12px rgba(108,99,255,0.3);
+  }
+  .tab-label {
+    font-size:11px; color:var(--text-tertiary);
+    text-align:center; margin-top:3px;
+  }
+
+  /* ─── Phone Container ─── */
+  .variants { display:flex; justify-content:center; padding:30px 16px 60px; }
+  .phone-wrap { display:none; }
+  .phone-wrap.active { display:block; }
+
+  .phone {
+    width:393px; height:852px;
+    background:var(--bg);
+    border-radius:44px;
+    border:3px solid #333;
+    overflow:hidden;
+    position:relative;
+    box-shadow:0 20px 80px rgba(0,0,0,0.5);
+  }
+
+  /* ─── Shared Drawer Base ─── */
+  .drawer-header {
+    display:flex; align-items:center;
+    padding:56px 16px 12px; flex-shrink:0;
+    border-bottom:1px solid var(--border);
+  }
+  .back-nav {
+    display:flex; align-items:center; gap:4px;
+    cursor:pointer; color:var(--accent);
+    font-size:15px; font-weight:500;
+  }
+  .back-nav svg { width:20px; height:20px; }
+  .drawer-title {
+    flex:1; text-align:center;
+    font-size:16px; font-weight:600;
+    margin-right:60px;
+  }
+  .drawer-body {
+    flex:1; overflow-y:auto;
+    padding-bottom:60px;
+  }
+
+  /* ─── Common Elements ─── */
+  .section-label {
+    font-size:12px; font-weight:600;
+    color:var(--text-tertiary);
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+    margin-bottom:8px; padding-left:4px;
+  }
+  .name-input {
+    width:100%;
+    background:var(--surface-2);
+    border:1px solid var(--border-light);
+    border-radius:var(--radius);
+    padding:13px 16px;
+    font-size:16px; color:var(--text);
+    outline:none; font-family:inherit;
+  }
+  .name-input:focus { border-color:var(--accent); }
+  .name-input::placeholder { color:var(--text-tertiary); }
+
+  .settings-group {
+    background:var(--surface-2);
+    border-radius:var(--radius);
+    overflow:hidden;
+  }
+  .row {
+    display:flex; align-items:center;
+    padding:14px 16px; gap:12px;
+    border-bottom:1px solid var(--border);
+    cursor:pointer;
+    transition:background 0.15s;
+  }
+  .row:last-child { border-bottom:none; }
+  .row:hover { background:var(--surface-3); }
+
+  .icon-box {
+    width:30px; height:30px;
+    border-radius:7px;
+    display:flex; align-items:center; justify-content:center;
+    flex-shrink:0;
+  }
+  .icon-box svg { width:16px; height:16px; }
+  .row .label { font-size:15px; font-weight:500; }
+  .row .sublabel { font-size:12px; color:var(--text-tertiary); margin-top:2px; }
+  .row .label-area { flex:1; min-width:0; }
+  .row .value {
+    font-size:14px; color:var(--text-secondary);
+    max-width:160px; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis;
+  }
+  .chevron { color:var(--text-tertiary); flex-shrink:0; }
+  .chevron svg { width:16px; height:16px; }
+
+  /* Skill list item (for settings page) */
+  .skill-list-item {
+    padding:12px 16px;
+    border-bottom:1px solid var(--border);
+  }
+  .skill-list-item:last-child { border-bottom:none; }
+  .skill-list-item .sname { font-size:14px; font-weight:500; color:var(--text); }
+  .skill-list-item .sdesc {
+    font-size:12px; color:var(--text-tertiary); margin-top:2px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+
+  /* Mode tag */
+  .mode-tag {
+    font-size:12px; font-weight:600;
+    padding:3px 10px;
+    border-radius:12px;
+    flex-shrink:0;
+  }
+
+  /* ════════════════════════════════════════════════════════════════ */
+  /* VARIANT A — "Minimal Sections"                                   */
+  /* 极简分区：纯线条分隔，无分组背景，留白充足                          */
+  /* ════════════════════════════════════════════════════════════════ */
+  .va .drawer-body { padding:20px; }
+  .va .va-section { margin-bottom:28px; }
+  .va .va-row {
+    display:flex; align-items:center;
+    padding:16px 0; gap:14px;
+    border-bottom:1px solid var(--border);
+    cursor:pointer;
+  }
+  .va .va-row:last-child { border-bottom:none; }
+  .va .va-label { font-size:14px; color:var(--text-secondary); width:60px; flex-shrink:0; }
+  .va .va-value { flex:1; font-size:15px; font-weight:500; }
+  .va .va-divider { height:1px; background:var(--border-light); margin:4px 0 20px; }
+  .va .va-skill-item {
+    padding:10px 0;
+    border-bottom:1px solid var(--border);
+  }
+  .va .va-skill-item:last-child { border-bottom:none; }
+  .va .va-sname { font-size:14px; font-weight:500; }
+  .va .va-sdesc { font-size:12px; color:var(--text-tertiary); margin-top:2px; }
+  .va .va-mode {
+    font-size:13px; color:var(--accent); font-weight:500;
+    padding:4px 0;
+  }
+
+  /* ════════════════════════════════════════════════════════════════ */
+  /* VARIANT B — "Grouped Cards"                                      */
+  /* iOS Settings 风格分组卡片，icon 色块 + 圆角分组                   */
+  /* ════════════════════════════════════════════════════════════════ */
+  .vb .drawer-body { padding:16px; }
+  .vb .vb-group {
+    background:var(--surface-2);
+    border-radius:var(--radius);
+    overflow:hidden;
+    margin-bottom:20px;
+  }
+
+  /* ════════════════════════════════════════════════════════════════ */
+  /* VARIANT C — "Banner + Flat"                                      */
+  /* 顶部模型 banner 卡片突出，其余扁平列表                            */
+  /* ════════════════════════════════════════════════════════════════ */
+  .vc .drawer-body { padding:16px; }
+  .vc .vc-banner {
+    background:linear-gradient(135deg, rgba(108,99,255,0.15), rgba(96,165,250,0.1));
+    border:1px solid rgba(108,99,255,0.2);
+    border-radius:16px;
+    padding:20px;
+    margin-bottom:24px;
+    cursor:pointer;
+    transition:transform 0.2s, box-shadow 0.2s;
+  }
+  .vc .vc-banner:hover { transform:translateY(-2px); box-shadow:0 8px 24px rgba(108,99,255,0.15); }
+  .vc .vc-banner-label { font-size:11px; color:var(--accent); font-weight:600; text-transform:uppercase; letter-spacing:0.5px; }
+  .vc .vc-banner-model { font-size:22px; font-weight:700; margin-top:4px; }
+  .vc .vc-banner-sub { font-size:12px; color:var(--text-tertiary); margin-top:4px; }
+  .vc .vc-banner-arrow { float:right; margin-top:-30px; color:var(--accent); }
+  .vc .vc-banner-arrow svg { width:24px; height:24px; }
+  .vc .vc-flat-row {
+    display:flex; align-items:center; gap:12px;
+    padding:14px 4px;
+    border-bottom:1px solid var(--border);
+    cursor:pointer;
+  }
+  .vc .vc-flat-row:hover { background:rgba(255,255,255,0.02); border-radius:8px; }
+  .vc .vc-skill-compact {
+    display:flex; align-items:center; gap:10px;
+    padding:10px 4px;
+    border-bottom:1px solid var(--border);
+  }
+  .vc .vc-skill-compact:last-child { border-bottom:none; }
+  .vc .vc-skill-dot { width:6px; height:6px; border-radius:50%; background:var(--green); flex-shrink:0; }
+  .vc .vc-skill-info { flex:1; min-width:0; }
+
+  /* ════════════════════════════════════════════════════════════════ */
+  /* VARIANT D — "Compact Grid"                                       */
+  /* 紧凑排列：模型和模式在一行，skills 紧凑列表                       */
+  /* ════════════════════════════════════════════════════════════════ */
+  .vd .drawer-body { padding:16px; }
+  .vd .vd-row-pair {
+    display:grid; grid-template-columns:1fr 1fr; gap:10px;
+    margin-bottom:16px;
+  }
+  .vd .vd-card {
+    background:var(--surface-2);
+    border-radius:var(--radius);
+    padding:14px;
+    cursor:pointer;
+    transition:background 0.15s;
+  }
+  .vd .vd-card:hover { background:var(--surface-3); }
+  .vd .vd-card-label { font-size:11px; color:var(--text-tertiary); font-weight:600; text-transform:uppercase; letter-spacing:0.3px; }
+  .vd .vd-card-value { font-size:15px; font-weight:600; margin-top:6px; display:flex; align-items:center; gap:6px; }
+  .vd .vd-full-card {
+    background:var(--surface-2);
+    border-radius:var(--radius);
+    overflow:hidden;
+    margin-bottom:16px;
+  }
+  .vd .vd-full-header {
+    padding:12px 14px;
+    display:flex; align-items:center; justify-content:space-between;
+    border-bottom:1px solid var(--border);
+  }
+  .vd .vd-full-header .fh-label { font-size:13px; font-weight:600; color:var(--text-secondary); }
+  .vd .vd-skill-row {
+    display:flex; align-items:center; gap:10px;
+    padding:10px 14px;
+    border-bottom:1px solid var(--border);
+  }
+  .vd .vd-skill-row:last-child { border-bottom:none; }
+  .vd .vd-skill-idx {
+    width:20px; height:20px; border-radius:5px;
+    background:var(--accent-soft); color:var(--accent);
+    font-size:11px; font-weight:700;
+    display:flex; align-items:center; justify-content:center;
+    flex-shrink:0;
+  }
+
+  /* ════════════════════════════════════════════════════════════════ */
+  /* VARIANT E — "Floating Panels"                                    */
+  /* 浮动面板风格：每个配置项是独立的浮动卡片，微阴影                     */
+  /* ════════════════════════════════════════════════════════════════ */
+  .ve .drawer-body { padding:16px; }
+  .ve .ve-panel {
+    background:var(--surface-2);
+    border-radius:16px;
+    margin-bottom:12px;
+    overflow:hidden;
+    border:1px solid var(--border);
+    transition:border-color 0.2s, box-shadow 0.2s;
+  }
+  .ve .ve-panel:hover { border-color:var(--border-light); box-shadow:0 4px 16px rgba(0,0,0,0.2); }
+  .ve .ve-panel-header {
+    display:flex; align-items:center; gap:10px;
+    padding:14px 16px;
+    cursor:pointer;
+  }
+  .ve .ve-panel-icon {
+    width:36px; height:36px; border-radius:10px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .ve .ve-panel-icon svg { width:18px; height:18px; }
+  .ve .ve-panel-title { font-size:13px; font-weight:600; color:var(--text-secondary); }
+  .ve .ve-panel-value { font-size:16px; font-weight:600; margin-top:2px; }
+  .ve .ve-panel-body {
+    padding:0 16px 14px;
+  }
+  .ve .ve-skill-pill {
+    display:flex; align-items:center; gap:8px;
+    padding:8px 0;
+    border-top:1px solid var(--border);
+  }
+  .ve .ve-skill-pill:first-child { border-top:none; }
+  .ve .ve-pill-dot {
+    width:8px; height:8px; border-radius:50%;
+    flex-shrink:0;
+  }
+  .ve .ve-pill-name { font-size:13px; font-weight:500; }
+  .ve .ve-pill-desc { font-size:11px; color:var(--text-tertiary); margin-top:1px; }
+</style>
+</head>
+<body>
+
+<!-- Tab Switcher -->
+<div class="tabs" id="tabs">
+  <div class="tab active" data-v="a" onclick="showVariant('a')">
+    <div>A</div>
+    <div class="tab-label">极简线条</div>
+  </div>
+  <div class="tab" data-v="b" onclick="showVariant('b')">
+    <div>B</div>
+    <div class="tab-label">分组卡片</div>
+  </div>
+  <div class="tab" data-v="c" onclick="showVariant('c')">
+    <div>C</div>
+    <div class="tab-label">Banner</div>
+  </div>
+  <div class="tab" data-v="d" onclick="showVariant('d')">
+    <div>D</div>
+    <div class="tab-label">紧凑网格</div>
+  </div>
+  <div class="tab" data-v="e" onclick="showVariant('e')">
+    <div>E</div>
+    <div class="tab-label">浮动面板</div>
+  </div>
+</div>
+
+<div class="variants">
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- VARIANT A — Minimal Sections                    -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="phone-wrap active" id="va">
+<div class="phone">
+<div class="va" style="height:100%; display:flex; flex-direction:column; background:var(--surface);">
+  <div class="drawer-header">
+    <div class="back-nav">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      返回
+    </div>
+    <div class="drawer-title">会话设置</div>
+  </div>
+  <div class="drawer-body">
+    <!-- Name -->
+    <div class="va-section">
+      <input class="name-input" value="New Chat (CEO)" placeholder="会话名称">
+    </div>
+
+    <div class="va-divider"></div>
+
+    <!-- Model -->
+    <div class="va-section">
+      <div class="va-row" style="padding-top:0;">
+        <div class="va-label">模型</div>
+        <div class="va-value">MiniMax-M2.7</div>
+        <div class="chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></div>
+      </div>
+    </div>
+
+    <div class="va-divider"></div>
+
+    <!-- Skills header -->
+    <div class="va-section">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+        <div style="font-size:13px; font-weight:600; color:var(--text-secondary);">Skills</div>
+        <div class="va-mode">优先触发</div>
+      </div>
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+        <div style="font-size:12px; color:var(--text-tertiary);">2 个已启用</div>
+        <div style="font-size:13px; color:var(--accent); cursor:pointer; font-weight:500;">修改 →</div>
+      </div>
+
+      <div class="va-skill-item">
+        <div class="va-sname">ceo-review</div>
+        <div class="va-sdesc">CEO/founder-mode plan review</div>
+      </div>
+      <div class="va-skill-item">
+        <div class="va-sname">eng-review</div>
+        <div class="va-sdesc">Engineering manager-mode plan review</div>
+      </div>
+    </div>
+
+    <div class="va-divider"></div>
+
+    <!-- System prompt -->
+    <div class="va-section">
+      <div class="va-row" style="padding-top:0;">
+        <div class="va-label">提示词</div>
+        <div class="va-value" style="color:var(--text-tertiary); font-weight:400;">未设置</div>
+        <div class="chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></div>
+      </div>
+      <div class="va-row">
+        <div class="va-label">工作目录</div>
+        <div class="va-value" style="font-weight:400;">default</div>
+        <div class="chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- VARIANT B — Grouped Cards (iOS Settings)        -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="phone-wrap" id="vb">
+<div class="phone">
+<div class="vb" style="height:100%; display:flex; flex-direction:column; background:var(--bg);">
+  <div class="drawer-header" style="background:var(--surface);">
+    <div class="back-nav">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      返回
+    </div>
+    <div class="drawer-title">会话设置</div>
+  </div>
+  <div class="drawer-body" style="background:var(--bg);">
+    <!-- Name -->
+    <div class="section-label" style="padding:0 4px; margin-bottom:8px;">会话名称</div>
+    <div class="vb-group" style="margin-bottom:24px; padding:4px;">
+      <input class="name-input" value="New Chat (CEO)" style="background:transparent; border:none;">
+    </div>
+
+    <!-- Model + Mode -->
+    <div class="section-label" style="padding:0 4px; margin-bottom:8px;">配置</div>
+    <div class="vb-group" style="margin-bottom:24px;">
+      <div class="row">
+        <div class="icon-box" style="background:var(--accent-soft); color:var(--accent);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        </div>
+        <div class="label-area"><div class="label">模型</div></div>
+        <div class="value">MiniMax-M2.7</div>
+        <div class="chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></div>
+      </div>
+      <div class="row">
+        <div class="icon-box" style="background:var(--green-soft); color:var(--green);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+        </div>
+        <div class="label-area">
+          <div class="label">Skills</div>
+          <div class="sublabel">2 个已启用 · 优先触发</div>
+        </div>
+        <div class="chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></div>
+      </div>
+    </div>
+
+    <!-- Skill List -->
+    <div class="section-label" style="padding:0 4px; margin-bottom:8px;">已选 Skills</div>
+    <div class="vb-group" style="margin-bottom:24px;">
+      <div class="skill-list-item">
+        <div class="sname">gstack-openclaw-ceo-review</div>
+        <div class="sdesc">CEO/founder-mode plan review, rethink problems</div>
+      </div>
+      <div class="skill-list-item">
+        <div class="sname">gstack-openclaw-eng-review</div>
+        <div class="sdesc">Engineering manager-mode plan review</div>
+      </div>
+    </div>
+
+    <!-- Advanced -->
+    <div class="section-label" style="padding:0 4px; margin-bottom:8px;">高级</div>
+    <div class="vb-group">
+      <div class="row">
+        <div class="icon-box" style="background:var(--blue-soft); color:var(--blue);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M16 13H8 M16 17H8"/></svg>
+        </div>
+        <div class="label-area"><div class="label">系统提示词</div></div>
+        <div class="value" style="color:var(--text-tertiary)">未设置</div>
+        <div class="chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></div>
+      </div>
+      <div class="row">
+        <div class="icon-box" style="background:var(--surface-3); color:var(--text-secondary);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        <div class="label-area"><div class="label">工作目录</div></div>
+        <div class="value">default</div>
+        <div class="chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- VARIANT C — Banner + Flat                       -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="phone-wrap" id="vc">
+<div class="phone">
+<div class="vc" style="height:100%; display:flex; flex-direction:column; background:var(--surface);">
+  <div class="drawer-header">
+    <div class="back-nav">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      返回
+    </div>
+    <div class="drawer-title">会话设置</div>
+  </div>
+  <div class="drawer-body">
+    <!-- Name -->
+    <div style="margin-bottom:20px;">
+      <input class="name-input" value="New Chat (CEO)">
+    </div>
+
+    <!-- Model Banner -->
+    <div class="vc-banner">
+      <div class="vc-banner-label">当前模型</div>
+      <div class="vc-banner-model">MiniMax-M2.7</div>
+      <div class="vc-banner-sub">minimax · Anthropic Messages API · 200K context</div>
+      <div class="vc-banner-arrow">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+      </div>
+    </div>
+
+    <!-- Skills -->
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+      <div style="font-size:13px; font-weight:600; color:var(--text-secondary);">Skills · <span style="color:var(--accent);">优先触发</span></div>
+      <div style="font-size:13px; color:var(--accent); cursor:pointer; font-weight:500;">修改</div>
+    </div>
+    <div class="vc-skill-compact">
+      <div class="vc-skill-dot"></div>
+      <div class="vc-skill-info">
+        <div style="font-size:14px; font-weight:500;">ceo-review</div>
+        <div style="font-size:12px; color:var(--text-tertiary);">CEO/founder-mode plan review</div>
+      </div>
+    </div>
+    <div class="vc-skill-compact">
+      <div class="vc-skill-dot"></div>
+      <div class="vc-skill-info">
+        <div style="font-size:14px; font-weight:500;">eng-review</div>
+        <div style="font-size:12px; color:var(--text-tertiary);">Engineering manager-mode review</div>
+      </div>
+    </div>
+
+    <div style="height:28px;"></div>
+
+    <!-- Flat rows -->
+    <div class="section-label">高级</div>
+    <div class="vc-flat-row">
+      <div class="icon-box" style="background:var(--blue-soft); color:var(--blue);">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6"/></svg>
+      </div>
+      <div class="label-area"><div class="label" style="font-size:15px; font-weight:500;">系统提示词</div></div>
+      <div class="value" style="color:var(--text-tertiary)">未设置</div>
+      <div class="chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></div>
+    </div>
+    <div class="vc-flat-row">
+      <div class="icon-box" style="background:var(--surface-3); color:var(--text-secondary);">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      </div>
+      <div class="label-area"><div class="label" style="font-size:15px; font-weight:500;">工作目录</div></div>
+      <div class="value">default</div>
+      <div class="chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></div>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- VARIANT D — Compact Grid                        -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="phone-wrap" id="vd">
+<div class="phone">
+<div class="vd" style="height:100%; display:flex; flex-direction:column; background:var(--surface);">
+  <div class="drawer-header">
+    <div class="back-nav">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      返回
+    </div>
+    <div class="drawer-title">会话设置</div>
+  </div>
+  <div class="drawer-body">
+    <div style="margin-bottom:16px;">
+      <input class="name-input" value="New Chat (CEO)">
+    </div>
+
+    <!-- Model + Mode side by side -->
+    <div class="vd-row-pair">
+      <div class="vd-card">
+        <div class="vd-card-label">模型</div>
+        <div class="vd-card-value">
+          <span style="color:var(--accent);">⬡</span>
+          M2.7
+        </div>
+      </div>
+      <div class="vd-card">
+        <div class="vd-card-label">触发模式</div>
+        <div class="vd-card-value">
+          <span style="color:var(--green);">●</span>
+          优先触发
+        </div>
+      </div>
+    </div>
+
+    <!-- Skills -->
+    <div class="vd-full-card">
+      <div class="vd-full-header">
+        <div class="fh-label">Skills · 2 个启用</div>
+        <div style="font-size:13px; color:var(--accent); cursor:pointer; font-weight:500;">修改</div>
+      </div>
+      <div class="vd-skill-row">
+        <div class="vd-skill-idx">1</div>
+        <div style="flex:1; min-width:0;">
+          <div style="font-size:14px; font-weight:500;">ceo-review</div>
+          <div style="font-size:11px; color:var(--text-tertiary); margin-top:1px;">CEO/founder-mode plan review</div>
+        </div>
+      </div>
+      <div class="vd-skill-row">
+        <div class="vd-skill-idx">2</div>
+        <div style="flex:1; min-width:0;">
+          <div style="font-size:14px; font-weight:500;">eng-review</div>
+          <div style="font-size:11px; color:var(--text-tertiary); margin-top:1px;">Engineering manager-mode review</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Advanced as 2-col -->
+    <div class="section-label">高级</div>
+    <div class="vd-row-pair">
+      <div class="vd-card">
+        <div class="vd-card-label">系统提示词</div>
+        <div class="vd-card-value" style="color:var(--text-tertiary); font-weight:400; font-size:13px;">未设置</div>
+      </div>
+      <div class="vd-card">
+        <div class="vd-card-label">工作目录</div>
+        <div class="vd-card-value" style="font-size:13px;">default</div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- VARIANT E — Floating Panels                     -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="phone-wrap" id="ve">
+<div class="phone">
+<div class="ve" style="height:100%; display:flex; flex-direction:column; background:var(--bg);">
+  <div class="drawer-header" style="background:var(--surface);">
+    <div class="back-nav">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      返回
+    </div>
+    <div class="drawer-title">会话设置</div>
+  </div>
+  <div class="drawer-body">
+    <!-- Name panel -->
+    <div class="ve-panel">
+      <div style="padding:4px;">
+        <input class="name-input" value="New Chat (CEO)" style="background:transparent; border:none;">
+      </div>
+    </div>
+
+    <!-- Model panel -->
+    <div class="ve-panel">
+      <div class="ve-panel-header">
+        <div class="ve-panel-icon" style="background:var(--accent-soft); color:var(--accent);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        </div>
+        <div style="flex:1;">
+          <div class="ve-panel-title">模型</div>
+          <div class="ve-panel-value">MiniMax-M2.7</div>
+        </div>
+        <div class="chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></div>
+      </div>
+    </div>
+
+    <!-- Skills panel -->
+    <div class="ve-panel">
+      <div class="ve-panel-header">
+        <div class="ve-panel-icon" style="background:var(--green-soft); color:var(--green);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+        </div>
+        <div style="flex:1;">
+          <div class="ve-panel-title">Skills · 2 个启用</div>
+          <div class="ve-panel-value" style="font-size:14px; color:var(--accent);">优先触发</div>
+        </div>
+        <div class="chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></div>
+      </div>
+      <div class="ve-panel-body">
+        <div class="ve-skill-pill">
+          <div class="ve-pill-dot" style="background:var(--green);"></div>
+          <div style="flex:1;">
+            <div class="ve-pill-name">ceo-review</div>
+            <div class="ve-pill-desc">CEO/founder-mode plan review</div>
+          </div>
+        </div>
+        <div class="ve-skill-pill">
+          <div class="ve-pill-dot" style="background:var(--blue);"></div>
+          <div style="flex:1;">
+            <div class="ve-pill-name">eng-review</div>
+            <div class="ve-pill-desc">Engineering manager-mode review</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Prompt panel -->
+    <div class="ve-panel">
+      <div class="ve-panel-header">
+        <div class="ve-panel-icon" style="background:var(--blue-soft); color:var(--blue);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M16 13H8 M16 17H8"/></svg>
+        </div>
+        <div style="flex:1;">
+          <div class="ve-panel-title">系统提示词</div>
+          <div class="ve-panel-value" style="color:var(--text-tertiary); font-size:14px;">未设置</div>
+        </div>
+        <div class="chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></div>
+      </div>
+    </div>
+
+    <!-- WorkDir panel -->
+    <div class="ve-panel">
+      <div class="ve-panel-header">
+        <div class="ve-panel-icon" style="background:var(--surface-3); color:var(--text-secondary);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        <div style="flex:1;">
+          <div class="ve-panel-title">工作目录</div>
+          <div class="ve-panel-value" style="font-size:14px;">default</div>
+        </div>
+        <div class="chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+</div><!-- /variants -->
+
+<script>
+function showVariant(v) {
+  document.querySelectorAll('.phone-wrap').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+  document.getElementById('v'+v).classList.add('active');
+  document.querySelector(`.tab[data-v="${v}"]`).classList.add('active');
+}
+</script>
+</body>
+</html>

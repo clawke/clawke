@@ -6,8 +6,8 @@ class MessageDao {
   MessageDao(this._db);
 
   /// 监听某个会话的消息（按时间倒序，限制条数）
-  Stream<List<Message>> watchMessages(String accountId, {int limit = 50}) {
-    return _db.watchMessagesInConversation(accountId, limit).watch();
+  Stream<List<Message>> watchMessages(String conversationId, {int limit = 50}) {
+    return _db.watchMessagesInConversation(conversationId, limit).watch();
   }
 
   /// 获取单条消息
@@ -75,10 +75,10 @@ class MessageDao {
   }
 
   /// 删除某个会话中的所有消息
-  Future<void> deleteByConversation(String accountId) {
+  Future<void> deleteByConversation(String conversationId) {
     return (_db.delete(
       _db.messages,
-    )..where((t) => t.accountId.equals(accountId))).go();
+    )..where((t) => t.conversationId.equals(conversationId))).go();
   }
 
   /// 获取所有 sending 状态的消息（重连后重试用）
@@ -98,11 +98,12 @@ class MessageDao {
     if (seq <= 0) return;
     final current = await getMaxSeq();
     if (current >= seq) return; // 已有更高的 seq，不需要设定基线
-    // 使用 default 会话（首次连接时已创建）以满足外键约束
+    // 使用 default 会话以满足外键约束
     // status='baseline' 确保不会出现在聊天列表中
     await insertMessage(MessagesCompanion(
       messageId: Value('_seq_baseline_$seq'),
       accountId: const Value('default'),
+      conversationId: const Value('default'),
       senderId: const Value('system'),
       type: const Value('system'),
       content: const Value(''),

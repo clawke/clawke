@@ -40,6 +40,31 @@ function getBackoffMs(attempt: number): number {
   return Math.round(capped * (0.75 + Math.random() * 0.5));
 }
 
+// 每个会话当前使用的模型（用于首次/变化时注入 /model）
+const sessionModels = new Map<string, string>();
+
+/** 从 OpenClaw 配置中提取可用模型列表 */
+function getAvailableModels(ctx: ChannelGatewayContext<ResolvedClawkeAccount>): string[] {
+  try {
+    const core = getClawkeRuntime();
+    const agentsList = (core as any).config?.agents?.list;
+    if (Array.isArray(agentsList)) {
+      const models = new Set<string>();
+      for (const agent of agentsList) {
+        if (agent.llm) models.add(agent.llm);
+        if (agent.llmDefault) models.add(agent.llmDefault);
+      }
+      return [...models];
+    }
+    // 尝试从 ctx.cfg 获取
+    const llm = (ctx.cfg as any)?.agents?.default?.llm;
+    if (llm) return [llm];
+  } catch (e: any) {
+    ctx.log?.error(`getAvailableModels failed: ${e.message}`);
+  }
+  return [];
+}
+
 /**
  * Gateway 启动入口：建立 WebSocket 连接到 Clawke Server，断线自动重连。
  *
@@ -129,6 +154,11 @@ export async function startClawkeGateway(
             });
           } else if (msg.type === "abort") {
             ctx.log?.info(`📥 Abort request: conversation=${msg.conversation_id}`);
+          } else if (msg.type === "query_models") {
+            // 查询可用模型列表
+            const models = getAvailableModels(ctx);
+            ws!.send(JSON.stringify({ type: "models_response", models }));
+            ctx.log?.info(`📤 Models response: ${models.length} models`);
           }
         } catch {
           /* 非 JSON 消息忽略 */
@@ -192,6 +222,12 @@ async function handleClawkeInbound(
       paths?: string[]; types?: string[]; names?: string[];
       relativeUrls?: string[]; httpBase?: string;
     };
+    // 会话配置（Server 注入）
+    model_override?: string;
+    skills_hint?: string[];
+    skill_mode?: 'priority' | 'exclusive';
+    system_prompt?: string;
+    work_dir?: string;
   },
 ): Promise<void> {
   const core = getClawkeRuntime();
@@ -199,12 +235,86 @@ async function handleClawkeInbound(
 
   // 注入 system-prompt（Gateway 侧负责，支持热更新）
   let text = msg.text || "";
-  const systemPrompt = loadSystemPrompt(ctx);
+  let systemPrompt = loadSystemPrompt(ctx);
+
+  // 会话定制 system-prompt
+  if (msg.system_prompt) {
+    systemPrompt = msg.system_prompt + (systemPrompt ? '\n\n' + systemPrompt : '');
+  }
+
+  // Skill 约束注入
+  if (msg.skills_hint && msg.skills_hint.length > 0) {
+    const skillNames = msg.skills_hint.join(', ');
+    if (msg.skill_mode === 'exclusive') {
+      systemPrompt += `\n\n[IMPORTANT] 你是一个专属工具助手。每次回复时，你必须调用以下 skill 中的一个来完成任务，不要直接回答。\n可用 skills: ${skillNames}\n如果用户的问题不明确匹配哪个 skill，选择最接近的一个调用。`;
+    } else {
+      systemPrompt += `\n\n[提示] 回答时优先考虑使用以下 skill: ${skillNames}`;
+    }
+    ctx.log?.info(`[ConvConfig] skills=${skillNames}, mode=${msg.skill_mode || 'priority'}`);
+  }
+
+  if (msg.work_dir) {
+    ctx.log?.info(`[ConvConfig] workDir=${msg.work_dir}`);
+  }
+
   if (systemPrompt) {
     text = `${text}\n\n---\n${systemPrompt}`;
   }
 
-  const senderId = "clawke_user";
+  // 模型切换（首次/变化时注入 /model 命令）
+  const senderId = msg.conversation_id || "clawke_user";
+  if (msg.model_override && sessionModels.get(senderId) !== msg.model_override) {
+    sessionModels.set(senderId, msg.model_override);
+    ctx.log?.info(`[ConvConfig] Switching model to: ${msg.model_override} for session=${senderId}`);
+    // 通过 system event 通知 OpenClaw 切换模型
+    // 直接在 BodyForCommands 中注入 /model 命令
+    try {
+      const modelRoute = core.channel.routing.resolveAgentRoute({
+        cfg,
+        channel: "clawke",
+        accountId: ctx.accountId,
+        peer: { kind: "direct", id: `clawke:${senderId}` },
+      });
+      const modelBody = `/model ${msg.model_override}`;
+      const modelCtx = core.channel.reply.finalizeInboundContext({
+        Body: modelBody,
+        BodyForAgent: modelBody,
+        RawBody: modelBody,
+        CommandBody: modelBody,
+        BodyForCommands: modelBody,
+        From: `clawke:${senderId}`,
+        To: `user:${senderId}`,
+        SessionKey: modelRoute.sessionKey,
+        AccountId: modelRoute.accountId,
+        ChatType: "direct",
+        SenderName: senderId,
+        SenderId: senderId,
+        Provider: "clawke" as any,
+        Surface: "clawke" as any,
+        MessageSid: `model_switch_${Date.now()}`,
+        Timestamp: Date.now(),
+        OriginatingChannel: "clawke" as any,
+        OriginatingTo: `user:${senderId}`,
+        CommandAuthorized: true,
+      });
+      const modelDispatcher = core.channel.reply.createReplyDispatcherWithTyping({
+        ctx: modelCtx,
+        cfg,
+        sessionKey: modelRoute.sessionKey,
+        dispatcher: { deliver: async () => {} },
+        replyOptions: {},
+      });
+      await core.channel.reply.withReplyDispatcher(modelCtx, modelDispatcher, async () => {
+        await core.channel.reply.dispatchReplyFromConfig({
+          ctx: modelCtx, cfg, dispatcher: modelDispatcher, replyOptions: {},
+        });
+      });
+      ctx.log?.info(`[ConvConfig] ✅ Model switched to: ${msg.model_override}`);
+    } catch (e: any) {
+      ctx.log?.error(`[ConvConfig] ❌ Model switch failed: ${e.message}`);
+    }
+  }
+
   const peerId = `clawke:${senderId}`;
   const messageId = msg.client_msg_id || `clawke_${Date.now()}`;
   const clawkeFrom = `clawke:${senderId}`;
@@ -341,8 +451,9 @@ async function handleClawkeInbound(
     } : {}),
   });
 
-  // 3. 创建回复分发器（参考飞书 createFeishuReplyDispatcher）
-  // deliver 回调是 Agent 回复到达时的实际发送函数
+  // 3. 创建回复分发器
+  // Clawke 是流式频道，不需要 responsePrefix（那是为非流式频道设计的，
+  // 会导致 deliver 被调用两次产生重复消息）
   const prefixContext = createReplyPrefixContext({ cfg, agentId: route.agentId });
 
   // 流式输出状态：跟踪已发送长度，计算差量
@@ -350,6 +461,7 @@ async function handleClawkeInbound(
   let lastSentLength = 0;
   let lastFullText = "";
   let hasStreamedAny = false;
+  let hasDeliveredBlock = false;  // Clawke 是 append-only 渠道，跟踪是否已通过 block 投递
 
   // Thinking 流式状态
   const thinkingMsgId = `think_${Date.now()}`;
@@ -358,11 +470,35 @@ async function handleClawkeInbound(
 
   const { dispatcher, replyOptions, markDispatchIdle } =
     core.channel.reply.createReplyDispatcherWithTyping({
-      responsePrefix: prefixContext.responsePrefix,
-      responsePrefixContextProvider: prefixContext.responsePrefixContextProvider,
+      responsePrefix: undefined,
+      responsePrefixContextProvider: undefined,
       humanDelay: core.channel.reply.resolveHumanDelayConfig(cfg, route.agentId),
-      deliver: async (payload: ReplyPayload) => {
+      deliver: async (payload: ReplyPayload, info?: { kind?: string }) => {
+        const kind = info?.kind ?? "final";
         const replyText = payload.text ?? "";
+
+        // Clawke 是 append-only 渠道（不支持消息编辑），block 已经投递了完整内容，
+        // final 只是给可编辑渠道（如 Telegram）做"终稿替换"用的，对 append-only 跳过。
+        if (kind === "final" && hasDeliveredBlock) {
+          ctx.log?.info(`⏭️ deliver SKIP final (append-only, block already delivered): ${replyText.slice(0, 60)}`);
+          // final 可能携带 usage，仍需发送给 Server
+          if (pendingUsage && pendingModel) {
+            sendToClawkeServer({
+              type: "agent_usage",
+              message_id: streamMsgId,
+              to: clawkeTo,
+              account_id: ctx.accountId,
+              conversation_id: senderId,
+              usage: pendingUsage,
+              model: pendingModel,
+              provider: pendingProvider,
+            });
+            pendingUsage = null;
+            pendingModel = '';
+            pendingProvider = '';
+          }
+          return;
+        }
 
         const mediaList = payload.mediaUrls?.length
           ? payload.mediaUrls
@@ -381,16 +517,17 @@ async function handleClawkeInbound(
               delta,
               to: clawkeTo,
               account_id: ctx.accountId,
+              conversation_id: senderId,
             });
           }
-          // 🔍 诊断日志：deliver 时 pendingUsage 状态（测试后移除）
-          console.log(`[Clawke-Usage] 📤 deliver(stream): hasPendingUsage=${!!pendingUsage}, model=${pendingModel}, usage=${JSON.stringify(pendingUsage ?? null)}`);
+
           sendToClawkeServer({
             type: "agent_text_done",
             message_id: streamMsgId,
             fullText: replyText,
             to: clawkeTo,
             account_id: ctx.accountId,
+            conversation_id: senderId,
             ...(pendingModel ? { usage: pendingUsage ?? undefined, model: pendingModel, provider: pendingProvider } : {}),
           });
           ctx.log?.info(`📤 Reply done (stream): ${replyText.slice(0, 80)}`);
@@ -399,14 +536,13 @@ async function handleClawkeInbound(
           pendingProvider = '';
         } else if (replyText.trim()) {
           // 没有流式输出（fallback），直接发完整文本
-          // 🔍 诊断日志（测试后移除）
-          console.log(`[Clawke-Usage] 📤 deliver(full): hasPendingUsage=${!!pendingUsage}, model=${pendingModel}, usage=${JSON.stringify(pendingUsage ?? null)}`);
           sendToClawkeServer({
             type: "agent_text",
             message_id: streamMsgId,
             text: replyText,
             to: clawkeTo,
             account_id: ctx.accountId,
+            conversation_id: senderId,
             ...(pendingModel ? { usage: pendingUsage ?? undefined, model: pendingModel, provider: pendingProvider } : {}),
           });
           ctx.log?.info(`📤 Reply done (full): ${replyText.slice(0, 80)}`);
@@ -415,7 +551,10 @@ async function handleClawkeInbound(
           pendingProvider = '';
         }
 
-        // 重置流式状态（支持多轮回复）
+        // 标记 block 投递状态
+        if (kind === "block") hasDeliveredBlock = true;
+
+        // 重置流式状态（为下一段 block 准备）
         lastSentLength = 0;
         lastFullText = "";
         hasStreamedAny = false;
@@ -427,6 +566,7 @@ async function handleClawkeInbound(
             mediaUrl,
             to: clawkeTo,
             account_id: ctx.accountId,
+            conversation_id: senderId,
           });
         }
       },
@@ -464,6 +604,7 @@ async function handleClawkeInbound(
         toolName: last.name,
         durationMs,
         account_id: ctx.accountId,
+        conversation_id: senderId,
       });
     }
   };
@@ -476,6 +617,10 @@ async function handleClawkeInbound(
       ctx: ctxPayload,
       cfg,
       dispatcher,
+      // 会话级工作目录覆盖：通过 configOverride 注入，不修改全局 cfg
+      ...(msg.work_dir ? {
+        configOverride: { agents: { defaults: { workspace: msg.work_dir } } },
+      } : {}),
       replyOptions: {
         ...replyOptions,
         onModelSelected: prefixContext.onModelSelected,
@@ -491,6 +636,7 @@ async function handleClawkeInbound(
               delta,
               to: clawkeTo,
               account_id: ctx.accountId,
+              conversation_id: senderId,
             });
             lastSentLength = text.length;
             lastFullText = text;
@@ -513,6 +659,7 @@ async function handleClawkeInbound(
               delta,
               to: clawkeTo,
               account_id: ctx.accountId,
+              conversation_id: senderId,
             });
             lastThinkingLength = text.length;
             hasStreamedThinking = true;
@@ -526,6 +673,7 @@ async function handleClawkeInbound(
               message_id: thinkingMsgId,
               to: clawkeTo,
               account_id: ctx.accountId,
+              conversation_id: senderId,
             });
             lastThinkingLength = 0;
             hasStreamedThinking = false;
@@ -543,6 +691,7 @@ async function handleClawkeInbound(
             toolCallId,
             toolName,
             account_id: ctx.accountId,
+            conversation_id: senderId,
           });
         },
       },
@@ -571,6 +720,7 @@ async function handleClawkeInbound(
       toolCallCount: toolCalls.length,
       tools: toolCalls.map((t) => t.name),
       account_id: ctx.accountId,
+      conversation_id: senderId,
     });
   }
 
@@ -593,6 +743,7 @@ async function handleClawkeInbound(
       text: fallbackText,
       to: clawkeTo,
       account_id: ctx.accountId,
+      conversation_id: senderId,
     });
   }
 }

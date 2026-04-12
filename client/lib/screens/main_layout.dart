@@ -393,7 +393,7 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
       appBar: AppBar(
         title: Text(
           context.l10n.navDashboard,
-          style: Theme.of(context).textTheme.titleSmall,
+          style: Theme.of(context).textTheme.titleMedium,
         ),
         backgroundColor: colorScheme.surface,
         surfaceTintColor: Colors.transparent,
@@ -409,15 +409,30 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
     return Scaffold(
       backgroundColor: colorScheme.surface,
       appBar: AppBar(
-        title: Text(context.l10n.navChat, style: Theme.of(context).textTheme.titleSmall),
+        title: Text(context.l10n.navChat, style: Theme.of(context).textTheme.titleMedium),
+        centerTitle: true,
         backgroundColor: colorScheme.surface,
         surfaceTintColor: Colors.transparent,
+        actions: [
+          NewConversationButton(
+            iconSize: 26,
+            onCreated: (convId) {
+              ref.read(selectedConversationIdProvider.notifier).state = convId;
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => ChatScreen(key: ValueKey(convId)),
+                ),
+              );
+            },
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: ConversationListScreen(
         showHeader: false,
         onConversationTap: (accountId) {
           // 移动端：push 全屏聊天页
-          ref.read(selectedAccountIdProvider.notifier).state = accountId;
+          ref.read(selectedConversationIdProvider.notifier).state = accountId;
           Navigator.of(context).push(
             MaterialPageRoute(
               builder: (_) => ChatScreen(key: ValueKey(accountId)),
@@ -433,7 +448,7 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
   // ─────────────────────────────────────────────
 
   Widget _buildDesktopLayout(BuildContext context) {
-    final selectedConvId = ref.watch(selectedAccountIdProvider);
+    final selectedConvId = ref.watch(selectedConversationIdProvider);
     final colorScheme = Theme.of(context).colorScheme;
     final debugLogEnabled = ref.watch(debugLogEnabledProvider);
     final activePage = ref.watch(activeNavPageProvider);

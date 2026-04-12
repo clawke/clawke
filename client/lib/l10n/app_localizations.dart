@@ -479,13 +479,13 @@ abstract class AppLocalizations {
   /// No description provided for @deleteConversation.
   ///
   /// In zh, this message translates to:
-  /// **'删除用户'**
+  /// **'删除会话'**
   String get deleteConversation;
 
   /// No description provided for @deleteConversationConfirm.
   ///
   /// In zh, this message translates to:
-  /// **'确定要删除此用户吗？所有消息将被清除且不可恢复。'**
+  /// **'确定要删除此会话吗？所有消息将被清除且不可恢复。'**
   String get deleteConversationConfirm;
 
   /// No description provided for @profile.

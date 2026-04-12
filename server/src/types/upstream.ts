@@ -27,6 +27,16 @@ export interface UpstreamMessage {
   action_data?: Record<string, unknown>;
   /** 媒体信息 */
   media?: UpstreamMediaInfo;
+  /** 会话配置：模型覆盖 */
+  model_override?: string;
+  /** 会话配置：优先 skill 列表 */
+  skills_hint?: string[];
+  /** 会话配置：skill 模式 'priority' | 'exclusive' */
+  skill_mode?: 'priority' | 'exclusive';
+  /** 会话配置：自定义系统提示词 */
+  system_prompt?: string;
+  /** 会话配置：工作目录覆盖 */
+  work_dir?: string;
 }
 
 /** 媒体信息（统一格式，Gateway 根据需要选择使用路径或 URL） */
@@ -64,7 +74,9 @@ export function toUpstreamMessage(
 
   const msg: UpstreamMessage = {
     type,
-    conversation_id: (context.account_id as string) || 'default',
+    conversation_id: (context.conversation_id as string)
+      || (context.account_id as string)   // 旧客户端兼容：没有 conversation_id 时用 account_id
+      || 'default',
   };
 
   if (type === 'chat') {
@@ -75,13 +87,22 @@ export function toUpstreamMessage(
     // 从 CUP 格式解析纯文本
     msg.text = extractTextFromCup(contentType, data);
 
-    // 媒体信息
+    // 媒体信息 — processMessageMedia 返回 MediaResult 格式，需要映射为 UpstreamMediaInfo
     if (media) {
-      msg.media = media;
+      const m = media as Record<string, unknown>;
+      msg.media = {
+        paths: (m.paths ?? m.mediaPaths) as string[] | undefined,
+        types: (m.types ?? m.mediaTypes) as string[] | undefined,
+        names: (m.names ?? m.fileNames) as string[] | undefined,
+        relativeUrls: (m.relativeUrls ?? m.mediaRelativeUrls) as string[] | undefined,
+        httpBase: (m.httpBase ?? m.csHttpBase) as string | undefined,
+      };
     }
   } else if (type === 'abort') {
     msg.message_id = data.message_id as string | undefined;
-    msg.conversation_id = (context.account_id as string) || 'default';
+    msg.conversation_id = (context.conversation_id as string)
+      || (context.account_id as string)
+      || 'default';
   } else if (type === 'action') {
     const action = payload.action || {};
     msg.action_id = action.action_id as string | undefined;

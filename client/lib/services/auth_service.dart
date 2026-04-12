@@ -156,7 +156,15 @@ class AuthService {
       );
 
       debugPrint('[Auth] Google signIn starting...');
-      final googleUser = await googleSignIn.signIn();
+      // 清除上一次残留的登录状态（macOS 上旧 session 可能阻塞新弹窗）
+      await googleSignIn.signOut();
+      final googleUser = await googleSignIn.signIn().timeout(
+        const Duration(seconds: 120),
+        onTimeout: () {
+          debugPrint('[Auth] Google signIn timeout after 120s');
+          return null;
+        },
+      );
       debugPrint('[Auth] Google signIn result: ${googleUser?.email ?? 'null (cancelled)'}');
 
       if (googleUser == null) {

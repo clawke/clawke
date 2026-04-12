@@ -8,4 +8,4 @@ final conversationListProvider = StreamProvider<List<Conversation>>((ref) {
 });
 
 /// 当前选中的会话 ID
-final selectedAccountIdProvider = StateProvider<String?>((ref) => null);
+final selectedConversationIdProvider = StateProvider<String?>((ref) => null);

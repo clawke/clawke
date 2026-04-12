@@ -28,18 +28,9 @@ export const clawkePlugin: ChannelPlugin<ResolvedClawkeAccount> = {
   outbound: {
     deliveryMode: "direct",
     sendText: async (ctx) => {
-      // 通过 WebSocket 将 Agent 文本回复发给 Clawke Server
-      // Clawke Server 会翻译为 CUP JSON 推给 Flutter Client
-      // gateway.startAccount 建立的 WebSocket 连接负责实际发送
-      // 这里通过 runtime 获取发送能力
-      const { sendToClawkeServer } = await import("./gateway.js");
-      sendToClawkeServer({
-        type: "agent_text",
-        message_id: `msg_${Date.now()}`,
-        text: ctx.text,
-        to: ctx.to,
-        account_id: ctx.accountId,
-      });
+      // ⚠️ NO-OP: Clawke 的消息发送由 gateway.ts 的 deliver 回调统一处理。
+      // 如果这里也发送，会和 deliver 回调产生重复消息。
+      // sendText 仅在没有自定义 deliver 的渠道中作为 fallback 使用。
       return { ok: true };
     },
     sendMedia: async (ctx) => {

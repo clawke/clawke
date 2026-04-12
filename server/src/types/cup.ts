@@ -24,6 +24,7 @@ export interface ClientPayload {
   data?: Record<string, unknown>;
   context?: {
     account_id?: string;
+    conversation_id?: string;
     client_msg_id?: string;
     device_id?: string;
   };

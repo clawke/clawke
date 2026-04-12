@@ -206,10 +206,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get confirm => '确定';
 
   @override
-  String get deleteConversation => '删除用户';
+  String get deleteConversation => '删除会话';
 
   @override
-  String get deleteConversationConfirm => '确定要删除此用户吗？所有消息将被清除且不可恢复。';
+  String get deleteConversationConfirm => '确定要删除此会话吗？所有消息将被清除且不可恢复。';
 
   @override
   String get profile => '我的';

@@ -18,6 +18,7 @@ import 'package:client/providers/database_providers.dart';
 import 'package:client/providers/reply_provider.dart';
 import 'package:client/providers/ws_state_provider.dart';
 import 'package:client/core/ws_service.dart';
+import 'package:client/screens/conversation_settings_sheet.dart';
 import 'package:client/data/repositories/message_repository.dart';
 import 'package:client/widgets/message_context_menu.dart';
 import 'package:client/widgets/image_message_widget.dart';
@@ -62,7 +63,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     // 选中会话时清零未读
     // sync 由 WsMessageHandler._onConnected 统一处理，此处不再重复发送
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final convId = ref.read(selectedAccountIdProvider);
+      final convId = ref.read(selectedConversationIdProvider);
       if (convId != null) {
         ref.read(conversationRepositoryProvider).markAsRead(convId);
       }
@@ -144,10 +145,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         // Enter（无 Shift）→ 发送（仅在已连接且非流式状态下）
         final connected =
             ref.read(wsStateProvider).valueOrNull == WsState.connected;
+        final currentConvId = ref.read(selectedConversationIdProvider);
+        final waitingConvId = ref.read(waitingForReplyProvider);
         final isStreaming =
             ref.read(streamingMessageProvider) != null ||
             ref.read(streamingThinkingProvider) != null ||
-            ref.read(waitingForReplyProvider);
+            (waitingConvId != null && waitingConvId == currentConvId);
         if (connected && !isStreaming) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             final text = _controller.text;
@@ -169,7 +172,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     // reverse: true 时，滚到顶部对应 maxScrollExtent
     if (position.pixels >= position.maxScrollExtent - 100) {
       _isLoadingMore = true;
-      final convId = ref.read(selectedAccountIdProvider);
+      final convId = ref.read(selectedConversationIdProvider);
       if (convId != null) {
         ref.read(chatLimitProvider(convId).notifier).state += 50;
       }
@@ -182,7 +185,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
 
   Future<void> _handleSend() async {
-    final convId = ref.read(selectedAccountIdProvider);
+    final convId = ref.read(selectedConversationIdProvider);
     if (convId == null) return;
     final text = _controller.text.trim();
     final attachments = List<StagedAttachment>.of(ref.read(stagedAttachmentsProvider));
@@ -202,11 +205,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final quoteId = editingMsg == null ? replyingTo?.messageId : null;
     final repo = ref.read(messageRepositoryProvider);
 
+    // 从 conversations 表查出真正的 accountId（新会话的 convId 是 UUID，不等于 accountId）
+    final convRepo = ref.read(conversationRepositoryProvider);
+    final conv = await convRepo.getConversation(convId);
+    final accountId = conv?.accountId ?? convId;
+
     // ── 立即清空 UI 状态（防重入 + 按钮立刻切换为 Stop）──
     ref.read(stagedAttachmentsProvider.notifier).clear();
     ref.read(editingMessageProvider.notifier).state = null;
     ref.read(replyingToProvider.notifier).state = null;
-    ref.read(waitingForReplyProvider.notifier).state = true;
+    ref.read(waitingForReplyProvider.notifier).state = convId;
     _controller.clear();
 
     SendResult result;
@@ -214,7 +222,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (attachments.isEmpty) {
       // 纯文本
       result = repo.sendMessage(
-        accountId: convId,
+        accountId: accountId,
+        conversationId: convId,
         content: text,
         senderId: 'local_user',
         quoteId: quoteId,
@@ -225,11 +234,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       if (att.isImage) {
         if (att.bytes != null) {
           // 粘贴的图片需要先保存到临时文件
-          _saveBytesAndSendImage(convId, att.bytes!);
+          _saveBytesAndSendImage(accountId, convId, att.bytes!);
           return;
         }
         final sendResult = await repo.sendImageMessage(
-          accountId: convId,
+          accountId: accountId,
+          conversationId: convId,
           senderId: 'local_user',
           filePath: att.path!,
           onProgress: (msgId, p) =>
@@ -238,11 +248,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ref.read(uploadProgressProvider.notifier).remove(sendResult.clientMsgId);
         ref
             .read(wsMessageHandlerProvider)
-            .trackRequest(sendResult.requestId, sendResult.clientMsgId);
+            .trackRequest(sendResult.requestId, sendResult.clientMsgId, conversationId: convId);
         return;
       } else {
         final sendResult = await repo.sendFileMessage(
-          accountId: convId,
+          accountId: accountId,
+          conversationId: convId,
           senderId: 'local_user',
           filePath: att.path!,
           fileName: att.name ?? 'unknown',
@@ -253,7 +264,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ref.read(uploadProgressProvider.notifier).remove(sendResult.clientMsgId);
         ref
             .read(wsMessageHandlerProvider)
-            .trackRequest(sendResult.requestId, sendResult.clientMsgId);
+            .trackRequest(sendResult.requestId, sendResult.clientMsgId, conversationId: convId);
         return;
       }
     } else {
@@ -261,7 +272,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       // Phase 1: 构建本地版 JSON → 立即写入 DB → 消息瞬间出现
       final localJson = _buildLocalMixedJson(text, attachments);
       result = repo.insertMixedLocal(
-        accountId: convId,
+        accountId: accountId,
+        conversationId: convId,
         senderId: 'local_user',
         contentJson: localJson,
         quoteId: quoteId,
@@ -273,7 +285,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         repo.finalizeMixed(
           messageId: result.clientMsgId,
           requestId: result.requestId,
-          accountId: convId,
+          accountId: accountId,
+          conversationId: convId,
           contentJson: uploadedJson,
           quoteId: quoteId,
         );
@@ -285,7 +298,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     // 注册待确认请求
     ref
         .read(wsMessageHandlerProvider)
-        .trackRequest(result.requestId, result.clientMsgId);
+        .trackRequest(result.requestId, result.clientMsgId, conversationId: convId);
   }
 
   /// 构建本地版混合消息 JSON（仅缓存文件到本地，无 HTTP 上传）
@@ -369,7 +382,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     return jsonEncode({'text': text, 'attachments': atts});
   }
 
-  Future<void> _saveBytesAndSendImage(String convId, Uint8List bytes) async {
+  Future<void> _saveBytesAndSendImage(String accountId, String convId, Uint8List bytes) async {
     // 使用 MediaCacheService 缓存粘贴的图片
     final cachedPath = MediaCacheService.instance.cacheBytes(
       bytes,
@@ -379,13 +392,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final sendResult = await ref
         .read(messageRepositoryProvider)
         .sendImageMessage(
-          accountId: convId,
+          accountId: accountId,
+          conversationId: convId,
           senderId: 'local_user',
           filePath: cachedPath,
         );
     ref
         .read(wsMessageHandlerProvider)
-        .trackRequest(sendResult.requestId, sendResult.clientMsgId);
+        .trackRequest(sendResult.requestId, sendResult.clientMsgId, conversationId: convId);
   }
 
   Future<void> _pickAndStageImage() async {
@@ -435,10 +449,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     final wsState = ref.watch(wsStateProvider);
-    final convId = ref.watch(selectedAccountIdProvider);
-    final streamingMsg = ref.watch(streamingMessageProvider);
-    final streamingThinking = ref.watch(streamingThinkingProvider);
+    final convId = ref.watch(selectedConversationIdProvider);
+    final rawStreamingMsg = ref.watch(streamingMessageProvider);
+    final rawStreamingThinking = ref.watch(streamingThinkingProvider);
     final colorScheme = Theme.of(context).colorScheme;
+
+    // 只显示属于当前会话的流式消息
+    final streamingMsg = (rawStreamingMsg is TextMessage &&
+            rawStreamingMsg.conversationId != null &&
+            rawStreamingMsg.conversationId != convId)
+        ? null
+        : rawStreamingMsg;
+    final streamingThinking = (rawStreamingThinking is ThinkingMessage &&
+            rawStreamingThinking.conversationId != null &&
+            rawStreamingThinking.conversationId != convId)
+        ? null
+        : rawStreamingThinking;
 
     // 同步 Mermaid 渲染开关到全局 builder
     final mermaidEnabled = ref.watch(mermaidEnabledProvider);
@@ -449,17 +475,32 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       appBar: AppBar(
         backgroundColor: colorScheme.surface,
         surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        centerTitle: false,
-        toolbarHeight: 54,
         title: _buildAppBarTitle(convId, colorScheme),
-        actions: const [SizedBox(width: 8)],
-        shape: Border(
-          bottom: BorderSide(
-            color: colorScheme.outlineVariant.withOpacity(0.5),
-          ),
-        ),
+        actions: [
+          if (convId != null)
+            IconButton(
+              icon: Icon(
+                Icons.settings_rounded,
+                size: 20,
+                color: colorScheme.onSurfaceVariant,
+              ),
+              tooltip: '会话设置',
+              onPressed: () {
+                final conversations = ref.read(conversationListProvider).valueOrNull;
+                final conv = conversations
+                    ?.where((c) => c.conversationId == convId)
+                    .firstOrNull;
+                if (conv != null) {
+                  ConversationSettingsSheet.show(
+                    context,
+                    conversationId: convId,
+                    accountId: conv.accountId,
+                  );
+                }
+              },
+            ),
+          const SizedBox(width: 4),
+        ],
       ),
       body: convId == null
           ? Center(
@@ -479,17 +520,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   Widget _buildAppBarTitle(String? convId, ColorScheme colorScheme) {
     if (convId == null) {
-      return Text('Clawke', style: TextStyle(color: colorScheme.onSurface));
+      return Text('Clawke',
+          style: Theme.of(context).textTheme.titleMedium);
     }
     final conversationsAsync = ref.watch(conversationListProvider);
     final name = conversationsAsync.valueOrNull
-        ?.where((c) => c.accountId == convId)
+        ?.where((c) => c.conversationId == convId)
         .map((c) => c.name)
         .firstOrNull;
     return Text(
       name ?? convId,
       overflow: TextOverflow.ellipsis,
-      style: TextStyle(color: colorScheme.onSurface),
+      style: Theme.of(context).textTheme.titleMedium,
     );
   }
 
@@ -914,7 +956,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   Widget _buildQuoteCard(String quoteId) {
-    final convId = ref.read(selectedAccountIdProvider);
+    final convId = ref.read(selectedConversationIdProvider);
     if (convId == null) return const SizedBox.shrink();
     final colorScheme = Theme.of(context).colorScheme;
 
@@ -1499,28 +1541,28 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ),
               ),
               const SizedBox(width: 8),
-              IconButton.filled(
-                onPressed: connected
-                    ? (ref.watch(streamingMessageProvider) != null ||
-                              ref.watch(streamingThinkingProvider) != null ||
-                              ref.watch(waitingForReplyProvider)
+              Builder(builder: (context) {
+                final convId = ref.watch(selectedConversationIdProvider);
+                final rawMsg = ref.watch(streamingMessageProvider);
+                final rawThink = ref.watch(streamingThinkingProvider);
+                final waiting = ref.watch(waitingForReplyProvider);
+                // 只看属于当前会话的流式状态
+                final isMyStreaming =
+                    (rawMsg != null && (rawMsg.conversationId == null || rawMsg.conversationId == convId)) ||
+                    (rawThink != null && (rawThink.conversationId == null || rawThink.conversationId == convId)) ||
+                    (waiting != null && waiting == convId);
+                return IconButton.filled(
+                  onPressed: connected
+                      ? (isMyStreaming
                           ? () => ref.read(wsMessageHandlerProvider).sendAbort()
                           : _handleSend)
-                    : null,
-                icon: Icon(
-                  ref.watch(streamingMessageProvider) != null ||
-                          ref.watch(streamingThinkingProvider) != null ||
-                          ref.watch(waitingForReplyProvider)
-                      ? Icons.stop
-                      : Icons.send,
-                ),
-                style:
-                    (ref.watch(streamingMessageProvider) != null ||
-                        ref.watch(streamingThinkingProvider) != null ||
-                        ref.watch(waitingForReplyProvider))
-                    ? IconButton.styleFrom(backgroundColor: colorScheme.error)
-                    : null,
-              ),
+                      : null,
+                  icon: Icon(isMyStreaming ? Icons.stop : Icons.send),
+                  style: isMyStreaming
+                      ? IconButton.styleFrom(backgroundColor: colorScheme.error)
+                      : null,
+                );
+              }),
             ],
           ),
         ),

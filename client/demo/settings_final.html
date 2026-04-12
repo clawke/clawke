@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clawke Settings — B + E Skill</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f0f12;
+    --surface: #1a1a22;
+    --surface-2: #22222e;
+    --surface-3: #2a2a38;
+    --border: rgba(255,255,255,0.06);
+    --border-light: rgba(255,255,255,0.1);
+    --text: #e8e8ed;
+    --text-secondary: #8888a0;
+    --text-tertiary: #5a5a72;
+    --accent: #6c63ff;
+    --accent-soft: rgba(108,99,255,0.12);
+    --green: #34d399;
+    --green-soft: rgba(52,211,153,0.12);
+    --blue: #60a5fa;
+    --blue-soft: rgba(96,165,250,0.12);
+    --orange: #fb923c;
+    --radius: 12px;
+    --radius-sm: 8px;
+    --transition: 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family:'Inter',-apple-system,sans-serif;
+    background:#08080c;
+    color:var(--text);
+    min-height:100vh;
+    display:flex; justify-content:center;
+    padding:30px 16px 60px;
+  }
+
+  .phone {
+    width:393px; height:852px;
+    background:var(--bg);
+    border-radius:44px;
+    border:3px solid #333;
+    overflow:hidden;
+    position:relative;
+    box-shadow:0 20px 80px rgba(0,0,0,0.5);
+  }
+  .wrapper {
+    height:100%; display:flex; flex-direction:column;
+    background:var(--bg);
+  }
+
+  /* ─── Header ─── */
+  .drawer-header {
+    display:flex; align-items:center;
+    padding:56px 16px 12px;
+    border-bottom:1px solid var(--border);
+    background:var(--surface);
+    flex-shrink:0;
+  }
+  .back-nav {
+    display:flex; align-items:center; gap:4px;
+    cursor:pointer; color:var(--accent);
+    font-size:15px; font-weight:500;
+    transition:opacity 0.2s;
+  }
+  .back-nav:hover { opacity:0.7; }
+  .back-nav svg { width:20px; height:20px; }
+  .drawer-title {
+    flex:1; text-align:center;
+    font-size:16px; font-weight:600;
+    margin-right:60px;
+  }
+
+  /* ─── Scrollable Body ─── */
+  .drawer-body {
+    flex:1; overflow-y:auto;
+    padding:16px;
+    padding-bottom:80px;
+  }
+
+  /* ─── Section Labels ─── */
+  .section-label {
+    font-size:12px; font-weight:600;
+    color:var(--text-tertiary);
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+    margin-bottom:8px; padding-left:4px;
+  }
+
+  /* ─── Name Input ─── */
+  .name-group {
+    background:var(--surface-2);
+    border-radius:var(--radius);
+    margin-bottom:24px;
+    padding:4px;
+  }
+  .name-input {
+    width:100%;
+    background:transparent;
+    border:none;
+    padding:12px 12px;
+    font-size:16px; color:var(--text);
+    outline:none; font-family:inherit;
+  }
+  .name-input::placeholder { color:var(--text-tertiary); }
+
+  /* ─── iOS Grouped Card ─── */
+  .group {
+    background:var(--surface-2);
+    border-radius:var(--radius);
+    overflow:hidden;
+    margin-bottom:24px;
+  }
+  .row {
+    display:flex; align-items:center;
+    padding:14px 16px; gap:12px;
+    border-bottom:1px solid var(--border);
+    cursor:pointer;
+    transition:background 0.15s;
+  }
+  .row:last-child { border-bottom:none; }
+  .row:hover { background:var(--surface-3); }
+
+  .icon-box {
+    width:30px; height:30px;
+    border-radius:7px;
+    display:flex; align-items:center; justify-content:center;
+    flex-shrink:0;
+  }
+  .icon-box svg { width:16px; height:16px; }
+
+  .label-area { flex:1; min-width:0; }
+  .label { font-size:15px; font-weight:500; }
+  .sublabel { font-size:12px; color:var(--text-tertiary); margin-top:2px; }
+  .value {
+    font-size:14px; color:var(--text-secondary);
+    max-width:160px; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis;
+  }
+  .chevron { color:var(--text-tertiary); flex-shrink:0; }
+  .chevron svg { width:16px; height:16px; }
+
+  /* ─── Skill Panel (E-style, connected) ─── */
+  .skill-panel {
+    background:var(--surface-2);
+    border-radius:var(--radius);
+    overflow:hidden;
+    margin-bottom:24px;
+  }
+  .skill-panel-header {
+    display:flex; align-items:center; gap:10px;
+    padding:14px 16px;
+    cursor:pointer;
+    border-bottom:1px solid var(--border);
+    transition:background 0.15s;
+  }
+  .skill-panel-header:hover { background:var(--surface-3); }
+  .skill-panel-icon {
+    width:30px; height:30px; border-radius:7px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .skill-panel-icon svg { width:16px; height:16px; }
+  .skill-panel-title { font-size:15px; font-weight:500; }
+  .skill-panel-sub { font-size:12px; color:var(--text-tertiary); margin-top:2px; }
+  .skill-panel-mode {
+    font-size:12px; font-weight:600;
+    color:var(--accent);
+    margin-left:auto;
+    padding-right:4px;
+  }
+
+  /* Skill items inside panel */
+  .skill-item {
+    display:flex; align-items:center; gap:10px;
+    padding:11px 16px;
+    border-bottom:1px solid var(--border);
+  }
+  .skill-item:last-child { border-bottom:none; }
+
+  .skill-dot {
+    width:7px; height:7px; border-radius:50%;
+    flex-shrink:0;
+  }
+  .skill-info { flex:1; min-width:0; }
+  .skill-name { font-size:14px; font-weight:500; color:var(--text); }
+  .skill-desc {
+    font-size:12px; color:var(--text-tertiary); margin-top:2px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+
+  /* Dot colors for variety */
+  .dot-green { background:var(--green); }
+  .dot-blue { background:var(--blue); }
+  .dot-accent { background:var(--accent); }
+  .dot-orange { background:var(--orange); }
+</style>
+</head>
+<body>
+
+<div class="phone">
+<div class="wrapper">
+  <!-- Header -->
+  <div class="drawer-header">
+    <div class="back-nav">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      返回
+    </div>
+    <div class="drawer-title">会话设置</div>
+  </div>
+
+  <div class="drawer-body">
+    <!-- ── 会话名称 ── -->
+    <div class="section-label">会话名称</div>
+    <div class="name-group">
+      <input class="name-input" value="New Chat (CEO)" placeholder="输入会话名称">
+    </div>
+
+    <!-- ── 配置 ── -->
+    <div class="section-label">配置</div>
+    <div class="group">
+      <!-- 模型 -->
+      <div class="row">
+        <div class="icon-box" style="background:var(--accent-soft); color:var(--accent);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        </div>
+        <div class="label-area">
+          <div class="label">模型</div>
+        </div>
+        <div class="value">MiniMax-M2.7</div>
+        <div class="chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></div>
+      </div>
+    </div>
+
+    <!-- ── Skills (E-style panel, connected block) ── -->
+    <div class="section-label">Skills</div>
+    <div class="skill-panel">
+      <!-- Panel header: click to enter skill picker drawer -->
+      <div class="skill-panel-header">
+        <div class="skill-panel-icon" style="background:var(--green-soft); color:var(--green);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+        </div>
+        <div class="label-area">
+          <div class="skill-panel-title">2 个已启用</div>
+          <div class="skill-panel-sub">点击修改 Skills 配置</div>
+        </div>
+        <div class="skill-panel-mode">优先触发</div>
+        <div class="chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></div>
+      </div>
+
+      <!-- Skill list items (connected to header) -->
+      <div class="skill-item">
+        <div class="skill-dot dot-green"></div>
+        <div class="skill-info">
+          <div class="skill-name">gstack-openclaw-ceo-review</div>
+          <div class="skill-desc">CEO/founder-mode plan review, rethink problems</div>
+        </div>
+      </div>
+      <div class="skill-item">
+        <div class="skill-dot dot-blue"></div>
+        <div class="skill-info">
+          <div class="skill-name">gstack-openclaw-eng-review</div>
+          <div class="skill-desc">Engineering manager-mode plan review</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 高级 ── -->
+    <div class="section-label">高级</div>
+    <div class="group">
+      <div class="row">
+        <div class="icon-box" style="background:var(--blue-soft); color:var(--blue);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M16 13H8 M16 17H8"/></svg>
+        </div>
+        <div class="label-area">
+          <div class="label">系统提示词</div>
+        </div>
+        <div class="value" style="color:var(--text-tertiary)">未设置</div>
+        <div class="chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></div>
+      </div>
+      <div class="row">
+        <div class="icon-box" style="background:rgba(255,255,255,0.04); color:var(--text-secondary);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        <div class="label-area">
+          <div class="label">工作目录</div>
+        </div>
+        <div class="value">default</div>
+        <div class="chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+</body>
+</html>

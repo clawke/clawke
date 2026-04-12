@@ -96,8 +96,8 @@ export function sendToOpenClaw(accountId: string, jsonObj: Record<string, unknow
   const ws = upstreamConnections.get(accountId);
   if (ws && ws.readyState === 1) {
     try {
-      if ((jsonObj as any).mediaPaths || (jsonObj as any).mediaRelativeUrls) {
-        console.log(`[Gateway] 📤 sendToOpenClaw(${accountId}): keys=${Object.keys(jsonObj).join(',')}, relUrls=${JSON.stringify((jsonObj as any).mediaRelativeUrls)}, paths=${JSON.stringify((jsonObj as any).mediaPaths)}`);
+      if ((jsonObj as any).media) {
+        console.log(`[Gateway] 📤 sendToOpenClaw(${accountId}): media=${JSON.stringify((jsonObj as any).media)}`);
       }
       console.log(`[Gateway] ➡️  sendToOpenClaw(${accountId}): type=${jsonObj.type}, text=${((jsonObj as any).text || '').slice(0, 50)}`);
       ws.send(JSON.stringify(jsonObj));
@@ -136,3 +136,49 @@ export function trackStreamingId(msgId: string): void {
 export function untrackStreamingId(msgId: string): void {
   activeStreamingIds.delete(msgId);
 }
+
+/**
+ * 通过 WS 查询 Gateway 的可用模型列表
+ *
+ * 发送 { type: "query_models" }，等待 { type: "models_response", models: [...] }
+ * 超时 5 秒返回空数组。
+ */
+export function queryGatewayModels(): Promise<string[]> {
+  return new Promise((resolve) => {
+    // 找到第一个活跃的 upstream 连接
+    let targetWs: WebSocket | null = null;
+    for (const ws of upstreamConnections.values()) {
+      if (ws.readyState === 1) { targetWs = ws; break; }
+    }
+    if (!targetWs) {
+      console.warn('[Gateway] queryGatewayModels: no upstream connected');
+      resolve([]);
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      console.warn('[Gateway] queryGatewayModels: timeout (5s)');
+      cleanup();
+      resolve([]);
+    }, 5000);
+
+    const handler = (raw: Buffer) => {
+      try {
+        const msg = JSON.parse(raw.toString());
+        if (msg.type === 'models_response') {
+          cleanup();
+          resolve(msg.models || []);
+        }
+      } catch { /* ignore non-JSON */ }
+    };
+
+    const cleanup = () => {
+      clearTimeout(timeout);
+      targetWs?.removeListener('message', handler);
+    };
+
+    targetWs.on('message', handler);
+    targetWs.send(JSON.stringify({ type: 'query_models' }));
+  });
+}
+

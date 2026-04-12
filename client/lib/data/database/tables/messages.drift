@@ -5,6 +5,7 @@ CREATE TABLE messages (
     message_id       TEXT    NOT NULL PRIMARY KEY,
     server_id        TEXT,
     account_id       TEXT    NOT NULL,
+    conversation_id  TEXT    NOT NULL DEFAULT 'default',
     sender_id        TEXT    NOT NULL,
     type             TEXT    NOT NULL,
     content          TEXT,
@@ -17,15 +18,15 @@ CREATE TABLE messages (
     input_tokens     INTEGER,
     output_tokens    INTEGER,
     model_name       TEXT,
-    FOREIGN KEY(account_id) REFERENCES conversations(account_id)
+    FOREIGN KEY(conversation_id) REFERENCES conversations(conversation_id)
         ON DELETE CASCADE
 );
 
-CREATE INDEX idx_msg_acct_created ON messages(account_id, created_at DESC);
+CREATE INDEX idx_msg_conv_created ON messages(conversation_id, created_at DESC);
 
 watchMessagesInConversation:
   SELECT * FROM messages
-  WHERE account_id = :accountId AND status != 'baseline'
+  WHERE conversation_id = :conversationId AND status != 'baseline'
   ORDER BY created_at DESC
   LIMIT :limit;
 

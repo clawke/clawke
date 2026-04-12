@@ -35,7 +35,7 @@ class _NewConversationDialogState extends ConsumerState<NewConversationDialog> {
         .ensureConversation(accountId: convId, type: 'dm', name: name);
 
     if (mounted) {
-      ref.read(selectedAccountIdProvider.notifier).state = convId;
+      ref.read(selectedConversationIdProvider.notifier).state = convId;
       Navigator.of(context).pop();
     }
   }

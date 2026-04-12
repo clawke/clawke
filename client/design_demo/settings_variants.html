@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clawke 会话设置 - B · 极简扁平 (修订)</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #0a0a0a;
+    color: #E4E4E7;
+    display: flex; justify-content: center; align-items: flex-start;
+    min-height: 100vh; padding: 40px 20px;
+  }
+
+  .demo-container {
+    width: 420px;
+  }
+  .demo-title {
+    text-align: center; font-size: 20px; font-weight: 700;
+    margin-bottom: 6px;
+    background: linear-gradient(135deg, #10B981, #34D399);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .demo-subtitle {
+    text-align: center; color: #52525B; font-size: 12px; margin-bottom: 24px;
+  }
+
+  /* ═══ VARIANT B: Minimal Flat (修订版) ═══ */
+  .vb {
+    background: #161616;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid #2a2a2a;
+  }
+  .vb .handle {
+    width: 40px; height: 4px; background: #3a3a3a; border-radius: 2px;
+    margin: 10px auto 0;
+  }
+  .vb .header {
+    display: flex; align-items: center; padding: 14px 20px 10px;
+  }
+  .vb .header h2 { flex: 1; font-size: 18px; font-weight: 600; }
+  .vb .header .btn-group { display: flex; align-items: center; gap: 6px; }
+  .vb .header .icon-btn {
+    width: 32px; height: 32px; border: 1px solid #333; background: transparent;
+    color: #A1A1AA; cursor: pointer; border-radius: 8px; font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s;
+  }
+  .vb .header .icon-btn:hover { border-color: #10B981; color: #10B981; }
+  .vb .header .btn-save {
+    padding: 6px 20px; border: 1px solid #10B981; border-radius: 8px;
+    background: transparent; color: #10B981; font-weight: 600; font-size: 13px;
+    cursor: pointer; transition: all 0.2s; font-family: inherit;
+  }
+  .vb .header .btn-save:hover { background: #10B981; color: #fff; }
+
+  .vb .body { padding: 0 20px 20px; }
+
+  .vb .section { margin-bottom: 20px; }
+  .vb .section:last-child { margin-bottom: 0; }
+  .vb .section-title {
+    font-size: 12px; font-weight: 500; color: #52525B;
+    margin-bottom: 8px; padding-left: 2px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .vb .section-title .count { color: #10B981; font-weight: 600; }
+
+  .vb .input-flat {
+    width: 100%; padding: 10px 0; background: transparent;
+    border: none; border-bottom: 1px solid #2a2a2a; color: #E4E4E7;
+    font-size: 14px; outline: none; transition: border-color 0.2s;
+    font-family: inherit;
+  }
+  .vb .input-flat:focus { border-bottom-color: #10B981; }
+  .vb .input-flat::placeholder { color: #3a3a3a; }
+
+  .vb .model-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 0; border-bottom: 1px solid #2a2a2a; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .vb .model-row:hover { border-bottom-color: #3a3a3a; }
+  .vb .model-row .model-name { flex: 1; font-size: 14px; color: #E4E4E7; }
+  .vb .model-row .model-tag {
+    font-size: 10px; padding: 2px 8px; border-radius: 4px;
+    background: rgba(16, 185, 129, 0.1); color: #10B981; font-weight: 500;
+  }
+  .vb .model-row .chevron { color: #52525B; font-size: 14px; }
+
+  .vb .mode-pills {
+    display: flex; background: #1c1c1c; border-radius: 8px; padding: 3px;
+    margin-bottom: 12px;
+  }
+  .vb .mode-pill {
+    flex: 1; padding: 7px; border: none; border-radius: 6px;
+    background: transparent; color: #71717A; font-size: 12px; font-weight: 500;
+    cursor: pointer; text-align: center; transition: all 0.2s;
+    font-family: inherit;
+  }
+  .vb .mode-pill.active {
+    background: #232323; color: #10B981;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+
+  /* Skill 搜索 */
+  .vb .skill-search {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 0; border-bottom: 1px solid #2a2a2a;
+    margin-bottom: 4px;
+  }
+  .vb .skill-search .search-icon { color: #3a3a3a; font-size: 14px; }
+  .vb .skill-search input {
+    flex: 1; background: none; border: none; color: #E4E4E7;
+    font-size: 13px; outline: none; font-family: inherit;
+  }
+  .vb .skill-search input::placeholder { color: #3a3a3a; }
+
+  /* Skill 列表 — 上下布局 */
+  .vb .skill-flat-list {
+    max-height: 280px; overflow-y: auto;
+  }
+  .vb .skill-flat-list::-webkit-scrollbar { width: 3px; }
+  .vb .skill-flat-list::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+
+  .vb .skill-flat-item {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 10px 2px; cursor: pointer; transition: all 0.15s;
+    border-bottom: 1px solid rgba(42,42,42,0.5);
+  }
+  .vb .skill-flat-item:last-child { border-bottom: none; }
+  .vb .skill-flat-item:hover { padding-left: 4px; }
+
+  .vb .skill-flat-item .toggle {
+    width: 34px; height: 18px; border-radius: 9px;
+    background: #333; position: relative; flex-shrink: 0;
+    transition: background 0.2s; margin-top: 2px;
+  }
+  .vb .skill-flat-item .toggle::after {
+    content: ''; position: absolute; width: 14px; height: 14px;
+    border-radius: 50%; background: #71717A; top: 2px; left: 2px;
+    transition: all 0.2s;
+  }
+  .vb .skill-flat-item.on .toggle { background: #10B981; }
+  .vb .skill-flat-item.on .toggle::after { background: #fff; left: 18px; }
+
+  .vb .skill-flat-item .s-content {
+    flex: 1; min-width: 0;
+  }
+  .vb .skill-flat-item .s-name {
+    font-size: 13px; font-weight: 500; line-height: 1.4;
+    margin-bottom: 2px;
+  }
+  .vb .skill-flat-item.on .s-name { color: #E4E4E7; }
+  .vb .skill-flat-item:not(.on) .s-name { color: #A1A1AA; }
+  .vb .skill-flat-item .s-desc {
+    font-size: 11px; color: #52525B; line-height: 1.5;
+    /* 允许多行显示 */
+    display: -webkit-box; -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical; overflow: hidden;
+  }
+
+  .vb textarea.input-flat {
+    resize: vertical; min-height: 60px; line-height: 1.5;
+    border: none; border-bottom: 1px solid #2a2a2a;
+  }
+</style>
+</head>
+<body>
+
+<div class="demo-container">
+  <div class="demo-title">B · 极简扁平 (修订版)</div>
+  <div class="demo-subtitle">添加搜索、去掉Chip、说明上下布局</div>
+
+  <div class="vb">
+    <div class="handle"></div>
+    <div class="header">
+      <h2>会话设置</h2>
+      <div class="btn-group">
+        <button class="icon-btn" title="刷新">⟳</button>
+        <button class="btn-save">保存</button>
+      </div>
+    </div>
+    <div class="body">
+      <!-- 名称 -->
+      <div class="section">
+        <div class="section-title">会话名称</div>
+        <input class="input-flat" placeholder="输入会话名称" value="天气助手">
+      </div>
+      <!-- 模型 -->
+      <div class="section">
+        <div class="section-title">模型</div>
+        <div class="model-row">
+          <span class="model-name">MiniMax / MiniMax-M2.7</span>
+          <span class="model-tag">当前</span>
+          <span class="chevron">›</span>
+        </div>
+      </div>
+      <!-- Skills -->
+      <div class="section">
+        <div class="section-title">Skills <span class="count">· 2 已选</span></div>
+        <div class="mode-pills">
+          <button class="mode-pill active">优先使用</button>
+          <button class="mode-pill">必须使用</button>
+        </div>
+        <!-- 搜索 -->
+        <div class="skill-search">
+          <span class="search-icon">🔍</span>
+          <input placeholder="搜索 skill...">
+        </div>
+        <!-- 列表：上下布局 -->
+        <div class="skill-flat-list">
+          <div class="skill-flat-item on">
+            <div class="toggle"></div>
+            <div class="s-content">
+              <div class="s-name">weather</div>
+              <div class="s-desc">查询全球天气信息，支持实时天气、未来预报、空气质量等</div>
+            </div>
+          </div>
+          <div class="skill-flat-item on">
+            <div class="toggle"></div>
+            <div class="s-content">
+              <div class="s-name">web-search</div>
+              <div class="s-desc">搜索互联网内容，获取最新资讯和网页信息</div>
+            </div>
+          </div>
+          <div class="skill-flat-item">
+            <div class="toggle"></div>
+            <div class="s-content">
+              <div class="s-name">coding-agent</div>
+              <div class="s-desc">编写、调试和执行代码，支持多种编程语言</div>
+            </div>
+          </div>
+          <div class="skill-flat-item">
+            <div class="toggle"></div>
+            <div class="s-content">
+              <div class="s-name">gstack-openclaw-investigate</div>
+              <div class="s-desc">系统调试与根因分析，四阶段调查：排查、分析、假设、实现</div>
+            </div>
+          </div>
+          <div class="skill-flat-item">
+            <div class="toggle"></div>
+            <div class="s-content">
+              <div class="s-name">gstack-openclaw-ceo-review</div>
+              <div class="s-desc">CEO 决策审查模式，重新思考问题，找到 10 星产品方案</div>
+            </div>
+          </div>
+          <div class="skill-flat-item">
+            <div class="toggle"></div>
+            <div class="s-content">
+              <div class="s-name">gstack-openclaw-office-hours</div>
+              <div class="s-desc">YC 办公时间风格的头脑风暴，适合产品构思和创意探索阶段</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- System Prompt -->
+      <div class="section">
+        <div class="section-title">系统提示词</div>
+        <textarea class="input-flat" placeholder="自定义系统提示词（可选）"></textarea>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

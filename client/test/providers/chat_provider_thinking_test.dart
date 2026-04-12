@@ -172,7 +172,7 @@ void main() {
       ).thenAnswer((_) async {});
       when(
         () => mockConvDao.updateLastMessage(
-          accountId: any(named: 'accountId'),
+          conversationId: any(named: 'conversationId'),
           messageId: any(named: 'messageId'),
           messageAt: any(named: 'messageAt'),
           preview: any(named: 'preview'),
@@ -198,7 +198,7 @@ void main() {
               ws: mockWs,
             ),
           ),
-          selectedAccountIdProvider.overrideWith((ref) => 'conv_test'),
+          selectedConversationIdProvider.overrideWith((ref) => 'conv_test'),
         ],
       );
     });

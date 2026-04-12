@@ -198,13 +198,26 @@ class AuthGate extends ConsumerWidget {
       }
 
       return true;
-    } on ApiException {
-      // 登录态无效，清除本地凭证
+    } on ApiException catch (e) {
+      // 网络超时不应该触发 logout — 只有服务端明确拒绝才清除凭证
+      if (e.message.contains('超时') || e.message.contains('网络异常')) {
+        debugPrint('[AuthGate] checkLogin timeout, using local data');
+        final user = await AuthService.getPersistedUser();
+        if (user != null) {
+          ref.read(authUserProvider.notifier).state = user;
+        }
+        final relay = await AuthService.getPersistedRelay();
+        if (relay != null) {
+          ref.read(relayCredentialsProvider.notifier).state = relay;
+        }
+        return true;
+      }
+      // 登录态无效（服务端返回 success=false），清除本地凭证
       debugPrint('[AuthGate] Login state invalid, clearing credentials');
       await AuthService.logout();
       return false;
     } catch (e) {
-      // 网络异常等，仍然用本地数据（离线容错）
+      // 其他异常，仍然用本地数据（离线容错）
       debugPrint('[AuthGate] checkLogin failed (network?): $e, using local data');
       final user = await AuthService.getPersistedUser();
       if (user != null) {

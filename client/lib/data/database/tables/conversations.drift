@@ -1,6 +1,7 @@
 -- conversations.drift
 CREATE TABLE conversations (
-    account_id           TEXT    NOT NULL PRIMARY KEY,
+    conversation_id      TEXT    NOT NULL PRIMARY KEY,
+    account_id           TEXT    NOT NULL,
     type                 TEXT    NOT NULL DEFAULT 'dm',
     name                 TEXT,
     icon_url             TEXT,
@@ -20,4 +21,9 @@ watchAllConversations:
 
 getConversation:
   SELECT * FROM conversations
-  WHERE account_id = :id;
+  WHERE conversation_id = :id;
+
+getConversationsByAccount:
+  SELECT * FROM conversations
+  WHERE account_id = :accountId
+  ORDER BY is_pinned DESC, last_message_at DESC;

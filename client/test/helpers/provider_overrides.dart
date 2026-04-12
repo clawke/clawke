@@ -51,6 +51,7 @@ class MockWsMessageHandler extends Mock implements WsMessageHandler {}
 
 /// 创建 Conversation 测试数据
 Conversation makeConversation({
+  String conversationId = 'conv_1',
   String accountId = 'conv_1',
   String type = 'ai',
   String? name = 'Test Chat',
@@ -60,6 +61,7 @@ Conversation makeConversation({
   int? lastMessageAt,
   String? lastMessagePreview,
 }) => Conversation(
+  conversationId: conversationId,
   accountId: accountId,
   type: type,
   name: name,
@@ -75,6 +77,7 @@ Conversation makeConversation({
 Message makeMessage({
   String messageId = 'msg_1',
   String accountId = 'conv_1',
+  String conversationId = 'conv_1',
   String senderId = 'local_user',
   String type = 'text',
   String? content = 'Hello',
@@ -84,6 +87,7 @@ Message makeMessage({
 }) => Message(
   messageId: messageId,
   accountId: accountId,
+  conversationId: conversationId,
   senderId: senderId,
   type: type,
   content: content,
@@ -105,7 +109,7 @@ List<Override> conversationListOverrides({
       (ref) => Stream.value(conversations ?? []),
     ),
     if (selectedId != null)
-      selectedAccountIdProvider.overrideWith((ref) => selectedId),
+      selectedConversationIdProvider.overrideWith((ref) => selectedId),
   ];
 }
 
@@ -150,7 +154,7 @@ List<Override> chatScreenOverrides({
   return [
     wsServiceProvider.overrideWithValue(ws),
     wsStateProvider.overrideWith((ref) => Stream.value(wsState)),
-    selectedAccountIdProvider.overrideWith((ref) => selectedConvId),
+    selectedConversationIdProvider.overrideWith((ref) => selectedConvId),
     conversationDaoProvider.overrideWithValue(mockConvDao),
     messageDaoProvider.overrideWithValue(mockMsgDao),
     conversationRepositoryProvider.overrideWithValue(

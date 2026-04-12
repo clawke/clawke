@@ -15,7 +15,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -56,6 +56,90 @@ class AppDatabase extends _$AppDatabase {
         await m.database.customStatement(
           'CREATE INDEX idx_msg_acct_created ON messages(account_id, created_at DESC)',
         );
+      }
+      if (from < 5) {
+        // Multi-Session: conversations 表改为 conversation_id 作为 PK
+        // SQLite 不支持修改 PK，需要重建表
+        await m.database.customStatement('''
+          CREATE TABLE conversations_new (
+            conversation_id      TEXT    NOT NULL PRIMARY KEY,
+            account_id           TEXT    NOT NULL,
+            type                 TEXT    NOT NULL DEFAULT 'dm',
+            name                 TEXT,
+            icon_url             TEXT,
+            last_message_id      TEXT,
+            last_message_at      INTEGER,
+            last_message_preview TEXT,
+            draft                TEXT,
+            is_pinned            INTEGER NOT NULL DEFAULT 0,
+            is_muted             INTEGER NOT NULL DEFAULT 0,
+            unseen_count         INTEGER NOT NULL DEFAULT 0,
+            created_at           INTEGER NOT NULL
+          )
+        ''');
+        // 迁移数据：旧 account_id 作为 conversation_id（保持兼容）
+        await m.database.customStatement('''
+          INSERT INTO conversations_new
+            (conversation_id, account_id, type, name, icon_url,
+             last_message_id, last_message_at, last_message_preview,
+             draft, is_pinned, is_muted, unseen_count, created_at)
+          SELECT account_id, account_id, type, name, icon_url,
+                 last_message_id, last_message_at, last_message_preview,
+                 draft, is_pinned, is_muted, unseen_count, created_at
+          FROM conversations
+        ''');
+        await m.database.customStatement('DROP TABLE conversations');
+        await m.database.customStatement(
+          'ALTER TABLE conversations_new RENAME TO conversations',
+        );
+
+        // messages 表也需要重建：FK 从 account_id → conversation_id
+        // SQLite 不支持 ALTER FOREIGN KEY，必须用 create-copy-drop-rename
+        await m.database.customStatement('DROP INDEX IF EXISTS idx_msg_acct_created');
+        await m.database.customStatement('''
+          CREATE TABLE messages_new (
+            message_id       TEXT    NOT NULL PRIMARY KEY,
+            server_id        TEXT,
+            account_id       TEXT    NOT NULL,
+            conversation_id  TEXT    NOT NULL DEFAULT 'default',
+            sender_id        TEXT    NOT NULL,
+            type             TEXT    NOT NULL,
+            content          TEXT,
+            thinking_content TEXT,
+            quote_id         TEXT,
+            status           TEXT    NOT NULL DEFAULT 'sending',
+            seq              INTEGER DEFAULT 0,
+            edited_at        INTEGER,
+            created_at       INTEGER NOT NULL,
+            input_tokens     INTEGER,
+            output_tokens    INTEGER,
+            model_name       TEXT,
+            FOREIGN KEY(conversation_id) REFERENCES conversations(conversation_id)
+                ON DELETE CASCADE
+          )
+        ''');
+        await m.database.customStatement('''
+          INSERT INTO messages_new
+            (message_id, server_id, account_id, conversation_id, sender_id,
+             type, content, thinking_content, quote_id, status, seq,
+             edited_at, created_at, input_tokens, output_tokens, model_name)
+          SELECT message_id, server_id, account_id, account_id, sender_id,
+                 type, content, thinking_content, quote_id, status, seq,
+                 edited_at, created_at, input_tokens, output_tokens, model_name
+          FROM messages
+        ''');
+        await m.database.customStatement('DROP TABLE messages');
+        await m.database.customStatement(
+          'ALTER TABLE messages_new RENAME TO messages',
+        );
+        await m.database.customStatement(
+          'CREATE INDEX idx_msg_conv_created ON messages(conversation_id, created_at DESC)',
+        );
+      }
+      if (from < 6) {
+        // v6: conversationId 全面改为 UUID，清除旧数据
+        await m.database.customStatement('DELETE FROM messages');
+        await m.database.customStatement('DELETE FROM conversations');
       }
     },
   );

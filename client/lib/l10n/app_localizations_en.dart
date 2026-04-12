@@ -211,11 +211,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get confirm => 'Confirm';
 
   @override
-  String get deleteConversation => 'Delete User';
+  String get deleteConversation => 'Delete Conversation';
 
   @override
   String get deleteConversationConfirm =>
-      'Are you sure you want to delete this user? All messages will be permanently removed.';
+      'Are you sure you want to delete this conversation? All messages will be permanently removed.';
 
   @override
   String get profile => 'Profile';

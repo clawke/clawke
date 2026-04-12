@@ -107,8 +107,11 @@ class ClawkeChannel(BaseChannel):
         """Convert Clawke chat message to nanobot InboundMessage."""
         text = msg.get("text", "")
         client_msg_id = msg.get("client_msg_id", f"clawke_{int(time.time() * 1000)}")
-        sender_id = "clawke_user"
+        sender_id = msg.get("conversation_id", "clawke_user")
         chat_id = f"clawke:{sender_id}"
+
+        # 保存 conversation_id 供下行消息使用
+        self._current_conversation_id = sender_id
 
         if not self.is_allowed(sender_id):
             logger.warning("Access denied for clawke_user")
@@ -149,6 +152,11 @@ class ClawkeChannel(BaseChannel):
         is_tool_hint = msg.metadata.get("_tool_hint", False)
         to = f"user:clawke_user"
 
+        # 从 OutboundMessage 的 chat_id 解析 conversation_id（格式 "clawke:{conv_id}"）
+        conv_id = (msg.chat_id.split(":", 1)[1]
+                   if msg.chat_id and ":" in msg.chat_id
+                   else getattr(self, '_current_conversation_id', 'clawke_user'))
+
         try:
             if is_tool_hint:
                 # Tool call notification
@@ -159,6 +167,7 @@ class ClawkeChannel(BaseChannel):
                     "toolCallId": tool_call_id,
                     "toolName": text.split("(")[0] if "(" in text else text,
                     "account_id": self._account_id,
+                    "conversation_id": conv_id,
                 }))
 
             elif is_progress:
@@ -169,6 +178,7 @@ class ClawkeChannel(BaseChannel):
                         "message_id": f"think_{self._ensure_stream_id()}",
                         "delta": text,
                         "account_id": self._account_id,
+                        "conversation_id": conv_id,
                     }))
 
             else:
@@ -179,6 +189,7 @@ class ClawkeChannel(BaseChannel):
                         "type": "agent_thinking_done",
                         "message_id": f"think_{self._stream_msg_id}",
                         "account_id": self._account_id,
+                        "conversation_id": conv_id,
                     }))
 
                 # Send complete text as non-streaming reply
@@ -189,6 +200,7 @@ class ClawkeChannel(BaseChannel):
                     "text": text,
                     "to": to,
                     "account_id": self._account_id,
+                    "conversation_id": conv_id,
                     "model": "nanobot",
                     "provider": "nanobot",
                 }))

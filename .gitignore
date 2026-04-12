@@ -66,3 +66,24 @@ tests/
 
 # Xcode user data
 **/xcuserdata/
+
+# macOS Flutter ephemeral (auto-generated)
+client/macos/Flutter/ephemeral/
+client/ios/Flutter/Flutter.podspec
+
+# Xcode user state
+*.xcuserstate
+
+# Agent persona files (not project code)
+AGENTS.md
+SOUL.md
+USER.md
+TOOLS.md
+IDENTITY.md
+HEARTBEAT.md
+MEMORY.md
+memory/
+
+# Local config
+client/android/local.properties
+.openclaw/

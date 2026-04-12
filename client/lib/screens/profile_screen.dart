@@ -6,7 +6,7 @@ import 'package:client/services/media_resolver.dart';
 import 'package:client/l10n/l10n.dart';
 
 /// 版本号常量（与 pubspec.yaml 同步，每次发布递增）
-const _appVersion = '1.0.38';
+const _appVersion = '1.0.39';
 
 /// 「我的」页面 — 移动端 Profile 入口
 class ProfileScreen extends ConsumerWidget {
@@ -25,7 +25,7 @@ class ProfileScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: colorScheme.surface,
       appBar: AppBar(
-        title: Text(context.l10n.profile),
+        title: Text(context.l10n.profile, style: Theme.of(context).textTheme.titleMedium),
         backgroundColor: colorScheme.surface,
         surfaceTintColor: Colors.transparent,
       ),

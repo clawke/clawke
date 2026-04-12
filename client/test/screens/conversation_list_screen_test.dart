@@ -21,9 +21,9 @@ void main() {
 
     testWidgets('renders multiple conversations', (tester) async {
       final convs = [
-        makeConversation(accountId: 'c1', name: 'Chat A'),
-        makeConversation(accountId: 'c2', name: 'Chat B'),
-        makeConversation(accountId: 'c3', name: 'Chat C'),
+        makeConversation(conversationId: 'c1', accountId: 'c1', name: 'Chat A'),
+        makeConversation(conversationId: 'c2', accountId: 'c2', name: 'Chat B'),
+        makeConversation(conversationId: 'c3', accountId: 'c3', name: 'Chat C'),
       ];
       await _pumpScreen(tester, conversations: convs);
       expect(find.text('Chat A'), findsOneWidget);
@@ -33,8 +33,8 @@ void main() {
 
     testWidgets('selected conversation is highlighted', (tester) async {
       final convs = [
-        makeConversation(accountId: 'c1', name: 'Chat A'),
-        makeConversation(accountId: 'c2', name: 'Chat B'),
+        makeConversation(conversationId: 'c1', accountId: 'c1', name: 'Chat A'),
+        makeConversation(conversationId: 'c2', accountId: 'c2', name: 'Chat B'),
       ];
       await _pumpScreen(tester, conversations: convs, selectedId: 'c1');
 
@@ -46,7 +46,7 @@ void main() {
 
     testWidgets('shows unseen count badge', (tester) async {
       final convs = [
-        makeConversation(accountId: 'c1', name: 'Chat A', unseenCount: 5),
+        makeConversation(conversationId: 'c1', accountId: 'c1', name: 'Chat A', unseenCount: 5),
       ];
       await _pumpScreen(tester, conversations: convs);
       expect(find.text('5'), findsOneWidget);
@@ -54,7 +54,7 @@ void main() {
 
     testWidgets('shows 99+ for unseen count > 99', (tester) async {
       final convs = [
-        makeConversation(accountId: 'c1', name: 'Chat A', unseenCount: 150),
+        makeConversation(conversationId: 'c1', accountId: 'c1', name: 'Chat A', unseenCount: 150),
       ];
       await _pumpScreen(tester, conversations: convs);
       expect(find.text('99+'), findsOneWidget);
@@ -62,7 +62,7 @@ void main() {
 
     testWidgets('shows pin icon for pinned conversation', (tester) async {
       final convs = [
-        makeConversation(accountId: 'c1', name: 'Chat A', isPinned: 1),
+        makeConversation(conversationId: 'c1', accountId: 'c1', name: 'Chat A', isPinned: 1),
       ];
       await _pumpScreen(tester, conversations: convs);
       expect(find.byIcon(Icons.push_pin), findsOneWidget);
@@ -72,7 +72,7 @@ void main() {
       tester,
     ) async {
       final convs = [
-        makeConversation(accountId: 'c1', name: 'Chat A', isPinned: 0),
+        makeConversation(conversationId: 'c1', accountId: 'c1', name: 'Chat A', isPinned: 0),
       ];
       await _pumpScreen(tester, conversations: convs);
       expect(find.byIcon(Icons.push_pin), findsNothing);

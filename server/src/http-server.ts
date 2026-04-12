@@ -10,6 +10,8 @@ import express from 'express';
 import { WebSocketServer } from 'ws';
 import multer from 'multer';
 import { mediaUpload, serveMedia, serveThumbnail } from './routes/media-routes.js';
+import { getModels, getSkills, getConvConfig, putConvConfig } from './routes/config-routes.js';
+import { listConversations, createConversation, updateConversation, deleteConversation } from './routes/conversation-routes.js';
 import { loadConfig } from './config.js';
 import type { Server } from 'http';
 
@@ -92,6 +94,18 @@ export function startUnifiedServer(port: number = 8780): { server: Server; wss: 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok', service: 'clawke-cs', timestamp: Date.now() });
   });
+
+  // 会话配置 API
+  app.get('/api/config/models', getModels as any);
+  app.get('/api/config/skills', getSkills as any);
+  app.get('/api/conv/:id/config', getConvConfig as any);
+  app.put('/api/conv/:id/config', putConvConfig as any);
+
+  // 会话 CRUD API
+  app.get('/api/conversations', listConversations as any);
+  app.post('/api/conversations', createConversation as any);
+  app.put('/api/conversations/:id', updateConversation as any);
+  app.delete('/api/conversations/:id', deleteConversation as any);
 
   // Error handler
   app.use((err: any, _req: any, res: any, _next: any) => {
