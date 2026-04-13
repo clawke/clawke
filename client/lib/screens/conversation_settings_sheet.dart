@@ -1296,28 +1296,36 @@ class _TextEditorPageState extends State<_TextEditorPage> {
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
-        child: TextField(
-          controller: _controller,
-          maxLines: widget.maxLines,
-          autofocus: true,
-          style: TextStyle(
-            fontSize: 14,
-            height: 1.6,
-            color: colorScheme.onSurface,
-          ),
-          decoration: InputDecoration(
-            hintText: widget.hint,
-            hintStyle: TextStyle(
-              color: colorScheme.onSurfaceVariant.withOpacity(0.4),
+        child: Column(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _controller,
+                maxLines: null,
+                expands: true,
+                textAlignVertical: TextAlignVertical.top,
+                autofocus: true,
+                style: TextStyle(
+                  fontSize: 14,
+                  height: 1.6,
+                  color: colorScheme.onSurface,
+                ),
+                decoration: InputDecoration(
+                  hintText: widget.hint,
+                  hintStyle: TextStyle(
+                    color: colorScheme.onSurfaceVariant.withOpacity(0.4),
+                  ),
+                  filled: true,
+                  fillColor: colorScheme.surfaceContainerHighest.withOpacity(0.5),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.all(16),
+                ),
+              ),
             ),
-            filled: true,
-            fillColor: colorScheme.surfaceContainerHighest.withOpacity(0.5),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-            contentPadding: const EdgeInsets.all(16),
-          ),
+          ],
         ),
       ),
     );
