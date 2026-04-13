@@ -3,6 +3,7 @@ import 'package:client/main.dart';
 import 'package:client/services/auth_service.dart';
 import 'package:client/l10n/l10n.dart';
 
+/// 修改密码页面 — Change password screen
 class ModifyPasswordScreen extends StatefulWidget {
   const ModifyPasswordScreen({super.key});
 
@@ -18,6 +19,9 @@ class _ModifyPasswordScreenState extends State<ModifyPasswordScreen> {
   
   bool _isLoading = false;
   String? _errorMessage;
+  bool _obscureOld = true;
+  bool _obscureNew = true;
+  bool _obscureConfirm = true;
 
   @override
   void dispose() {
@@ -69,16 +73,57 @@ class _ModifyPasswordScreenState extends State<ModifyPasswordScreen> {
     }
   }
 
+  /// 统一输入框装饰，和登录页保持一致 — Unified InputDecoration matching login screen
+  InputDecoration _buildInputDecoration({
+    required String hintText,
+    required IconData prefixIcon,
+    required ColorScheme colorScheme,
+    Widget? suffixIcon,
+  }) {
+    return InputDecoration(
+      hintText: hintText,
+      floatingLabelBehavior: FloatingLabelBehavior.never,
+      prefixIcon: Icon(prefixIcon),
+      suffixIcon: suffixIcon,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Colors.transparent),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: colorScheme.primary, width: 2),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: colorScheme.error),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: colorScheme.error, width: 2),
+      ),
+      filled: true,
+      fillColor: colorScheme.surfaceContainerLow,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final l10n = context.l10n;
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.modifyPassword)),
+      appBar: AppBar(
+        title: Text(l10n.modifyPassword),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+          padding: const EdgeInsets.symmetric(horizontal: 32),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 400),
             child: Form(
@@ -87,14 +132,13 @@ class _ModifyPasswordScreenState extends State<ModifyPasswordScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  if (_errorMessage != null)
+                  // 错误提示 — Error message
+                  if (_errorMessage != null) ...[
                     Container(
                       padding: const EdgeInsets.all(12),
-                      margin: const EdgeInsets.only(bottom: 16),
                       decoration: BoxDecoration(
                         color: colorScheme.error.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: colorScheme.error.withValues(alpha: 0.3)),
                       ),
                       child: Row(
                         children: [
@@ -103,52 +147,72 @@ class _ModifyPasswordScreenState extends State<ModifyPasswordScreen> {
                           Expanded(
                             child: Text(
                               _errorMessage!,
-                              style: TextStyle(color: colorScheme.error, fontSize: 13),
+                              style: TextStyle(
+                                color: colorScheme.error,
+                                fontSize: Theme.of(context).textTheme.bodySmall!.fontSize,
+                              ),
                             ),
                           ),
                         ],
                       ),
                     ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // 当前密码 — Current password
                   TextFormField(
                     controller: _oldController,
-                    obscureText: true,
-                    decoration: InputDecoration(
-                      labelText: l10n.currentPassword,
-                      prefixIcon: const Icon(Icons.lock_outline),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      filled: true,
-                      fillColor: colorScheme.surfaceContainerLow,
+                    obscureText: _obscureOld,
+                    decoration: _buildInputDecoration(
+                      hintText: l10n.enterCurrentPassword,
+                      prefixIcon: Icons.lock_outline,
+                      colorScheme: colorScheme,
+                      suffixIcon: IconButton(
+                        icon: Icon(_obscureOld ? Icons.visibility_off : Icons.visibility),
+                        onPressed: () => setState(() => _obscureOld = !_obscureOld),
+                      ),
                     ),
                     validator: (v) => v!.isEmpty ? l10n.enterCurrentPassword : null,
                   ),
                   const SizedBox(height: 16),
+
+                  // 新密码 — New password
                   TextFormField(
                     controller: _newController,
-                    obscureText: true,
-                    decoration: InputDecoration(
-                      labelText: l10n.newPassword,
-                      prefixIcon: const Icon(Icons.key_outlined),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      filled: true,
-                      fillColor: colorScheme.surfaceContainerLow,
+                    obscureText: _obscureNew,
+                    decoration: _buildInputDecoration(
+                      hintText: l10n.enterNewPassword,
+                      prefixIcon: Icons.key_outlined,
+                      colorScheme: colorScheme,
+                      suffixIcon: IconButton(
+                        icon: Icon(_obscureNew ? Icons.visibility_off : Icons.visibility),
+                        onPressed: () => setState(() => _obscureNew = !_obscureNew),
+                      ),
                     ),
                     validator: (v) => v!.isEmpty ? l10n.enterNewPassword : null,
                   ),
                   const SizedBox(height: 16),
+
+                  // 确认新密码 — Confirm new password
                   TextFormField(
                     controller: _confirmController,
-                    obscureText: true,
-                    decoration: InputDecoration(
-                      labelText: l10n.confirmNewPassword,
-                      prefixIcon: const Icon(Icons.check_circle_outline),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      filled: true,
-                      fillColor: colorScheme.surfaceContainerLow,
+                    obscureText: _obscureConfirm,
+                    decoration: _buildInputDecoration(
+                      hintText: l10n.pleaseConfirmNewPassword,
+                      prefixIcon: Icons.check_circle_outline,
+                      colorScheme: colorScheme,
+                      suffixIcon: IconButton(
+                        icon: Icon(_obscureConfirm ? Icons.visibility_off : Icons.visibility),
+                        onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                      ),
                     ),
                     validator: (v) => v!.isEmpty ? l10n.pleaseConfirmNewPassword : null,
                   ),
                   const SizedBox(height: 32),
+
+                  // 提交按钮 — Submit button
                   SizedBox(
+                    width: double.infinity,
                     height: 48,
                     child: FilledButton(
                       key: const Key('modify_pwd_submit_btn'),
@@ -162,7 +226,12 @@ class _ModifyPasswordScreenState extends State<ModifyPasswordScreen> {
                               height: 20,
                               child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                             )
-                          : Text(l10n.submitChanges, style: const TextStyle(fontWeight: FontWeight.w600)),
+                          : Text(
+                              l10n.submitChanges,
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                     ),
                   ),
                 ],
