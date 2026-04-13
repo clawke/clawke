@@ -87,9 +87,11 @@ class ClawkeApp extends ConsumerWidget {
         textTheme: scaledText,
         useMaterial3: true,
         appBarTheme: AppBarTheme(
-          actionsPadding: const EdgeInsets.only(right: 8),
+          actionsPadding: const EdgeInsets.only(right: 12),
+          foregroundColor: Colors.black87,
           titleTextStyle: scaledText.titleMedium?.copyWith(
             fontWeight: FontWeight.w600,
+            color: Colors.black87,
           ),
         ),
         extensions: [
@@ -120,9 +122,11 @@ class ClawkeApp extends ConsumerWidget {
         textTheme: scaledText,
         useMaterial3: true,
         appBarTheme: AppBarTheme(
-          actionsPadding: const EdgeInsets.only(right: 8),
+          actionsPadding: const EdgeInsets.only(right: 12),
+          foregroundColor: const Color(0xFFE4E4E7),
           titleTextStyle: scaledText.titleMedium?.copyWith(
             fontWeight: FontWeight.w600,
+            color: const Color(0xFFE4E4E7),
           ),
         ),
         extensions: [
@@ -134,9 +138,7 @@ class ClawkeApp extends ConsumerWidget {
         ],
       ),
       // Named routes for navigation from login/welcome screens
-      routes: {
-        '/main': (_) => const MainLayout(),
-      },
+      routes: {'/main': (_) => const MainLayout()},
       home: const AuthGate(),
     );
   }
@@ -177,7 +179,8 @@ class AuthGate extends ConsumerWidget {
     if (loggedOut) return false;
 
     final httpUrl = prefs.getString('clawke_http_url');
-    final hasConfig = httpUrl != null &&
+    final hasConfig =
+        httpUrl != null &&
         httpUrl.isNotEmpty &&
         httpUrl != 'http://127.0.0.1:8780';
 
@@ -230,7 +233,9 @@ class AuthGate extends ConsumerWidget {
       return false;
     } catch (e) {
       // 其他异常，仍然用本地数据（离线容错）
-      debugPrint('[AuthGate] checkLogin failed (network?): $e, using local data');
+      debugPrint(
+        '[AuthGate] checkLogin failed (network?): $e, using local data',
+      );
       final user = await AuthService.getPersistedUser();
       if (user != null) {
         ref.read(authUserProvider.notifier).state = user;
