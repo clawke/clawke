@@ -229,14 +229,14 @@ class _ConversationSettingsSheetState
             : ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  // ── 会话名称 ──
-                  _sectionLabel('会话名称'),
-                  _buildNameInput(colorScheme),
-                  const SizedBox(height: 24),
-
                   // ── Gateway ──
                   _sectionLabel('Gateway'),
                   _buildGatewayCard(colorScheme),
+                  const SizedBox(height: 24),
+
+                  // ── 会话名称 ──
+                  _sectionLabel('会话名称'),
+                  _buildNameInput(colorScheme),
                   const SizedBox(height: 24),
 
                   // ── 模型 ──
@@ -297,7 +297,7 @@ class _ConversationSettingsSheetState
   }
 
   // ═══════════════════════════════════════
-  // 会话名称 — 行内输入框
+  // 会话名称 — 左对齐输入框，带图标
   // ═══════════════════════════════════════
   Widget _buildNameInput(ColorScheme colorScheme) {
     return Container(
@@ -306,7 +306,7 @@ class _ConversationSettingsSheetState
         borderRadius: BorderRadius.circular(12),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Row(
           children: [
             Container(
@@ -319,29 +319,17 @@ class _ConversationSettingsSheetState
                   size: 16, color: colorScheme.primary),
             ),
             const SizedBox(width: 12),
-            Text(
-              '会话名称',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
-                color: colorScheme.onSurface,
-              ),
-            ),
-            const SizedBox(width: 8),
             Expanded(
               child: TextField(
                 controller: _nameController,
-                style: TextStyle(fontSize: 14, color: colorScheme.onSurface),
-                textAlign: TextAlign.right,
+                style: TextStyle(fontSize: 16, color: colorScheme.onSurface),
                 decoration: InputDecoration(
-                  hintText: '输入名称',
+                  hintText: '输入会话名称',
                   hintStyle: TextStyle(
                     color: colorScheme.onSurface.withOpacity(0.3),
-                    fontSize: 14,
                   ),
                   border: InputBorder.none,
-                  contentPadding: EdgeInsets.zero,
-                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 14),
                 ),
               ),
             ),
@@ -511,18 +499,22 @@ class _ConversationSettingsSheetState
                             color: colorScheme.onSurface,
                           ),
                         ),
+                        if (selectedList.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            modeText,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: _skillMode == 'exclusive'
+                                  ? const Color(0xFFFB923C)
+                                  : colorScheme.primary,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
-                  if (selectedList.isNotEmpty)
-                    Text(
-                      modeText,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: colorScheme.primary,
-                      ),
-                    ),
                   const SizedBox(width: 6),
                   Icon(Icons.chevron_right_rounded,
                       size: 18, color: colorScheme.onSurfaceVariant.withOpacity(0.4)),
