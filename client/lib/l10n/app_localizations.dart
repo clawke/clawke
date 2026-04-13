@@ -715,6 +715,66 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'法律信息'**
   String get legal;
+
+  /// No description provided for @currentPassword.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前密码'**
+  String get currentPassword;
+
+  /// No description provided for @newPassword.
+  ///
+  /// In zh, this message translates to:
+  /// **'新密码'**
+  String get newPassword;
+
+  /// No description provided for @confirmNewPassword.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认新密码'**
+  String get confirmNewPassword;
+
+  /// No description provided for @enterCurrentPassword.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入当前密码'**
+  String get enterCurrentPassword;
+
+  /// No description provided for @enterNewPassword.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入新密码'**
+  String get enterNewPassword;
+
+  /// No description provided for @pleaseConfirmNewPassword.
+  ///
+  /// In zh, this message translates to:
+  /// **'请确认新密码'**
+  String get pleaseConfirmNewPassword;
+
+  /// No description provided for @passwordMismatch.
+  ///
+  /// In zh, this message translates to:
+  /// **'两次输入的新密码不一致'**
+  String get passwordMismatch;
+
+  /// No description provided for @passwordLengthError.
+  ///
+  /// In zh, this message translates to:
+  /// **'新密码长度必须为 6-20 位'**
+  String get passwordLengthError;
+
+  /// No description provided for @passwordChangedSuccess.
+  ///
+  /// In zh, this message translates to:
+  /// **'修改密码成功，需要重新登录'**
+  String get passwordChangedSuccess;
+
+  /// No description provided for @submitChanges.
+  ///
+  /// In zh, this message translates to:
+  /// **'提交修改'**
+  String get submitChanges;
 }
 
 class _AppLocalizationsDelegate

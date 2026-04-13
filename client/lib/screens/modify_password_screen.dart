@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:client/main.dart';
 import 'package:client/services/auth_service.dart';
+import 'package:client/l10n/l10n.dart';
 
 class ModifyPasswordScreen extends StatefulWidget {
   const ModifyPasswordScreen({super.key});
@@ -31,13 +32,14 @@ class _ModifyPasswordScreenState extends State<ModifyPasswordScreen> {
     final oldPwd = _oldController.text;
     final newPwd = _newController.text;
     final confirmPwd = _confirmController.text;
+    final l10n = context.l10n;
 
     if (newPwd != confirmPwd) {
-      setState(() => _errorMessage = '两次输入的新密码不一致');
+      setState(() => _errorMessage = l10n.passwordMismatch);
       return;
     }
     if (newPwd.length < 6 || newPwd.length > 20) {
-      setState(() => _errorMessage = '新密码长度必须为 6-20 位');
+      setState(() => _errorMessage = l10n.passwordLengthError);
       return;
     }
 
@@ -50,9 +52,9 @@ class _ModifyPasswordScreenState extends State<ModifyPasswordScreen> {
       await AuthService.modifyPassword(oldPwd, newPwd, confirmPwd);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('修改密码成功，需要重新登录')),
+        SnackBar(content: Text(context.l10n.passwordChangedSuccess)),
       );
-      // Kick them out to re-login just like RC World usually does
+      // 登出并跳转到登录页 — Log out and redirect to login
       await AuthService.logout();
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
@@ -70,9 +72,10 @@ class _ModifyPasswordScreenState extends State<ModifyPasswordScreen> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final l10n = context.l10n;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('修改密码'), centerTitle: true),
+      appBar: AppBar(title: Text(l10n.modifyPassword)),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
@@ -110,39 +113,39 @@ class _ModifyPasswordScreenState extends State<ModifyPasswordScreen> {
                     controller: _oldController,
                     obscureText: true,
                     decoration: InputDecoration(
-                      labelText: '当前密码',
+                      labelText: l10n.currentPassword,
                       prefixIcon: const Icon(Icons.lock_outline),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       filled: true,
                       fillColor: colorScheme.surfaceContainerLow,
                     ),
-                    validator: (v) => v!.isEmpty ? '请输入当前密码' : null,
+                    validator: (v) => v!.isEmpty ? l10n.enterCurrentPassword : null,
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _newController,
                     obscureText: true,
                     decoration: InputDecoration(
-                      labelText: '新密码',
+                      labelText: l10n.newPassword,
                       prefixIcon: const Icon(Icons.key_outlined),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       filled: true,
                       fillColor: colorScheme.surfaceContainerLow,
                     ),
-                    validator: (v) => v!.isEmpty ? '请输入新密码' : null,
+                    validator: (v) => v!.isEmpty ? l10n.enterNewPassword : null,
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _confirmController,
                     obscureText: true,
                     decoration: InputDecoration(
-                      labelText: '确认新密码',
+                      labelText: l10n.confirmNewPassword,
                       prefixIcon: const Icon(Icons.check_circle_outline),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       filled: true,
                       fillColor: colorScheme.surfaceContainerLow,
                     ),
-                    validator: (v) => v!.isEmpty ? '请确认新密码' : null,
+                    validator: (v) => v!.isEmpty ? l10n.pleaseConfirmNewPassword : null,
                   ),
                   const SizedBox(height: 32),
                   SizedBox(
@@ -159,7 +162,7 @@ class _ModifyPasswordScreenState extends State<ModifyPasswordScreen> {
                               height: 20,
                               child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                             )
-                          : const Text('提交修改', style: TextStyle(fontWeight: FontWeight.w600)),
+                          : Text(l10n.submitChanges, style: const TextStyle(fontWeight: FontWeight.w600)),
                     ),
                   ),
                 ],

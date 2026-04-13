@@ -336,4 +336,34 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get legal => 'Legal';
+
+  @override
+  String get currentPassword => 'Current Password';
+
+  @override
+  String get newPassword => 'New Password';
+
+  @override
+  String get confirmNewPassword => 'Confirm New Password';
+
+  @override
+  String get enterCurrentPassword => 'Please enter current password';
+
+  @override
+  String get enterNewPassword => 'Please enter new password';
+
+  @override
+  String get pleaseConfirmNewPassword => 'Please confirm new password';
+
+  @override
+  String get passwordMismatch => 'New passwords do not match';
+
+  @override
+  String get passwordLengthError => 'Password must be 6-20 characters';
+
+  @override
+  String get passwordChangedSuccess => 'Password changed, please log in again';
+
+  @override
+  String get submitChanges => 'Submit';
 }

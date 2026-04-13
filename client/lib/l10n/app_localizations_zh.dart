@@ -326,4 +326,34 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get legal => '法律信息';
+
+  @override
+  String get currentPassword => '当前密码';
+
+  @override
+  String get newPassword => '新密码';
+
+  @override
+  String get confirmNewPassword => '确认新密码';
+
+  @override
+  String get enterCurrentPassword => '请输入当前密码';
+
+  @override
+  String get enterNewPassword => '请输入新密码';
+
+  @override
+  String get pleaseConfirmNewPassword => '请确认新密码';
+
+  @override
+  String get passwordMismatch => '两次输入的新密码不一致';
+
+  @override
+  String get passwordLengthError => '新密码长度必须为 6-20 位';
+
+  @override
+  String get passwordChangedSuccess => '修改密码成功，需要重新登录';
+
+  @override
+  String get submitChanges => '提交修改';
 }

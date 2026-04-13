@@ -102,5 +102,15 @@
   "off": "Off",
   "termsOfService": "Terms of Service",
   "privacyPolicy": "Privacy Policy",
-  "legal": "Legal"
+  "legal": "Legal",
+  "currentPassword": "Current Password",
+  "newPassword": "New Password",
+  "confirmNewPassword": "Confirm New Password",
+  "enterCurrentPassword": "Please enter current password",
+  "enterNewPassword": "Please enter new password",
+  "pleaseConfirmNewPassword": "Please confirm new password",
+  "passwordMismatch": "New passwords do not match",
+  "passwordLengthError": "Password must be 6-20 characters",
+  "passwordChangedSuccess": "Password changed, please log in again",
+  "submitChanges": "Submit"
 }

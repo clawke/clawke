@@ -111,5 +111,15 @@
   "off": "关闭",
   "termsOfService": "用户协议",
   "privacyPolicy": "隐私政策",
-  "legal": "法律信息"
+  "legal": "法律信息",
+  "currentPassword": "当前密码",
+  "newPassword": "新密码",
+  "confirmNewPassword": "确认新密码",
+  "enterCurrentPassword": "请输入当前密码",
+  "enterNewPassword": "请输入新密码",
+  "pleaseConfirmNewPassword": "请确认新密码",
+  "passwordMismatch": "两次输入的新密码不一致",
+  "passwordLengthError": "新密码长度必须为 6-20 位",
+  "passwordChangedSuccess": "修改密码成功，需要重新登录",
+  "submitChanges": "提交修改"
 }
