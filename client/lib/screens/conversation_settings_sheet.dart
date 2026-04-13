@@ -229,9 +229,14 @@ class _ConversationSettingsSheetState
             : ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  // ── 基本信息 ──
-                  _sectionLabel('基本信息'),
-                  _buildBasicInfoGroup(colorScheme),
+                  // ── 会话名称 ──
+                  _sectionLabel('会话名称'),
+                  _buildNameInput(colorScheme),
+                  const SizedBox(height: 24),
+
+                  // ── Gateway ──
+                  _sectionLabel('Gateway'),
+                  _buildGatewayCard(colorScheme),
                   const SizedBox(height: 24),
 
                   // ── 模型 ──
@@ -292,135 +297,110 @@ class _ConversationSettingsSheetState
   }
 
   // ═══════════════════════════════════════
-  // 基本信息组 — 会话名称 + Gateway + 会话 ID
+  // 会话名称 — 行内输入框
   // ═══════════════════════════════════════
-  Widget _buildBasicInfoGroup(ColorScheme colorScheme) {
+  Widget _buildNameInput(ColorScheme colorScheme) {
     return Container(
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest.withOpacity(0.5),
         borderRadius: BorderRadius.circular(12),
       ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          // 会话名称
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-            child: Row(
-              children: [
-                Container(
-                  width: 30, height: 30,
-                  decoration: BoxDecoration(
-                    color: colorScheme.primary.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(7),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+        child: Row(
+          children: [
+            Container(
+              width: 30, height: 30,
+              decoration: BoxDecoration(
+                color: colorScheme.primary.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(7),
+              ),
+              child: Icon(Icons.chat_bubble_outline_rounded,
+                  size: 16, color: colorScheme.primary),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              '会话名称',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextField(
+                controller: _nameController,
+                style: TextStyle(fontSize: 14, color: colorScheme.onSurface),
+                textAlign: TextAlign.right,
+                decoration: InputDecoration(
+                  hintText: '输入名称',
+                  hintStyle: TextStyle(
+                    color: colorScheme.onSurface.withOpacity(0.3),
+                    fontSize: 14,
                   ),
-                  child: Icon(Icons.chat_bubble_outline_rounded,
-                      size: 16, color: colorScheme.primary),
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
+                  isDense: true,
                 ),
-                const SizedBox(width: 12),
-                Text(
-                  '会话名称',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                    color: colorScheme.onSurface,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextField(
-                    controller: _nameController,
-                    style: TextStyle(fontSize: 14, color: colorScheme.onSurface),
-                    textAlign: TextAlign.right,
-                    decoration: InputDecoration(
-                      hintText: '输入名称',
-                      hintStyle: TextStyle(
-                        color: colorScheme.onSurface.withOpacity(0.3),
-                        fontSize: 14,
-                      ),
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.zero,
-                      isDense: true,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════
+  // Gateway 卡片 — Gateway 名称 + 会话 ID 小字
+  // ═══════════════════════════════════════
+  Widget _buildGatewayCard(ColorScheme colorScheme) {
+    final sessionId = widget.conversationId ?? '（创建后生成）';
+    return Container(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Container(
+              width: 30, height: 30,
+              decoration: BoxDecoration(
+                color: colorScheme.onSurfaceVariant.withOpacity(0.06),
+                borderRadius: BorderRadius.circular(7),
+              ),
+              child: Icon(Icons.dns_outlined,
+                  size: 16, color: colorScheme.onSurfaceVariant.withOpacity(0.5)),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.accountId,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color: colorScheme.onSurface,
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 3),
+                  Text(
+                    'ID: $sessionId',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontFamily: 'monospace',
+                      color: colorScheme.onSurfaceVariant.withOpacity(0.4),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          Divider(height: 1, thickness: 1,
-              color: colorScheme.outlineVariant.withOpacity(0.1)),
-          // Gateway
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: Row(
-              children: [
-                Container(
-                  width: 30, height: 30,
-                  decoration: BoxDecoration(
-                    color: colorScheme.onSurfaceVariant.withOpacity(0.06),
-                    borderRadius: BorderRadius.circular(7),
-                  ),
-                  child: Icon(Icons.dns_outlined,
-                      size: 16, color: colorScheme.onSurfaceVariant.withOpacity(0.5)),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  'Gateway',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                    color: colorScheme.onSurface,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  widget.accountId,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Divider(height: 1, thickness: 1,
-              color: colorScheme.outlineVariant.withOpacity(0.1)),
-          // 会话 ID
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: Row(
-              children: [
-                Container(
-                  width: 30, height: 30,
-                  decoration: BoxDecoration(
-                    color: colorScheme.onSurfaceVariant.withOpacity(0.06),
-                    borderRadius: BorderRadius.circular(7),
-                  ),
-                  child: Icon(Icons.tag_rounded,
-                      size: 16, color: colorScheme.onSurfaceVariant.withOpacity(0.5)),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  '会话 ID',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                    color: colorScheme.onSurface,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  widget.conversationId ?? '（创建后生成）',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontFamily: 'monospace',
-                    color: colorScheme.onSurfaceVariant.withOpacity(0.5),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
