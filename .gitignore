@@ -87,3 +87,5 @@ memory/
 # Local config
 client/android/local.properties
 .openclaw/
+.clawke/
+client/demo/
