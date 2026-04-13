@@ -199,5 +199,28 @@
   "skillsNotEnabled": "None enabled",
   "skillsEnabledCount": "{count} enabled",
   "workDirHint": "Enter OpenClaw work directory path",
-  "workDirNote": "This is a path on the OpenClaw server, not local"
+  "workDirNote": "This is a path on the OpenClaw server, not local",
+  "today": "Today",
+  "yesterday": "Yesterday",
+  "monthDay": "{month}/{day}",
+  "@monthDay": {
+    "placeholders": {
+      "month": {"type": "int"},
+      "day": {"type": "int"}
+    }
+  },
+  "messageInvisible": "[Message not visible]",
+  "yesterdayTime": "Yesterday {time}",
+  "@yesterdayTime": {
+    "placeholders": {
+      "time": {"type": "String"}
+    }
+  },
+  "selectAIBackend": "Please select AI backend",
+  "connectionAuthFailed": "Connection Auth Failed",
+  "relayConnectionRefused": "Relay connection refused, token may have expired.\nPlease log in again to get new credentials.",
+  "later": "Later",
+  "reLogin": "Log In Again",
+  "showToken": "Show Token",
+  "hideToken": "Hide Token"
 }

@@ -215,7 +215,7 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
                             size: 18,
                             color: colorScheme.onSurfaceVariant,
                           ),
-                          tooltip: _obscureToken ? '显示 Token' : '隐藏 Token',
+                          tooltip: _obscureToken ? context.l10n.showToken : context.l10n.hideToken,
                           onPressed: () =>
                               setState(() => _obscureToken = !_obscureToken),
                         ),

@@ -622,4 +622,44 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get workDirNote => '此目录为 OpenClaw 服务器上的路径，非本地路径';
+
+  @override
+  String get today => '今天';
+
+  @override
+  String get yesterday => '昨天';
+
+  @override
+  String monthDay(int month, int day) {
+    return '$month月$day日';
+  }
+
+  @override
+  String get messageInvisible => '[消息不可见]';
+
+  @override
+  String yesterdayTime(String time) {
+    return '昨天 $time';
+  }
+
+  @override
+  String get selectAIBackend => '请选择 AI 后端';
+
+  @override
+  String get connectionAuthFailed => '连接认证失败';
+
+  @override
+  String get relayConnectionRefused => 'Relay 连接被拒绝，Token 可能已过期。\n请重新登录获取新的凭证。';
+
+  @override
+  String get later => '稍后';
+
+  @override
+  String get reLogin => '重新登录';
+
+  @override
+  String get showToken => '显示 Token';
+
+  @override
+  String get hideToken => '隐藏 Token';
 }

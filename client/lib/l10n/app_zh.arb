@@ -218,5 +218,28 @@
   "skillsEnabledCount": "已启用 {count} 个",
   "@skillsEnabledCount": { "placeholders": { "count": { "type": "int" } } },
   "workDirHint": "输入 OpenClaw 工作目录路径",
-  "workDirNote": "此目录为 OpenClaw 服务器上的路径，非本地路径"
+  "workDirNote": "此目录为 OpenClaw 服务器上的路径，非本地路径",
+  "today": "今天",
+  "yesterday": "昨天",
+  "monthDay": "{month}月{day}日",
+  "@monthDay": {
+    "placeholders": {
+      "month": {"type": "int"},
+      "day": {"type": "int"}
+    }
+  },
+  "messageInvisible": "[消息不可见]",
+  "yesterdayTime": "昨天 {time}",
+  "@yesterdayTime": {
+    "placeholders": {
+      "time": {"type": "String"}
+    }
+  },
+  "selectAIBackend": "请选择 AI 后端",
+  "connectionAuthFailed": "连接认证失败",
+  "relayConnectionRefused": "Relay 连接被拒绝，Token 可能已过期。\n请重新登录获取新的凭证。",
+  "later": "稍后",
+  "reLogin": "重新登录",
+  "showToken": "显示 Token",
+  "hideToken": "隐藏 Token"
 }

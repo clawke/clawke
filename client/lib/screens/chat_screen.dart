@@ -484,7 +484,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 size: 20,
                 color: colorScheme.onSurfaceVariant,
               ),
-              tooltip: '会话设置',
+              tooltip: context.l10n.conversationSettings,
               onPressed: () {
                 final conversations = ref.read(conversationListProvider).valueOrNull;
                 final conv = conversations
@@ -720,9 +720,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   String _formatSeparatorLabel(DateTime day) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    if (day == today) return '今天';
-    if (day == today.subtract(const Duration(days: 1))) return '昨天';
-    if (day.year == now.year) return '${day.month}月${day.day}日';
+    if (day == today) return context.l10n.today;
+    if (day == today.subtract(const Duration(days: 1))) return context.l10n.yesterday;
+    if (day.year == now.year) return context.l10n.monthDay(day.month, day.day);
     return '${day.year}/${day.month}/${day.day}';
   }
 
@@ -973,7 +973,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         border: Border(left: BorderSide(color: colorScheme.primary, width: 3)),
       ),
       child: Text(
-        quotedMsg?.content ?? '[消息不可见]',
+        quotedMsg?.content ?? context.l10n.messageInvisible,
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
         style: Theme.of(context).textTheme.labelMedium?.copyWith(color: colorScheme.onSurfaceVariant),
@@ -1144,7 +1144,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (msgDay == today) {
       return time;
     } else if (msgDay == today.subtract(const Duration(days: 1))) {
-      return '昨天 $time';
+      return context.l10n.yesterdayTime(time);
     } else if (dt.year == now.year) {
       return '${dt.month}/${dt.day} $time';
     } else {

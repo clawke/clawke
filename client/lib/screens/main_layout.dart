@@ -80,12 +80,12 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        title: const Text('连接认证失败'),
-        content: const Text('Relay 连接被拒绝，Token 可能已过期。\n请重新登录获取新的凭证。'),
+        title: Text(context.l10n.connectionAuthFailed),
+        content: Text(context.l10n.relayConnectionRefused),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('稍后'),
+            child: Text(context.l10n.later),
           ),
           FilledButton(
             onPressed: () async {
@@ -103,7 +103,7 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
                 ).pushNamedAndRemoveUntil('/', (route) => false);
               }
             },
-            child: const Text('重新登录'),
+            child: Text(context.l10n.reLogin),
           ),
         ],
       ),

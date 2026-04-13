@@ -504,7 +504,7 @@ class NewConversationButton extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '请选择 AI 后端',
+                  context.l10n.selectAIBackend,
                   style: tt.bodyMedium?.copyWith(
                     color: cs.onSurfaceVariant,
                   ),

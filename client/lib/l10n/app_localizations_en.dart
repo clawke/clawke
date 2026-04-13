@@ -641,4 +641,45 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get workDirNote => 'This is a path on the OpenClaw server, not local';
+
+  @override
+  String get today => 'Today';
+
+  @override
+  String get yesterday => 'Yesterday';
+
+  @override
+  String monthDay(int month, int day) {
+    return '$month/$day';
+  }
+
+  @override
+  String get messageInvisible => '[Message not visible]';
+
+  @override
+  String yesterdayTime(String time) {
+    return 'Yesterday $time';
+  }
+
+  @override
+  String get selectAIBackend => 'Please select AI backend';
+
+  @override
+  String get connectionAuthFailed => 'Connection Auth Failed';
+
+  @override
+  String get relayConnectionRefused =>
+      'Relay connection refused, token may have expired.\nPlease log in again to get new credentials.';
+
+  @override
+  String get later => 'Later';
+
+  @override
+  String get reLogin => 'Log In Again';
+
+  @override
+  String get showToken => 'Show Token';
+
+  @override
+  String get hideToken => 'Hide Token';
 }

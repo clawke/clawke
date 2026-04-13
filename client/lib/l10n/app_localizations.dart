@@ -1267,6 +1267,78 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'此目录为 OpenClaw 服务器上的路径，非本地路径'**
   String get workDirNote;
+
+  /// No description provided for @today.
+  ///
+  /// In zh, this message translates to:
+  /// **'今天'**
+  String get today;
+
+  /// No description provided for @yesterday.
+  ///
+  /// In zh, this message translates to:
+  /// **'昨天'**
+  String get yesterday;
+
+  /// No description provided for @monthDay.
+  ///
+  /// In zh, this message translates to:
+  /// **'{month}月{day}日'**
+  String monthDay(int month, int day);
+
+  /// No description provided for @messageInvisible.
+  ///
+  /// In zh, this message translates to:
+  /// **'[消息不可见]'**
+  String get messageInvisible;
+
+  /// No description provided for @yesterdayTime.
+  ///
+  /// In zh, this message translates to:
+  /// **'昨天 {time}'**
+  String yesterdayTime(String time);
+
+  /// No description provided for @selectAIBackend.
+  ///
+  /// In zh, this message translates to:
+  /// **'请选择 AI 后端'**
+  String get selectAIBackend;
+
+  /// No description provided for @connectionAuthFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'连接认证失败'**
+  String get connectionAuthFailed;
+
+  /// No description provided for @relayConnectionRefused.
+  ///
+  /// In zh, this message translates to:
+  /// **'Relay 连接被拒绝，Token 可能已过期。\n请重新登录获取新的凭证。'**
+  String get relayConnectionRefused;
+
+  /// No description provided for @later.
+  ///
+  /// In zh, this message translates to:
+  /// **'稍后'**
+  String get later;
+
+  /// No description provided for @reLogin.
+  ///
+  /// In zh, this message translates to:
+  /// **'重新登录'**
+  String get reLogin;
+
+  /// No description provided for @showToken.
+  ///
+  /// In zh, this message translates to:
+  /// **'显示 Token'**
+  String get showToken;
+
+  /// No description provided for @hideToken.
+  ///
+  /// In zh, this message translates to:
+  /// **'隐藏 Token'**
+  String get hideToken;
 }
 
 class _AppLocalizationsDelegate
