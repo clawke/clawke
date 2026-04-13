@@ -32,6 +32,7 @@ class ConversationListScreen extends ConsumerWidget {
       appBar: showHeader
           ? AppBar(
               automaticallyImplyLeading: false,
+              centerTitle: false,
               title: Text(context.l10n.conversations),
               backgroundColor: headerBg,
               surfaceTintColor: Colors.transparent,
