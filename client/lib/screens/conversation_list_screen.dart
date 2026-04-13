@@ -23,35 +23,26 @@ class ConversationListScreen extends ConsumerWidget {
     final selectedId = ref.watch(selectedConversationIdProvider);
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Column(
-      children: [
-        // 顶部标题栏
-        if (showHeader)
-          Container(
-            height: 54,
-            padding: const EdgeInsets.only(left: 16, right: 8),
-            decoration: BoxDecoration(
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? colorScheme.surfaceContainerLowest
-                  : colorScheme.surfaceContainer,
-              border: Border(
-                bottom: BorderSide(
+    final headerBg = Theme.of(context).brightness == Brightness.dark
+        ? colorScheme.surfaceContainerLowest
+        : colorScheme.surfaceContainer;
+
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      appBar: showHeader
+          ? AppBar(
+              automaticallyImplyLeading: false,
+              title: Text(context.l10n.conversations),
+              backgroundColor: headerBg,
+              surfaceTintColor: Colors.transparent,
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(1),
+                child: Divider(
+                  height: 1,
                   color: colorScheme.outlineVariant.withOpacity(0.5),
                 ),
               ),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    context.l10n.conversations,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: colorScheme.onSurface,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
+              actions: [
                 NewConversationButton(
                   onCreated: (convId) {
                     ref.read(selectedConversationIdProvider.notifier).state = convId;
@@ -59,58 +50,54 @@ class ConversationListScreen extends ConsumerWidget {
                   },
                 ),
               ],
-            ),
-          ),
-        // 会话列表
-        Expanded(
-          child: conversationsAsync.when(
-            data: (conversations) {
-              if (conversations.isEmpty) {
-                return Center(
-                  child: Text(
-                    context.l10n.noConversations,
-                    style: TextStyle(color: colorScheme.onSurfaceVariant),
-                  ),
-                );
-              }
-              return ListView.builder(
-                itemCount: conversations.length,
-                itemBuilder: (context, index) {
-                  final conv = conversations[index];
-                  return Dismissible(
-                    key: Key(conv.conversationId),
-                    direction: DismissDirection.endToStart,
-                    confirmDismiss: (_) async {
-                      return await _showDeleteConfirm(context, ref, conv);
-                    },
-                    background: Container(
-                      alignment: Alignment.centerRight,
-                      padding: const EdgeInsets.only(right: 20),
-                      color: colorScheme.error,
-                      child: Icon(
-                        Icons.delete_outline,
-                        color: colorScheme.onError,
-                      ),
-                    ),
-                    child: _ConversationTile(
-                      conversation: conv,
-                      isSelected: conv.conversationId == selectedId,
-                      onTap: () {
-                        ref.read(selectedConversationIdProvider.notifier).state =
-                            conv.conversationId;
-                        onConversationTap?.call(conv.conversationId);
-                      },
-                    ),
-                  );
+            )
+          : null,
+      body: conversationsAsync.when(
+        data: (conversations) {
+          if (conversations.isEmpty) {
+            return Center(
+              child: Text(
+                context.l10n.noConversations,
+                style: TextStyle(color: colorScheme.onSurfaceVariant),
+              ),
+            );
+          }
+          return ListView.builder(
+            itemCount: conversations.length,
+            itemBuilder: (context, index) {
+              final conv = conversations[index];
+              return Dismissible(
+                key: Key(conv.conversationId),
+                direction: DismissDirection.endToStart,
+                confirmDismiss: (_) async {
+                  return await _showDeleteConfirm(context, ref, conv);
                 },
+                background: Container(
+                  alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.only(right: 20),
+                  color: colorScheme.error,
+                  child: Icon(
+                    Icons.delete_outline,
+                    color: colorScheme.onError,
+                  ),
+                ),
+                child: _ConversationTile(
+                  conversation: conv,
+                  isSelected: conv.conversationId == selectedId,
+                  onTap: () {
+                    ref.read(selectedConversationIdProvider.notifier).state =
+                        conv.conversationId;
+                    onConversationTap?.call(conv.conversationId);
+                  },
+                ),
               );
             },
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) =>
-                Center(child: Text(context.l10n.loadFailed(e.toString()))),
-          ),
-        ),
-      ],
+          );
+        },
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) =>
+            Center(child: Text(context.l10n.loadFailed(e.toString()))),
+      ),
     );
   }
 
