@@ -51,7 +51,10 @@ export async function getModels(req: Request, res: Response): Promise<void> {
       models = await queryModelsFunc(accountId);
     }
 
-    modelCache.set(accountId, { models, expiresAt: Date.now() + MODEL_CACHE_TTL });
+    // 空结果不缓存（gateway 可能还没连接）
+    if (models.length > 0) {
+      modelCache.set(accountId, { models, expiresAt: Date.now() + MODEL_CACHE_TTL });
+    }
     res.json({ models });
   } catch (err: any) {
     console.error('[ConfigAPI] getModels error:', err.message);
@@ -84,7 +87,10 @@ export async function getSkills(req: Request, res: Response): Promise<void> {
       skills = await querySkillsFunc(accountId);
     }
 
-    skillsCache.set(accountId, { skills, expiresAt: Date.now() + SKILLS_CACHE_TTL });
+    // 空结果不缓存
+    if (skills.length > 0) {
+      skillsCache.set(accountId, { skills, expiresAt: Date.now() + SKILLS_CACHE_TTL });
+    }
     res.json({ skills });
   } catch (err: any) {
     console.error('[ConfigAPI] getSkills error:', err.message);

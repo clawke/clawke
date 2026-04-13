@@ -211,6 +211,11 @@ class _ConversationSettingsSheetState
               _isCreateMode ? '新建会话' : '会话设置',
               style: Theme.of(context).textTheme.titleMedium),
           actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh_rounded, size: 20),
+              tooltip: '刷新模型和 Skills',
+              onPressed: _loading ? null : () => _loadData(refresh: true),
+            ),
             if (_isCreateMode)
               TextButton(
                 onPressed: _saving ? null : _save,
