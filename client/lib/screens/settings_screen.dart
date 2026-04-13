@@ -326,7 +326,7 @@ class SettingsScreen extends ConsumerWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(t.deleteAccount),
-        content: const Text('注销后所有数据将丢失，无法恢复，\r\n是否确认注销？'),
+        content: Text(t.deleteAccountConfirmContent),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
@@ -335,7 +335,7 @@ class SettingsScreen extends ConsumerWidget {
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             style: FilledButton.styleFrom(backgroundColor: colorScheme.error),
-            child: const Text('确认注销'),
+            child: Text(t.confirmDeleteAccount),
           ),
         ],
       ),
@@ -352,7 +352,7 @@ class SettingsScreen extends ConsumerWidget {
       } catch (e) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('注销失败: $e')),
+            SnackBar(content: Text(t.deleteAccountFailed(e.toString()))),
           );
         }
       }

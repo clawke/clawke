@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:client/core/http_util.dart';
 import 'package:client/services/auth_service.dart';
+import 'package:client/l10n/l10n.dart';
 
 /// 忘记密码页面 —— 三步式流程。
 ///
@@ -53,7 +54,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('忘记密码'),
+        title: Text(context.l10n.forgotPasswordTitle),
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
@@ -142,11 +143,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   Widget _buildStepIndicator(ColorScheme colorScheme, TextTheme textTheme) {
     return Row(
       children: [
-        _stepDot(0, '邮箱', colorScheme, textTheme),
+        _stepDot(0, context.l10n.stepEmail, colorScheme, textTheme),
         Expanded(child: Container(height: 2, color: _step >= 1 ? colorScheme.primary : colorScheme.outline.withValues(alpha: 0.3))),
-        _stepDot(1, '验证', colorScheme, textTheme),
+        _stepDot(1, context.l10n.stepVerify, colorScheme, textTheme),
         Expanded(child: Container(height: 2, color: _step >= 2 ? colorScheme.primary : colorScheme.outline.withValues(alpha: 0.3))),
-        _stepDot(2, '重置', colorScheme, textTheme),
+        _stepDot(2, context.l10n.stepReset, colorScheme, textTheme),
       ],
     );
   }
@@ -194,12 +195,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '请输入你的注册邮箱',
+          context.l10n.enterRegisteredEmail,
           style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
         Text(
-          '我们将向你的邮箱发送一个验证码来重置密码',
+          context.l10n.willSendCodeToReset,
           style: textTheme.bodySmall?.copyWith(
             color: colorScheme.onSurface.withValues(alpha: 0.6),
           ),
@@ -210,8 +211,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           controller: _emailController,
           keyboardType: TextInputType.emailAddress,
           decoration: InputDecoration(
-            labelText: '邮箱地址',
-            hintText: '请输入注册时的邮箱',
+            labelText: context.l10n.emailAddress,
+            hintText: context.l10n.enterRegisteredEmailHint,
             prefixIcon: const Icon(Icons.email_outlined),
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             border: OutlineInputBorder(
@@ -253,7 +254,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     width: 20, height: 20,
                     child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                   )
-                : Text('发送验证码', style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                : Text(context.l10n.sendVerificationCode, style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
           ),
         ),
       ],
@@ -267,12 +268,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '输入邮箱验证码',
+          context.l10n.enterEmailCode,
           style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
         Text(
-          '验证码已发送到 ${_emailController.text}',
+          context.l10n.codeSentTo(_emailController.text),
           style: textTheme.bodySmall?.copyWith(
             color: colorScheme.onSurface.withValues(alpha: 0.6),
           ),
@@ -284,8 +285,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           keyboardType: TextInputType.number,
           maxLength: 6,
           decoration: InputDecoration(
-            labelText: '验证码',
-            hintText: '请输入 6 位验证码',
+            labelText: context.l10n.verificationCode,
+            hintText: context.l10n.enterSixDigitCode,
             prefixIcon: const Icon(Icons.verified_outlined),
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             border: OutlineInputBorder(
@@ -322,7 +323,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             TextButton(
               onPressed: _countdown > 0 || _isLoading ? null : _handleResendCode,
               child: Text(
-                _countdown > 0 ? '重新发送 (${_countdown}s)' : '重新发送',
+                _countdown > 0 ? context.l10n.resendCountdown(_countdown) : context.l10n.resend,
                 style: TextStyle(fontSize: textTheme.bodySmall!.fontSize),
               ),
             ),
@@ -343,7 +344,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     width: 20, height: 20,
                     child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                   )
-                : Text('验证', style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                : Text(context.l10n.verifyButton, style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
           ),
         ),
       ],
@@ -357,12 +358,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '设置新密码',
+          context.l10n.setNewPasswordTitle,
           style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
         Text(
-          '请输入 6-20 位的新密码',
+          context.l10n.enter6to20Password,
           style: textTheme.bodySmall?.copyWith(
             color: colorScheme.onSurface.withValues(alpha: 0.6),
           ),
@@ -373,8 +374,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           controller: _passwordController,
           obscureText: _obscurePassword,
           decoration: InputDecoration(
-            labelText: '新密码',
-            hintText: '请输入新密码',
+            labelText: context.l10n.newPassword,
+            hintText: context.l10n.enterNewPassword,
             prefixIcon: const Icon(Icons.lock_outlined),
             suffixIcon: IconButton(
               icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
@@ -410,8 +411,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           controller: _confirmPasswordController,
           obscureText: _obscureConfirm,
           decoration: InputDecoration(
-            labelText: '确认密码',
-            hintText: '请再次输入新密码',
+            labelText: context.l10n.confirmPasswordLabel,
+            hintText: context.l10n.reenterNewPassword,
             prefixIcon: const Icon(Icons.lock_outlined),
             suffixIcon: IconButton(
               icon: Icon(_obscureConfirm ? Icons.visibility_off : Icons.visibility),
@@ -457,7 +458,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     width: 20, height: 20,
                     child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                   )
-                : Text('重置密码', style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                : Text(context.l10n.resetPasswordButton, style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
           ),
         ),
       ],
@@ -470,7 +471,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   Future<void> _handleSendCode() async {
     final email = _emailController.text.trim();
     if (email.isEmpty) {
-      setState(() { _error = '请输入邮箱地址'; _success = null; });
+      setState(() { _error = context.l10n.enterEmailFirst; _success = null; });
       return;
     }
 
@@ -480,12 +481,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       _startCountdown();
       setState(() {
         _step = 1;
-        _success = '验证码已发送，请查收邮件';
+        _success = context.l10n.codeSentCheckEmail;
       });
     } on ApiException catch (e) {
       setState(() => _error = e.message);
     } catch (e) {
-      setState(() => _error = '发送失败: $e');
+      setState(() => _error = context.l10n.sendFailed(e.toString()));
     } finally {
       setState(() => _isLoading = false);
     }
@@ -495,7 +496,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   Future<void> _handleVerifyCode() async {
     final code = _codeController.text.trim();
     if (code.isEmpty || code.length != 6) {
-      setState(() { _error = '请输入 6 位验证码'; _success = null; });
+      setState(() { _error = context.l10n.enterSixDigitCode; _success = null; });
       return;
     }
 
@@ -504,12 +505,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       await AuthService.verifyForgotPasswordCode(_emailController.text.trim(), code);
       setState(() {
         _step = 2;
-        _success = '验证成功，请设置新密码';
+        _success = context.l10n.verifySuccess;
       });
     } on ApiException catch (e) {
       setState(() => _error = e.message);
     } catch (e) {
-      setState(() => _error = '验证失败: $e');
+      setState(() => _error = context.l10n.verifyFailed(e.toString()));
     } finally {
       setState(() => _isLoading = false);
     }
@@ -521,11 +522,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     try {
       await AuthService.sendForgotPasswordCode(_emailController.text.trim());
       _startCountdown();
-      setState(() => _success = '验证码已重新发送');
+      setState(() => _success = context.l10n.codeResent);
     } on ApiException catch (e) {
       setState(() => _error = e.message);
     } catch (e) {
-      setState(() => _error = '发送失败: $e');
+      setState(() => _error = context.l10n.sendFailed(e.toString()));
     } finally {
       setState(() => _isLoading = false);
     }
@@ -537,15 +538,15 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     final confirm = _confirmPasswordController.text;
 
     if (password.isEmpty) {
-      setState(() { _error = '请输入新密码'; _success = null; });
+      setState(() { _error = context.l10n.enterNewPassword; _success = null; });
       return;
     }
     if (password.length < 6 || password.length > 20) {
-      setState(() { _error = '密码长度需要在 6-20 位之间'; _success = null; });
+      setState(() { _error = context.l10n.passwordLengthError; _success = null; });
       return;
     }
     if (password != confirm) {
-      setState(() { _error = '两次输入的密码不一致'; _success = null; });
+      setState(() { _error = context.l10n.passwordMismatch; _success = null; });
       return;
     }
 
@@ -556,8 +557,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       if (mounted) {
         // 弹出成功提示并返回登录页
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('密码重置成功，请用新密码登录'),
+          SnackBar(
+            content: Text(context.l10n.passwordResetSuccess),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -566,7 +567,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     } on ApiException catch (e) {
       setState(() => _error = e.message);
     } catch (e) {
-      setState(() => _error = '重置失败: $e');
+      setState(() => _error = context.l10n.resetFailed(e.toString()));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import 'package:client/services/config_api_service.dart';
 import 'package:client/providers/database_providers.dart';
+import 'package:client/l10n/l10n.dart';
 
 /// 会话设置页面 — iOS 风格抽屉式导航
 ///
@@ -208,13 +209,13 @@ class _ConversationSettingsSheetState
           backgroundColor: colorScheme.surface,
           surfaceTintColor: Colors.transparent,
           title: Text(
-              _isCreateMode ? '新建会话' : '会话设置'),
+              _isCreateMode ? context.l10n.newConversation : context.l10n.conversationSettings),
           actions: [
             if (_isCreateMode)
               TextButton(
                 onPressed: _saving ? null : _save,
                 child: Text(
-                  '创建',
+                  context.l10n.create,
                   style: TextStyle(
                     color: colorScheme.primary,
                     fontWeight: FontWeight.w600,
@@ -234,12 +235,12 @@ class _ConversationSettingsSheetState
                   const SizedBox(height: 24),
 
                   // ── 会话名称 ──
-                  _sectionLabel('会话名称'),
+                  _sectionLabel(context.l10n.conversationName),
                   _buildNameInput(colorScheme),
                   const SizedBox(height: 24),
 
                   // ── 模型 ──
-                  _sectionLabel('模型'),
+                  _sectionLabel(context.l10n.model),
                   _buildModelCard(colorScheme),
                   const SizedBox(height: 24),
 
@@ -249,19 +250,19 @@ class _ConversationSettingsSheetState
                   const SizedBox(height: 24),
 
                   // ── 系统提示词 ──
-                  _sectionLabel('系统提示词'),
+                  _sectionLabel(context.l10n.systemPrompt),
                   _buildContentCard(
                     icon: Icons.description_outlined,
                     iconColor: const Color(0xFF60A5FA),
                     iconBg: const Color(0xFF60A5FA).withOpacity(0.12),
                     content: _systemPromptController.text.trim(),
-                    placeholder: '未设置',
+                    placeholder: context.l10n.notSet,
                     onTap: () => _openSystemPromptEditor(colorScheme),
                   ),
                   const SizedBox(height: 24),
 
                   // ── 工作目录 ──
-                  _sectionLabel('工作目录'),
+                  _sectionLabel(context.l10n.workDir),
                   _buildContentCard(
                     icon: Icons.folder_outlined,
                     iconColor: colorScheme.onSurfaceVariant,
@@ -323,7 +324,7 @@ class _ConversationSettingsSheetState
                 controller: _nameController,
                 style: TextStyle(fontSize: 16, color: colorScheme.onSurface),
                 decoration: InputDecoration(
-                  hintText: '输入会话名称',
+                  hintText: context.l10n.enterConversationName,
                   hintStyle: TextStyle(
                     color: colorScheme.onSurface.withOpacity(0.3),
                   ),
@@ -342,7 +343,7 @@ class _ConversationSettingsSheetState
   // Gateway 卡片 — Gateway 名称 + 会话 ID 小字
   // ═══════════════════════════════════════
   Widget _buildGatewayCard(ColorScheme colorScheme) {
-    final sessionId = widget.conversationId ?? '（创建后生成）';
+    final sessionId = widget.conversationId ?? context.l10n.generatedAfterCreate;
     return Container(
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest.withOpacity(0.5),
@@ -396,7 +397,7 @@ class _ConversationSettingsSheetState
   // 模型卡片 — 显示模型名称
   // ═══════════════════════════════════════
   Widget _buildModelCard(ColorScheme colorScheme) {
-    final displayModel = _selectedModel ?? '默认模型';
+    final displayModel = _selectedModel ?? context.l10n.defaultModel;
 
     return Container(
       decoration: BoxDecoration(
@@ -450,7 +451,7 @@ class _ConversationSettingsSheetState
         .map((name) => _availableSkills.where((s) => s.name == name).firstOrNull)
         .whereType<SkillInfo>()
         .toList();
-    final modeText = _skillMode == 'exclusive' ? '必须触发' : '优先触发';
+    final modeText = _skillMode == 'exclusive' ? context.l10n.exclusiveTrigger : context.l10n.priorityTrigger;
     final dotColors = [
       const Color(0xFF34D399),
       const Color(0xFF60A5FA),
@@ -490,8 +491,8 @@ class _ConversationSettingsSheetState
                       children: [
                         Text(
                           selectedList.isEmpty
-                              ? '未启用'
-                              : '已启用 ${selectedList.length} 个',
+                              ? context.l10n.skillsNotEnabled
+                              : context.l10n.skillsEnabledCount(selectedList.length),
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w500,
@@ -707,8 +708,8 @@ class _ConversationSettingsSheetState
     final result = await Navigator.of(context).push<String?>(
       MaterialPageRoute(
         builder: (_) => _TextEditorPage(
-          title: '系统提示词',
-          hint: '自定义系统提示词（可选）',
+          title: context.l10n.systemPrompt,
+          hint: context.l10n.systemPromptHint,
           initialValue: _systemPromptController.text,
           maxLines: 8,
         ),
@@ -780,7 +781,7 @@ class _ModelPickerPageState extends State<_ModelPickerPage> {
       appBar: AppBar(
         backgroundColor: colorScheme.surface,
         surfaceTintColor: Colors.transparent,
-        title: Text('选择模型'),
+        title: Text(context.l10n.selectModel),
         actions: [
           if (widget.onRefresh != null)
             IconButton(
@@ -789,7 +790,7 @@ class _ModelPickerPageState extends State<_ModelPickerPage> {
                       width: 18, height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.refresh_rounded, size: 20),
-              tooltip: '刷新模型列表',
+              tooltip: context.l10n.refreshModelList,
               onPressed: _refreshing ? null : _refresh,
             ),
         ],
@@ -806,7 +807,7 @@ class _ModelPickerPageState extends State<_ModelPickerPage> {
             child: Column(
               children: [
                 // 默认模型
-                _buildModelItem(null, '默认模型', colorScheme),
+                _buildModelItem(null, context.l10n.defaultModel, colorScheme),
                 if (_models.isEmpty)
                   // 空状态提示
                   Padding(
@@ -817,7 +818,7 @@ class _ModelPickerPageState extends State<_ModelPickerPage> {
                             size: 16, color: colorScheme.onSurfaceVariant.withOpacity(0.5)),
                         const SizedBox(width: 8),
                         Text(
-                          '当前 Gateway 不支持指定模型',
+                          context.l10n.gatewayNoModelSupport,
                           style: TextStyle(
                             fontSize: 13,
                             color: colorScheme.onSurfaceVariant.withOpacity(0.5),
@@ -978,7 +979,7 @@ class _SkillPickerPageState extends State<_SkillPickerPage> {
             onPressed: () => Navigator.of(context)
                 .pop(_SkillPickerResult(selected: _selected, mode: _mode)),
           ),
-          title: Text('选择 Skills'),
+          title: Text(context.l10n.selectSkills),
           actions: [
             if (widget.onRefresh != null)
               IconButton(
@@ -987,7 +988,7 @@ class _SkillPickerPageState extends State<_SkillPickerPage> {
                         width: 18, height: 18,
                         child: CircularProgressIndicator(strokeWidth: 2))
                     : const Icon(Icons.refresh_rounded, size: 20),
-                tooltip: '刷新 Skills 列表',
+                tooltip: context.l10n.refreshSkillsList,
                 onPressed: _refreshing ? null : _refresh,
               ),
           ],
@@ -1003,7 +1004,7 @@ class _SkillPickerPageState extends State<_SkillPickerPage> {
                           size: 48, color: colorScheme.onSurfaceVariant.withOpacity(0.3)),
                       const SizedBox(height: 16),
                       Text(
-                        '当前 Gateway 不支持指定 Skill',
+                        context.l10n.gatewayNoSkillSupport,
                         style: TextStyle(
                           fontSize: 15,
                           color: colorScheme.onSurfaceVariant.withOpacity(0.5),
@@ -1011,7 +1012,7 @@ class _SkillPickerPageState extends State<_SkillPickerPage> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        '点击右上角刷新按钮重试',
+                        context.l10n.clickRefreshToRetry,
                         style: TextStyle(
                           fontSize: 13,
                           color: colorScheme.onSurfaceVariant.withOpacity(0.35),
@@ -1076,8 +1077,8 @@ class _SkillPickerPageState extends State<_SkillPickerPage> {
                 ),
                 child: Row(
                   children: [
-                    _buildModeBtn('优先触发', 'priority', colorScheme),
-                    _buildModeBtn('必须触发', 'exclusive', colorScheme),
+                    _buildModeBtn(context.l10n.priorityTrigger, 'priority', colorScheme),
+                    _buildModeBtn(context.l10n.exclusiveTrigger, 'exclusive', colorScheme),
                   ],
                 ),
               ),
@@ -1090,7 +1091,7 @@ class _SkillPickerPageState extends State<_SkillPickerPage> {
                 controller: _searchController,
                 style: TextStyle(fontSize: 14, color: colorScheme.onSurface),
                 decoration: InputDecoration(
-                  hintText: '搜索 Skills...',
+                  hintText: context.l10n.searchSkills,
                   hintStyle: TextStyle(
                       color: colorScheme.onSurfaceVariant.withOpacity(0.4)),
                   prefixIcon: Icon(Icons.search_rounded,
@@ -1371,7 +1372,7 @@ class _WorkDirPageState extends State<_WorkDirPage> {
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
           onPressed: () => Navigator.of(context).pop(_controller.text),
         ),
-        title: Text('工作目录'),
+        title: Text(context.l10n.workDir),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
@@ -1388,7 +1389,7 @@ class _WorkDirPageState extends State<_WorkDirPage> {
                 style: TextStyle(
                     fontSize: 14, color: colorScheme.onSurface),
                 decoration: InputDecoration(
-                  hintText: '输入 OpenClaw 工作目录路径',
+                  hintText: context.l10n.workDirHint,
                   hintStyle: TextStyle(
                     color: colorScheme.onSurface.withOpacity(0.3),
                   ),
@@ -1414,7 +1415,7 @@ class _WorkDirPageState extends State<_WorkDirPage> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: Text(
-                '此目录为 OpenClaw 服务器上的路径，非本地路径',
+                context.l10n.workDirNote,
                 style: TextStyle(
                   fontSize: 12,
                   color: colorScheme.onSurfaceVariant.withOpacity(0.4),

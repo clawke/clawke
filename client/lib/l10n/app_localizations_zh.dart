@@ -356,4 +356,270 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get submitChanges => '提交修改';
+
+  @override
+  String get orDivider => '或';
+
+  @override
+  String get emailAddress => '邮箱地址';
+
+  @override
+  String get enterEmail => '请输入邮箱地址';
+
+  @override
+  String get password => '密码';
+
+  @override
+  String get enterPassword => '请输入密码';
+
+  @override
+  String get forgotPassword => '忘记密码？';
+
+  @override
+  String get loginButton => '登录';
+
+  @override
+  String get verificationCode => '验证码';
+
+  @override
+  String get enterVerificationCode => '请输入邮箱验证码';
+
+  @override
+  String get resend => '重新发送';
+
+  @override
+  String get getVerificationCode => '获取验证码';
+
+  @override
+  String get setPassword => '设置密码';
+
+  @override
+  String get setLoginPassword => '请设置一个登录密码';
+
+  @override
+  String get registerButton => '注册';
+
+  @override
+  String get googleSignIn => 'Google 登录';
+
+  @override
+  String get appleSignIn => 'Apple 登录';
+
+  @override
+  String get fillEmailAndPassword => '请填写邮箱和密码';
+
+  @override
+  String get enterEmailFirst => '请先输入邮箱地址';
+
+  @override
+  String sendCodeFailed(String error) {
+    return '发送验证码失败: $error';
+  }
+
+  @override
+  String get fillAllFields => '请填写所有字段';
+
+  @override
+  String get googleSignInUnavailable => 'Google 登录暂不可用，请使用邮箱登录';
+
+  @override
+  String get appleSignInUnavailable => 'Apple 登录暂不可用，请使用邮箱登录';
+
+  @override
+  String loginFailed(String error) {
+    return '登录失败: $error';
+  }
+
+  @override
+  String get forgotPasswordTitle => '忘记密码';
+
+  @override
+  String get stepEmail => '邮箱';
+
+  @override
+  String get stepVerify => '验证';
+
+  @override
+  String get stepReset => '重置';
+
+  @override
+  String get enterRegisteredEmail => '请输入你的注册邮箱';
+
+  @override
+  String get willSendCodeToReset => '我们将向你的邮箱发送一个验证码来重置密码';
+
+  @override
+  String get enterRegisteredEmailHint => '请输入注册时的邮箱';
+
+  @override
+  String get sendVerificationCode => '发送验证码';
+
+  @override
+  String get enterEmailCode => '输入邮箱验证码';
+
+  @override
+  String codeSentTo(String email) {
+    return '验证码已发送到 $email';
+  }
+
+  @override
+  String get enterSixDigitCode => '请输入 6 位验证码';
+
+  @override
+  String resendCountdown(int seconds) {
+    return '重新发送 (${seconds}s)';
+  }
+
+  @override
+  String get verifyButton => '验证';
+
+  @override
+  String get setNewPasswordTitle => '设置新密码';
+
+  @override
+  String get enter6to20Password => '请输入 6-20 位的新密码';
+
+  @override
+  String get confirmPasswordLabel => '确认密码';
+
+  @override
+  String get reenterNewPassword => '请再次输入新密码';
+
+  @override
+  String get resetPasswordButton => '重置密码';
+
+  @override
+  String get codeSentCheckEmail => '验证码已发送，请查收邮件';
+
+  @override
+  String sendFailed(String error) {
+    return '发送失败: $error';
+  }
+
+  @override
+  String get verifySuccess => '验证成功，请设置新密码';
+
+  @override
+  String verifyFailed(String error) {
+    return '验证失败: $error';
+  }
+
+  @override
+  String get codeResent => '验证码已重新发送';
+
+  @override
+  String get passwordResetSuccess => '密码重置成功，请用新密码登录';
+
+  @override
+  String resetFailed(String error) {
+    return '重置失败: $error';
+  }
+
+  @override
+  String get deleteAccountConfirmContent => '注销后所有数据将丢失，无法恢复，\n是否确认注销？';
+
+  @override
+  String get confirmDeleteAccount => '确认注销';
+
+  @override
+  String deleteAccountFailed(String error) {
+    return '注销失败: $error';
+  }
+
+  @override
+  String get enterServerAddressToConnect => '输入 Clawke 服务器地址进行连接';
+
+  @override
+  String get tokenOptional => 'Token（可选）';
+
+  @override
+  String get tokenHint => '留空 = 无认证（仅局域网）';
+
+  @override
+  String get connectingStatus => '连接中...';
+
+  @override
+  String get enterServerAddressError => '请输入服务器地址';
+
+  @override
+  String get connectionTimeout => '连接超时，请检查服务器地址';
+
+  @override
+  String get connectionTimeoutShort => '连接超时';
+
+  @override
+  String connectionFailed(String error) {
+    return '连接失败: $error';
+  }
+
+  @override
+  String get conversationSettings => '会话设置';
+
+  @override
+  String get model => '模型';
+
+  @override
+  String get systemPrompt => '系统提示词';
+
+  @override
+  String get systemPromptHint => '自定义系统提示词（可选）';
+
+  @override
+  String get workDir => '工作目录';
+
+  @override
+  String get notSet => '未设置';
+
+  @override
+  String get enterConversationName => '输入会话名称';
+
+  @override
+  String get generatedAfterCreate => '（创建后生成）';
+
+  @override
+  String get defaultModel => '默认模型';
+
+  @override
+  String get selectModel => '选择模型';
+
+  @override
+  String get refreshModelList => '刷新模型列表';
+
+  @override
+  String get gatewayNoModelSupport => '当前 Gateway 不支持指定模型';
+
+  @override
+  String get selectSkills => '选择 Skills';
+
+  @override
+  String get refreshSkillsList => '刷新 Skills 列表';
+
+  @override
+  String get gatewayNoSkillSupport => '当前 Gateway 不支持指定 Skill';
+
+  @override
+  String get clickRefreshToRetry => '点击右上角刷新按钮重试';
+
+  @override
+  String get priorityTrigger => '优先触发';
+
+  @override
+  String get exclusiveTrigger => '必须触发';
+
+  @override
+  String get searchSkills => '搜索 Skills...';
+
+  @override
+  String get skillsNotEnabled => '未启用';
+
+  @override
+  String skillsEnabledCount(int count) {
+    return '已启用 $count 个';
+  }
+
+  @override
+  String get workDirHint => '输入 OpenClaw 工作目录路径';
+
+  @override
+  String get workDirNote => '此目录为 OpenClaw 服务器上的路径，非本地路径';
 }

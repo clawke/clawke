@@ -8,7 +8,7 @@ import 'package:client/services/auth_service.dart';
 import 'package:client/providers/auth_provider.dart';
 import 'package:client/providers/server_host_provider.dart';
 import 'package:client/screens/forgot_password_screen.dart';
-import 'package:client/l10n/app_localizations.dart';
+import 'package:client/l10n/l10n.dart';
 import 'package:client/core/ws_service.dart';
 import 'package:client/services/media_resolver.dart';
 
@@ -63,11 +63,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final t = AppLocalizations.of(context)!;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(t.loginTabLogin),
+        title: Text(context.l10n.loginTabLogin),
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
@@ -95,8 +94,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                     unselectedLabelColor: colorScheme.onSurface.withValues(alpha: 0.6),
                     dividerHeight: 0,
                     tabs: [
-                      Tab(text: t.loginTabLogin),
-                      Tab(text: t.loginTabRegister),
+                      Tab(text: context.l10n.loginTabLogin),
+                      Tab(text: context.l10n.loginTabRegister),
                     ],
                     onTap: (_) => setState(() => _error = null),
                   ),
@@ -149,7 +148,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Text(
-                        '或',
+                        context.l10n.orDivider,
                         style: TextStyle(
                           color: colorScheme.onSurface.withValues(alpha: 0.5),
                           fontSize: Theme.of(context).textTheme.bodySmall!.fontSize,
@@ -182,8 +181,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           controller: _loginEmailController,
           keyboardType: TextInputType.emailAddress,
           decoration: InputDecoration(
-            labelText: '邮箱地址',
-            hintText: '请输入邮箱地址',
+            labelText: context.l10n.emailAddress,
+            hintText: context.l10n.enterEmail,
             floatingLabelBehavior: FloatingLabelBehavior.never,
             prefixIcon: const Icon(Icons.email_outlined),
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -217,8 +216,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           controller: _loginPasswordController,
           obscureText: _obscureLoginPassword,
           decoration: InputDecoration(
-            labelText: '密码',
-            hintText: '请输入密码',
+            labelText: context.l10n.password,
+            hintText: context.l10n.enterPassword,
             floatingLabelBehavior: FloatingLabelBehavior.never,
             prefixIcon: const Icon(Icons.lock_outlined),
             suffixIcon: IconButton(
@@ -261,7 +260,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
               );
             },
             child: Text(
-              '忘记密码？',
+              context.l10n.forgotPassword,
               style: TextStyle(
                 fontSize: Theme.of(context).textTheme.bodySmall!.fontSize,
                 color: colorScheme.primary,
@@ -286,7 +285,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                     height: 20,
                     child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                   )
-                : Text('登录', style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                : Text(context.l10n.loginButton, style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
           ),
         ),
       ],
@@ -301,8 +300,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           controller: _regEmailController,
           keyboardType: TextInputType.emailAddress,
           decoration: InputDecoration(
-            labelText: '邮箱地址',
-            hintText: '请输入邮箱地址',
+            labelText: context.l10n.emailAddress,
+            hintText: context.l10n.enterEmail,
             floatingLabelBehavior: FloatingLabelBehavior.never,
             prefixIcon: const Icon(Icons.email_outlined),
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -339,8 +338,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                 controller: _regCodeController,
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(
-                  labelText: '验证码',
-                  hintText: '请输入邮箱验证码',
+                  labelText: context.l10n.verificationCode,
+                  hintText: context.l10n.enterVerificationCode,
                   floatingLabelBehavior: FloatingLabelBehavior.never,
                   prefixIcon: const Icon(Icons.verified_outlined),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -374,7 +373,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
               child: TextButton(
                 onPressed: (_isLoading || _countdown > 0) ? null : _handleSendCode,
                 child: Text(
-                  _countdown > 0 ? '${_countdown}s' : (_codeSent ? '重新发送' : '获取验证码'),
+                  _countdown > 0 ? '${_countdown}s' : (_codeSent ? context.l10n.resend : context.l10n.getVerificationCode),
                   style: TextStyle(color: _countdown > 0 ? colorScheme.onSurface.withValues(alpha: 0.4) : colorScheme.primary),
                 ),
               ),
@@ -388,8 +387,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           controller: _regPasswordController,
           obscureText: _obscureRegPassword,
           decoration: InputDecoration(
-            labelText: '设置密码',
-            hintText: '请设置一个登录密码',
+            labelText: context.l10n.setPassword,
+            hintText: context.l10n.setLoginPassword,
             floatingLabelBehavior: FloatingLabelBehavior.never,
             prefixIcon: const Icon(Icons.lock_outlined),
             suffixIcon: IconButton(
@@ -438,7 +437,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                     height: 20,
                     child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                   )
-                : Text('注册', style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                : Text(context.l10n.registerButton, style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
           ),
         ),
       ],
@@ -455,7 +454,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           child: OutlinedButton.icon(
             onPressed: _isLoading ? null : _handleGoogleLogin,
             icon: Text('G', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
-            label: Text('Google 登录', style: Theme.of(context).textTheme.bodyMedium),
+            label: Text(context.l10n.googleSignIn, style: Theme.of(context).textTheme.bodyMedium),
             style: OutlinedButton.styleFrom(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               side: BorderSide(color: colorScheme.outline.withValues(alpha: 0.3)),
@@ -472,7 +471,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
             child: OutlinedButton.icon(
               onPressed: _isLoading ? null : _handleAppleLogin,
               icon: const Icon(Icons.apple, size: 24),
-              label: Text('Apple 登录', style: Theme.of(context).textTheme.bodyMedium),
+              label: Text(context.l10n.appleSignIn, style: Theme.of(context).textTheme.bodyMedium),
               style: OutlinedButton.styleFrom(
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 side: BorderSide(color: colorScheme.outline.withValues(alpha: 0.3)),
@@ -490,7 +489,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     final email = _loginEmailController.text.trim();
     final password = _loginPasswordController.text;
     if (email.isEmpty || password.isEmpty) {
-      setState(() => _error = '请填写邮箱和密码');
+      setState(() => _error = context.l10n.fillEmailAndPassword);
       return;
     }
     await _doLogin(() => AuthService.loginWithEmail(email, password));
@@ -499,7 +498,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   Future<void> _handleSendCode() async {
     final email = _regEmailController.text.trim();
     if (email.isEmpty) {
-      setState(() => _error = '请先输入邮箱地址');
+      setState(() => _error = context.l10n.enterEmailFirst);
       return;
     }
     setState(() { _isLoading = true; _error = null; });
@@ -510,7 +509,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     } on ApiException catch (e) {
       setState(() => _error = e.message);
     } catch (e) {
-      setState(() => _error = '发送验证码失败: $e');
+      setState(() => _error = context.l10n.sendCodeFailed(e.toString()));
     } finally {
       setState(() => _isLoading = false);
     }
@@ -521,7 +520,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     final code = _regCodeController.text.trim();
     final password = _regPasswordController.text;
     if (email.isEmpty || code.isEmpty || password.isEmpty) {
-      setState(() => _error = '请填写所有字段');
+      setState(() => _error = context.l10n.fillAllFields);
       return;
     }
     await _doLogin(() => AuthService.registerWithEmail(email, code, password));
@@ -532,7 +531,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       await _doLogin(() => AuthService.loginWithGoogle());
     } catch (e) {
       if (mounted) {
-        setState(() => _error = 'Google 登录暂不可用，请使用邮箱登录');
+        setState(() => _error = context.l10n.googleSignInUnavailable);
       }
     }
   }
@@ -542,7 +541,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       await _doLogin(() => AuthService.loginWithApple());
     } catch (e) {
       if (mounted) {
-        setState(() => _error = 'Apple 登录暂不可用，请使用邮箱登录');
+        setState(() => _error = context.l10n.appleSignInUnavailable);
       }
     }
   }
@@ -589,7 +588,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       setState(() => _error = e.message);
     } catch (e, st) {
       debugPrint('[Login] ❌ Error: $e\n$st');
-      setState(() => _error = '登录失败: $e');
+      setState(() => _error = context.l10n.loginFailed(e.toString()));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:client/providers/server_host_provider.dart';
-import 'package:client/l10n/app_localizations.dart';
+import 'package:client/l10n/l10n.dart';
 
 /// Full-screen manual server configuration page.
 ///
@@ -46,11 +46,10 @@ class _ManualConfigScreenState extends ConsumerState<ManualConfigScreen> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final t = AppLocalizations.of(context)!;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(t.manualConfigTitle),
+        title: Text(context.l10n.manualConfigTitle),
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
@@ -65,7 +64,7 @@ class _ManualConfigScreenState extends ConsumerState<ManualConfigScreen> {
               children: [
                 // Title
                 Text(
-                  'Clawke 服务器',
+                  context.l10n.serverConnection,
                   style: TextStyle(
                     fontSize: Theme.of(context).textTheme.titleMedium!.fontSize,
                     fontWeight: FontWeight.w600,
@@ -74,7 +73,7 @@ class _ManualConfigScreenState extends ConsumerState<ManualConfigScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '输入 Clawke 服务器地址进行连接',
+                  context.l10n.enterServerAddressToConnect,
                   style: TextStyle(
                     fontSize: Theme.of(context).textTheme.bodySmall!.fontSize,
                     color: colorScheme.onSurface.withValues(alpha: 0.6),
@@ -88,7 +87,7 @@ class _ManualConfigScreenState extends ConsumerState<ManualConfigScreen> {
                   controller: _urlController,
                   keyboardType: TextInputType.url,
                   decoration: InputDecoration(
-                    labelText: '服务器地址',
+                    labelText: context.l10n.serverAddress,
                     hintText: 'http://192.168.1.100:8780',
 
                     prefixIcon: const Icon(Icons.dns_outlined),
@@ -107,8 +106,8 @@ class _ManualConfigScreenState extends ConsumerState<ManualConfigScreen> {
                   enableSuggestions: false,
                   autocorrect: false,
                   decoration: InputDecoration(
-                    labelText: 'Token（可选）',
-                    hintText: '留空 = 无认证（仅局域网）',
+                    labelText: context.l10n.tokenOptional,
+                    hintText: context.l10n.tokenHint,
                     prefixIcon: const Icon(Icons.key_outlined),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     filled: true,
@@ -157,7 +156,7 @@ class _ManualConfigScreenState extends ConsumerState<ManualConfigScreen> {
                           )
                         : const Icon(Icons.link),
                     label: Text(
-                      _isConnecting ? '连接中...' : t.manualConfigConnect,
+                      _isConnecting ? context.l10n.connectingStatus : context.l10n.manualConfigConnect,
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                     style: FilledButton.styleFrom(
@@ -178,7 +177,7 @@ class _ManualConfigScreenState extends ConsumerState<ManualConfigScreen> {
   Future<void> _handleConnect() async {
     final url = _urlController.text.trim();
     if (url.isEmpty) {
-      setState(() => _error = '请输入服务器地址');
+      setState(() => _error = context.l10n.enterServerAddressError);
       return;
     }
 
@@ -206,7 +205,7 @@ class _ManualConfigScreenState extends ConsumerState<ManualConfigScreen> {
       final channel = WebSocketChannel.connect(connectUri);
       await channel.ready.timeout(
         const Duration(seconds: 5),
-        onTimeout: () => throw TimeoutException('连接超时，请检查服务器地址'),
+        onTimeout: () => throw TimeoutException(context.l10n.connectionTimeout),
       );
       await channel.sink.close();
 
@@ -220,11 +219,11 @@ class _ManualConfigScreenState extends ConsumerState<ManualConfigScreen> {
         Navigator.of(context).pushNamedAndRemoveUntil('/main', (route) => false);
       }
     } on TimeoutException catch (e) {
-      setState(() => _error = e.message ?? '连接超时');
+      setState(() => _error = e.message ?? context.l10n.connectionTimeoutShort);
     } on SocketException catch (e) {
-      setState(() => _error = '无法连接: ${e.message}');
+      setState(() => _error = context.l10n.connectionFailed(e.message));
     } catch (e) {
-      setState(() => _error = '连接失败: $e');
+      setState(() => _error = context.l10n.connectionFailed(e.toString()));
     } finally {
       if (mounted) setState(() => _isConnecting = false);
     }

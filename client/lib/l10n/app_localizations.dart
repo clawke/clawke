@@ -775,6 +775,498 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'提交修改'**
   String get submitChanges;
+
+  /// No description provided for @orDivider.
+  ///
+  /// In zh, this message translates to:
+  /// **'或'**
+  String get orDivider;
+
+  /// No description provided for @emailAddress.
+  ///
+  /// In zh, this message translates to:
+  /// **'邮箱地址'**
+  String get emailAddress;
+
+  /// No description provided for @enterEmail.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入邮箱地址'**
+  String get enterEmail;
+
+  /// No description provided for @password.
+  ///
+  /// In zh, this message translates to:
+  /// **'密码'**
+  String get password;
+
+  /// No description provided for @enterPassword.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入密码'**
+  String get enterPassword;
+
+  /// No description provided for @forgotPassword.
+  ///
+  /// In zh, this message translates to:
+  /// **'忘记密码？'**
+  String get forgotPassword;
+
+  /// No description provided for @loginButton.
+  ///
+  /// In zh, this message translates to:
+  /// **'登录'**
+  String get loginButton;
+
+  /// No description provided for @verificationCode.
+  ///
+  /// In zh, this message translates to:
+  /// **'验证码'**
+  String get verificationCode;
+
+  /// No description provided for @enterVerificationCode.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入邮箱验证码'**
+  String get enterVerificationCode;
+
+  /// No description provided for @resend.
+  ///
+  /// In zh, this message translates to:
+  /// **'重新发送'**
+  String get resend;
+
+  /// No description provided for @getVerificationCode.
+  ///
+  /// In zh, this message translates to:
+  /// **'获取验证码'**
+  String get getVerificationCode;
+
+  /// No description provided for @setPassword.
+  ///
+  /// In zh, this message translates to:
+  /// **'设置密码'**
+  String get setPassword;
+
+  /// No description provided for @setLoginPassword.
+  ///
+  /// In zh, this message translates to:
+  /// **'请设置一个登录密码'**
+  String get setLoginPassword;
+
+  /// No description provided for @registerButton.
+  ///
+  /// In zh, this message translates to:
+  /// **'注册'**
+  String get registerButton;
+
+  /// No description provided for @googleSignIn.
+  ///
+  /// In zh, this message translates to:
+  /// **'Google 登录'**
+  String get googleSignIn;
+
+  /// No description provided for @appleSignIn.
+  ///
+  /// In zh, this message translates to:
+  /// **'Apple 登录'**
+  String get appleSignIn;
+
+  /// No description provided for @fillEmailAndPassword.
+  ///
+  /// In zh, this message translates to:
+  /// **'请填写邮箱和密码'**
+  String get fillEmailAndPassword;
+
+  /// No description provided for @enterEmailFirst.
+  ///
+  /// In zh, this message translates to:
+  /// **'请先输入邮箱地址'**
+  String get enterEmailFirst;
+
+  /// No description provided for @sendCodeFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'发送验证码失败: {error}'**
+  String sendCodeFailed(String error);
+
+  /// No description provided for @fillAllFields.
+  ///
+  /// In zh, this message translates to:
+  /// **'请填写所有字段'**
+  String get fillAllFields;
+
+  /// No description provided for @googleSignInUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'Google 登录暂不可用，请使用邮箱登录'**
+  String get googleSignInUnavailable;
+
+  /// No description provided for @appleSignInUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'Apple 登录暂不可用，请使用邮箱登录'**
+  String get appleSignInUnavailable;
+
+  /// No description provided for @loginFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'登录失败: {error}'**
+  String loginFailed(String error);
+
+  /// No description provided for @forgotPasswordTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'忘记密码'**
+  String get forgotPasswordTitle;
+
+  /// No description provided for @stepEmail.
+  ///
+  /// In zh, this message translates to:
+  /// **'邮箱'**
+  String get stepEmail;
+
+  /// No description provided for @stepVerify.
+  ///
+  /// In zh, this message translates to:
+  /// **'验证'**
+  String get stepVerify;
+
+  /// No description provided for @stepReset.
+  ///
+  /// In zh, this message translates to:
+  /// **'重置'**
+  String get stepReset;
+
+  /// No description provided for @enterRegisteredEmail.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入你的注册邮箱'**
+  String get enterRegisteredEmail;
+
+  /// No description provided for @willSendCodeToReset.
+  ///
+  /// In zh, this message translates to:
+  /// **'我们将向你的邮箱发送一个验证码来重置密码'**
+  String get willSendCodeToReset;
+
+  /// No description provided for @enterRegisteredEmailHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入注册时的邮箱'**
+  String get enterRegisteredEmailHint;
+
+  /// No description provided for @sendVerificationCode.
+  ///
+  /// In zh, this message translates to:
+  /// **'发送验证码'**
+  String get sendVerificationCode;
+
+  /// No description provided for @enterEmailCode.
+  ///
+  /// In zh, this message translates to:
+  /// **'输入邮箱验证码'**
+  String get enterEmailCode;
+
+  /// No description provided for @codeSentTo.
+  ///
+  /// In zh, this message translates to:
+  /// **'验证码已发送到 {email}'**
+  String codeSentTo(String email);
+
+  /// No description provided for @enterSixDigitCode.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入 6 位验证码'**
+  String get enterSixDigitCode;
+
+  /// No description provided for @resendCountdown.
+  ///
+  /// In zh, this message translates to:
+  /// **'重新发送 ({seconds}s)'**
+  String resendCountdown(int seconds);
+
+  /// No description provided for @verifyButton.
+  ///
+  /// In zh, this message translates to:
+  /// **'验证'**
+  String get verifyButton;
+
+  /// No description provided for @setNewPasswordTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'设置新密码'**
+  String get setNewPasswordTitle;
+
+  /// No description provided for @enter6to20Password.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入 6-20 位的新密码'**
+  String get enter6to20Password;
+
+  /// No description provided for @confirmPasswordLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认密码'**
+  String get confirmPasswordLabel;
+
+  /// No description provided for @reenterNewPassword.
+  ///
+  /// In zh, this message translates to:
+  /// **'请再次输入新密码'**
+  String get reenterNewPassword;
+
+  /// No description provided for @resetPasswordButton.
+  ///
+  /// In zh, this message translates to:
+  /// **'重置密码'**
+  String get resetPasswordButton;
+
+  /// No description provided for @codeSentCheckEmail.
+  ///
+  /// In zh, this message translates to:
+  /// **'验证码已发送，请查收邮件'**
+  String get codeSentCheckEmail;
+
+  /// No description provided for @sendFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'发送失败: {error}'**
+  String sendFailed(String error);
+
+  /// No description provided for @verifySuccess.
+  ///
+  /// In zh, this message translates to:
+  /// **'验证成功，请设置新密码'**
+  String get verifySuccess;
+
+  /// No description provided for @verifyFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'验证失败: {error}'**
+  String verifyFailed(String error);
+
+  /// No description provided for @codeResent.
+  ///
+  /// In zh, this message translates to:
+  /// **'验证码已重新发送'**
+  String get codeResent;
+
+  /// No description provided for @passwordResetSuccess.
+  ///
+  /// In zh, this message translates to:
+  /// **'密码重置成功，请用新密码登录'**
+  String get passwordResetSuccess;
+
+  /// No description provided for @resetFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'重置失败: {error}'**
+  String resetFailed(String error);
+
+  /// No description provided for @deleteAccountConfirmContent.
+  ///
+  /// In zh, this message translates to:
+  /// **'注销后所有数据将丢失，无法恢复，\n是否确认注销？'**
+  String get deleteAccountConfirmContent;
+
+  /// No description provided for @confirmDeleteAccount.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认注销'**
+  String get confirmDeleteAccount;
+
+  /// No description provided for @deleteAccountFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'注销失败: {error}'**
+  String deleteAccountFailed(String error);
+
+  /// No description provided for @enterServerAddressToConnect.
+  ///
+  /// In zh, this message translates to:
+  /// **'输入 Clawke 服务器地址进行连接'**
+  String get enterServerAddressToConnect;
+
+  /// No description provided for @tokenOptional.
+  ///
+  /// In zh, this message translates to:
+  /// **'Token（可选）'**
+  String get tokenOptional;
+
+  /// No description provided for @tokenHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'留空 = 无认证（仅局域网）'**
+  String get tokenHint;
+
+  /// No description provided for @connectingStatus.
+  ///
+  /// In zh, this message translates to:
+  /// **'连接中...'**
+  String get connectingStatus;
+
+  /// No description provided for @enterServerAddressError.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入服务器地址'**
+  String get enterServerAddressError;
+
+  /// No description provided for @connectionTimeout.
+  ///
+  /// In zh, this message translates to:
+  /// **'连接超时，请检查服务器地址'**
+  String get connectionTimeout;
+
+  /// No description provided for @connectionTimeoutShort.
+  ///
+  /// In zh, this message translates to:
+  /// **'连接超时'**
+  String get connectionTimeoutShort;
+
+  /// No description provided for @connectionFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'连接失败: {error}'**
+  String connectionFailed(String error);
+
+  /// No description provided for @conversationSettings.
+  ///
+  /// In zh, this message translates to:
+  /// **'会话设置'**
+  String get conversationSettings;
+
+  /// No description provided for @model.
+  ///
+  /// In zh, this message translates to:
+  /// **'模型'**
+  String get model;
+
+  /// No description provided for @systemPrompt.
+  ///
+  /// In zh, this message translates to:
+  /// **'系统提示词'**
+  String get systemPrompt;
+
+  /// No description provided for @systemPromptHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'自定义系统提示词（可选）'**
+  String get systemPromptHint;
+
+  /// No description provided for @workDir.
+  ///
+  /// In zh, this message translates to:
+  /// **'工作目录'**
+  String get workDir;
+
+  /// No description provided for @notSet.
+  ///
+  /// In zh, this message translates to:
+  /// **'未设置'**
+  String get notSet;
+
+  /// No description provided for @enterConversationName.
+  ///
+  /// In zh, this message translates to:
+  /// **'输入会话名称'**
+  String get enterConversationName;
+
+  /// No description provided for @generatedAfterCreate.
+  ///
+  /// In zh, this message translates to:
+  /// **'（创建后生成）'**
+  String get generatedAfterCreate;
+
+  /// No description provided for @defaultModel.
+  ///
+  /// In zh, this message translates to:
+  /// **'默认模型'**
+  String get defaultModel;
+
+  /// No description provided for @selectModel.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择模型'**
+  String get selectModel;
+
+  /// No description provided for @refreshModelList.
+  ///
+  /// In zh, this message translates to:
+  /// **'刷新模型列表'**
+  String get refreshModelList;
+
+  /// No description provided for @gatewayNoModelSupport.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前 Gateway 不支持指定模型'**
+  String get gatewayNoModelSupport;
+
+  /// No description provided for @selectSkills.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择 Skills'**
+  String get selectSkills;
+
+  /// No description provided for @refreshSkillsList.
+  ///
+  /// In zh, this message translates to:
+  /// **'刷新 Skills 列表'**
+  String get refreshSkillsList;
+
+  /// No description provided for @gatewayNoSkillSupport.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前 Gateway 不支持指定 Skill'**
+  String get gatewayNoSkillSupport;
+
+  /// No description provided for @clickRefreshToRetry.
+  ///
+  /// In zh, this message translates to:
+  /// **'点击右上角刷新按钮重试'**
+  String get clickRefreshToRetry;
+
+  /// No description provided for @priorityTrigger.
+  ///
+  /// In zh, this message translates to:
+  /// **'优先触发'**
+  String get priorityTrigger;
+
+  /// No description provided for @exclusiveTrigger.
+  ///
+  /// In zh, this message translates to:
+  /// **'必须触发'**
+  String get exclusiveTrigger;
+
+  /// No description provided for @searchSkills.
+  ///
+  /// In zh, this message translates to:
+  /// **'搜索 Skills...'**
+  String get searchSkills;
+
+  /// No description provided for @skillsNotEnabled.
+  ///
+  /// In zh, this message translates to:
+  /// **'未启用'**
+  String get skillsNotEnabled;
+
+  /// No description provided for @skillsEnabledCount.
+  ///
+  /// In zh, this message translates to:
+  /// **'已启用 {count} 个'**
+  String skillsEnabledCount(int count);
+
+  /// No description provided for @workDirHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'输入 OpenClaw 工作目录路径'**
+  String get workDirHint;
+
+  /// No description provided for @workDirNote.
+  ///
+  /// In zh, this message translates to:
+  /// **'此目录为 OpenClaw 服务器上的路径，非本地路径'**
+  String get workDirNote;
 }
 
 class _AppLocalizationsDelegate

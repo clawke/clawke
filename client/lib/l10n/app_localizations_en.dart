@@ -366,4 +366,279 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get submitChanges => 'Submit';
+
+  @override
+  String get orDivider => 'or';
+
+  @override
+  String get emailAddress => 'Email';
+
+  @override
+  String get enterEmail => 'Enter email address';
+
+  @override
+  String get password => 'Password';
+
+  @override
+  String get enterPassword => 'Enter password';
+
+  @override
+  String get forgotPassword => 'Forgot password?';
+
+  @override
+  String get loginButton => 'Log In';
+
+  @override
+  String get verificationCode => 'Verification Code';
+
+  @override
+  String get enterVerificationCode => 'Enter verification code';
+
+  @override
+  String get resend => 'Resend';
+
+  @override
+  String get getVerificationCode => 'Get Code';
+
+  @override
+  String get setPassword => 'Set Password';
+
+  @override
+  String get setLoginPassword => 'Set a login password';
+
+  @override
+  String get registerButton => 'Register';
+
+  @override
+  String get googleSignIn => 'Sign in with Google';
+
+  @override
+  String get appleSignIn => 'Sign in with Apple';
+
+  @override
+  String get fillEmailAndPassword => 'Please fill in email and password';
+
+  @override
+  String get enterEmailFirst => 'Please enter email first';
+
+  @override
+  String sendCodeFailed(String error) {
+    return 'Failed to send code: $error';
+  }
+
+  @override
+  String get fillAllFields => 'Please fill all fields';
+
+  @override
+  String get googleSignInUnavailable =>
+      'Google sign-in unavailable, please use email';
+
+  @override
+  String get appleSignInUnavailable =>
+      'Apple sign-in unavailable, please use email';
+
+  @override
+  String loginFailed(String error) {
+    return 'Login failed: $error';
+  }
+
+  @override
+  String get forgotPasswordTitle => 'Forgot Password';
+
+  @override
+  String get stepEmail => 'Email';
+
+  @override
+  String get stepVerify => 'Verify';
+
+  @override
+  String get stepReset => 'Reset';
+
+  @override
+  String get enterRegisteredEmail => 'Enter your registered email';
+
+  @override
+  String get willSendCodeToReset =>
+      'We\'ll send a verification code to reset your password';
+
+  @override
+  String get enterRegisteredEmailHint => 'Enter registration email';
+
+  @override
+  String get sendVerificationCode => 'Send Code';
+
+  @override
+  String get enterEmailCode => 'Enter email verification code';
+
+  @override
+  String codeSentTo(String email) {
+    return 'Code sent to $email';
+  }
+
+  @override
+  String get enterSixDigitCode => 'Enter 6-digit code';
+
+  @override
+  String resendCountdown(int seconds) {
+    return 'Resend (${seconds}s)';
+  }
+
+  @override
+  String get verifyButton => 'Verify';
+
+  @override
+  String get setNewPasswordTitle => 'Set New Password';
+
+  @override
+  String get enter6to20Password => 'Enter 6-20 character password';
+
+  @override
+  String get confirmPasswordLabel => 'Confirm Password';
+
+  @override
+  String get reenterNewPassword => 'Re-enter new password';
+
+  @override
+  String get resetPasswordButton => 'Reset Password';
+
+  @override
+  String get codeSentCheckEmail => 'Code sent, check your email';
+
+  @override
+  String sendFailed(String error) {
+    return 'Send failed: $error';
+  }
+
+  @override
+  String get verifySuccess => 'Verified, please set new password';
+
+  @override
+  String verifyFailed(String error) {
+    return 'Verification failed: $error';
+  }
+
+  @override
+  String get codeResent => 'Code resent';
+
+  @override
+  String get passwordResetSuccess =>
+      'Password reset, please log in with new password';
+
+  @override
+  String resetFailed(String error) {
+    return 'Reset failed: $error';
+  }
+
+  @override
+  String get deleteAccountConfirmContent =>
+      'All data will be permanently deleted after account deletion.\nAre you sure?';
+
+  @override
+  String get confirmDeleteAccount => 'Confirm Delete';
+
+  @override
+  String deleteAccountFailed(String error) {
+    return 'Delete failed: $error';
+  }
+
+  @override
+  String get enterServerAddressToConnect =>
+      'Enter Clawke server address to connect';
+
+  @override
+  String get tokenOptional => 'Token (optional)';
+
+  @override
+  String get tokenHint => 'Leave empty for no auth (LAN only)';
+
+  @override
+  String get connectingStatus => 'Connecting...';
+
+  @override
+  String get enterServerAddressError => 'Please enter server address';
+
+  @override
+  String get connectionTimeout =>
+      'Connection timeout, please check server address';
+
+  @override
+  String get connectionTimeoutShort => 'Connection timeout';
+
+  @override
+  String connectionFailed(String error) {
+    return 'Connection failed: $error';
+  }
+
+  @override
+  String get conversationSettings => 'Conversation Settings';
+
+  @override
+  String get model => 'Model';
+
+  @override
+  String get systemPrompt => 'System Prompt';
+
+  @override
+  String get systemPromptHint => 'Custom system prompt (optional)';
+
+  @override
+  String get workDir => 'Work Directory';
+
+  @override
+  String get notSet => 'Not set';
+
+  @override
+  String get enterConversationName => 'Enter conversation name';
+
+  @override
+  String get generatedAfterCreate => '(generated after creation)';
+
+  @override
+  String get defaultModel => 'Default Model';
+
+  @override
+  String get selectModel => 'Select Model';
+
+  @override
+  String get refreshModelList => 'Refresh model list';
+
+  @override
+  String get gatewayNoModelSupport =>
+      'Current gateway does not support model selection';
+
+  @override
+  String get selectSkills => 'Select Skills';
+
+  @override
+  String get refreshSkillsList => 'Refresh skills list';
+
+  @override
+  String get gatewayNoSkillSupport =>
+      'Current gateway does not support skill selection';
+
+  @override
+  String get clickRefreshToRetry => 'Click refresh button to retry';
+
+  @override
+  String get priorityTrigger => 'Priority';
+
+  @override
+  String get exclusiveTrigger => 'Exclusive';
+
+  @override
+  String get searchSkills => 'Search Skills...';
+
+  @override
+  String get skillsNotEnabled => 'None enabled';
+
+  @override
+  String skillsEnabledCount(int count) {
+    return '$count enabled';
+  }
+
+  @override
+  String get workDirHint => 'Enter OpenClaw work directory path';
+
+  @override
+  String get workDirNote => 'This is a path on the OpenClaw server, not local';
 }
