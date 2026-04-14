@@ -28,7 +28,9 @@ export const clawkePlugin: ChannelPlugin<ResolvedClawkeAccount> = {
   outbound: {
     deliveryMode: "direct",
     sendText: async (ctx) => {
-      console.log(`[Clawke-sendText] ⚡ CALLED: to=${ctx.to}, text=${ctx.text?.slice(0, 60)}`);
+      // 从 to 参数提取 conversation_id（兼容 user: 和 conversation: 前缀）
+      const conversationId = ctx.to?.replace(/^(user:|conversation:)/, '') || ctx.to;
+      console.log(`[Clawke-sendText] ⚡ CALLED: to=${ctx.to}, conversation_id=${conversationId}, text=${ctx.text?.slice(0, 60)}`);
       const { sendToClawkeServer } = await import("./gateway.js");
       sendToClawkeServer({
         type: "agent_text",
@@ -36,6 +38,7 @@ export const clawkePlugin: ChannelPlugin<ResolvedClawkeAccount> = {
         text: ctx.text,
         to: ctx.to,
         account_id: ctx.accountId,
+        conversation_id: conversationId,
       });
       return { ok: true };
     },
