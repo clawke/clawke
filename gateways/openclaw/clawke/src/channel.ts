@@ -28,9 +28,15 @@ export const clawkePlugin: ChannelPlugin<ResolvedClawkeAccount> = {
   outbound: {
     deliveryMode: "direct",
     sendText: async (ctx) => {
-      // ⚠️ NO-OP: Clawke 的消息发送由 gateway.ts 的 deliver 回调统一处理。
-      // 如果这里也发送，会和 deliver 回调产生重复消息。
-      // sendText 仅在没有自定义 deliver 的渠道中作为 fallback 使用。
+      console.log(`[Clawke-sendText] ⚡ CALLED: to=${ctx.to}, text=${ctx.text?.slice(0, 60)}`);
+      const { sendToClawkeServer } = await import("./gateway.js");
+      sendToClawkeServer({
+        type: "agent_text",
+        message_id: `msg_${Date.now()}`,
+        text: ctx.text,
+        to: ctx.to,
+        account_id: ctx.accountId,
+      });
       return { ok: true };
     },
     sendMedia: async (ctx) => {
