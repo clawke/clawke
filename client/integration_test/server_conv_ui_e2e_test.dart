@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:drift/native.dart';
 
-import 'package:client/main.dart'; // import ClawkeApp if needed, but we bypass it
+// import ClawkeApp if needed, but we bypass it
 import 'package:client/screens/main_layout.dart';
 import 'package:client/screens/conversation_list_screen.dart';
 import 'package:client/l10n/app_localizations.dart';

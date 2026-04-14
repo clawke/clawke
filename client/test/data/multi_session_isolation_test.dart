@@ -6,6 +6,7 @@
 /// - 未读计数、最后消息预览按 conversationId 独立
 /// - ensureConversation 幂等性（不覆盖用户重命名）
 /// - clearConversation 只删目标会话的消息
+library;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:drift/drift.dart' hide isNull, isNotNull;
@@ -13,7 +14,6 @@ import 'package:client/data/database/app_database.dart';
 import 'package:client/data/database/dao/conversation_dao.dart';
 import 'package:client/data/database/dao/message_dao.dart';
 import 'package:client/data/repositories/conversation_repository.dart';
-import 'package:client/data/repositories/message_repository.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:client/core/ws_service.dart';
 

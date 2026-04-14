@@ -18,6 +18,7 @@ import 'package:client/widgets/debug_log_panel.dart';
 import 'package:client/widgets/widget_factory.dart';
 import 'package:client/services/auth_service.dart';
 import 'package:client/l10n/l10n.dart';
+import 'package:client/core/notification_service.dart';
 
 /// Sidebar 宽度持久化 key
 const _kSidebarWidthKey = 'clawke_sidebar_width';
@@ -53,6 +54,11 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
     _loadSidebarWidth();
     // App 启动：先等 host 加载完成，再建立 WebSocket 连接
     _initConnectionAsync();
+    // 延迟请求通知权限：等首帧渲染完后再弹权限对话框，
+    // 避免 macOS 启动时黑屏（权限弹窗阻塞 Flutter 引擎初始化）
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      NotificationService.requestPermissions();
+    });
   }
 
   Future<void> _initConnectionAsync() async {

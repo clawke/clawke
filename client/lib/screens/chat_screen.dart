@@ -520,7 +520,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   Widget _buildAppBarTitle(String? convId, ColorScheme colorScheme) {
     if (convId == null) {
-      return Text('Clawke');
+      return const Text('Clawke');
     }
     final conversationsAsync = ref.watch(conversationListProvider);
     final name = conversationsAsync.valueOrNull
@@ -664,6 +664,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     return body;
   }
 
+  bool get _isMobile => Platform.isIOS || Platform.isAndroid;
+
   Widget _buildAvatar(bool isUser) {
     final colorScheme = Theme.of(context).colorScheme;
     return ClipRRect(
@@ -684,6 +686,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       ),
     );
   }
+
 
   Widget _buildDbMessageWithSeparator(Message msg, Message? olderMsg) {
     // ListView is reverse, so separator for THIS message appears
@@ -803,6 +806,96 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ? colorScheme.primary
         : colorScheme.surfaceContainerLowest;
 
+    // 移动端 AI 消息：thinking 保持原位（头像右边），正文加宽（92%）+ 箭头向上
+    if (_isMobile && !isUser) {
+      final hasThinking = msg.thinkingContent != null &&
+          msg.thinkingContent!.isNotEmpty;
+
+      return MessageContextMenu(
+        message: msg,
+        isUser: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Thinking 块：保持原有布局（头像 + thinking 同行）
+                if (hasThinking)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildAvatar(false),
+                      const SizedBox(width: 2),
+                      Flexible(
+                        child: Container(
+                          constraints: BoxConstraints(
+                            maxWidth:
+                                MediaQuery.of(context).size.width * 0.78,
+                          ),
+                          child: ThinkingBlockWidget(
+                            content: msg.thinkingContent!,
+                            isStreaming: false,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                // 没有 thinking 时显示头像行
+                if (!hasThinking)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 2),
+                    child: _buildAvatar(false),
+                  ),
+                // 向上箭头（跟随气泡左边缘）
+                Padding(
+                  padding: const EdgeInsets.only(left: 10),
+                  child: _BubbleArrowUp(color: bubbleColor),
+                ),
+                // 正文气泡（宽度左右对称，减去外层 padding 的 24px）
+                Container(
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width - 24,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: bubbleColor,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (msg.quoteId != null)
+                        _buildQuoteCard(msg.quoteId!),
+                      _buildMessageContent(msg, false),
+                      if (msg.editedAt != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            context.l10n.edited,
+                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                // 时间戳 + token
+                _buildMetaLine(msg, false),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // 桌面端 / 用户消息：保持原有布局
     return MessageContextMenu(
       message: msg,
       isUser: isUser,
@@ -828,10 +921,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       Container(
                         constraints: BoxConstraints(
                           maxWidth:
-                              MediaQuery.of(context).size.width *
-                              ((Platform.isIOS || Platform.isAndroid)
-                                  ? 0.78
-                                  : 0.55),
+                              MediaQuery.of(context).size.width * 0.55,
                         ),
                         child: ThinkingBlockWidget(
                           content: msg.thinkingContent!,
@@ -856,9 +946,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                             constraints: BoxConstraints(
                               maxWidth:
                                   MediaQuery.of(context).size.width *
-                                  ((Platform.isIOS || Platform.isAndroid)
-                                      ? 0.78
-                                      : 0.55),
+                                  (_isMobile ? 0.78 : 0.55),
                             ),
                             padding: const EdgeInsets.symmetric(
                               horizontal: 14,
@@ -1166,7 +1254,99 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   ) {
     final colorScheme = Theme.of(context).colorScheme;
     final isThinkingOnly = streamingThinking != null && streamingMsg == null;
+    final bubbleColor = colorScheme.surfaceContainerLowest;
 
+    // 移动端：thinking 保持原位（头像右边），正文加宽 + 箭头向上
+    if (_isMobile) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Thinking 块：保持原有布局（头像 + thinking 同行）
+              if (streamingThinking != null)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildAvatar(false),
+                    const SizedBox(width: 2),
+                    Flexible(
+                      child: Container(
+                        constraints: BoxConstraints(
+                          maxWidth:
+                              MediaQuery.of(context).size.width * 0.78,
+                        ),
+                        child: ThinkingBlockWidget(
+                          content: streamingThinking.content,
+                          isStreaming: isThinkingOnly,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              // 没有 thinking 时显示头像
+              if (streamingThinking == null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 2),
+                  child: _buildAvatar(false),
+                ),
+              // 文本气泡（如果有）
+              if (streamingMsg != null) ...[
+                // 向上箭头（跟随气泡左边缘）
+                Padding(
+                  padding: const EdgeInsets.only(left: 10),
+                  child: _BubbleArrowUp(color: bubbleColor),
+                ),
+                Container(
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width - 24,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: bubbleColor,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: SelectionArea(
+                    child: GptMarkdown(
+                      _autoLinkUrls(streamingMsg.content),
+                      useDollarSignsForLatex: true,
+                      codeBuilder: buildHighlightedCodeBlock,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                      linkBuilder: (context, text, url, style) {
+                        return MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          child: Text(
+                            text.toPlainText(),
+                            style: const TextStyle(
+                              color: Color(0xFF4493F8),
+                              decoration: TextDecoration.underline,
+                              decorationColor: Color(0xFF4493F8),
+                            ),
+                          ),
+                        );
+                      },
+                      onLinkTap: (url, title) {
+                        if (url.startsWith('http://') || url.startsWith('https://')) {
+                          launchUrl(Uri.parse(url), mode: LaunchMode.inAppBrowserView);
+                        }
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+    }
+
+    // 桌面端：保持原有布局
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Align(
@@ -1185,11 +1365,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   if (streamingThinking != null)
                     Container(
                       constraints: BoxConstraints(
-                        maxWidth:
-                            MediaQuery.of(context).size.width *
-                            ((Platform.isIOS || Platform.isAndroid)
-                                ? 0.78
-                                : 0.55),
+                        maxWidth: MediaQuery.of(context).size.width * 0.55,
                       ),
                       child: ThinkingBlockWidget(
                         content: streamingThinking.content,
@@ -1206,24 +1382,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           padding: const EdgeInsets.only(top: 14),
                           child: _BubbleArrow(
                             isUser: false,
-                            color: colorScheme.surfaceContainerLowest,
+                            color: bubbleColor,
                           ),
                         ),
                         Flexible(
                           child: Container(
                             constraints: BoxConstraints(
                               maxWidth:
-                                  MediaQuery.of(context).size.width *
-                                  ((Platform.isIOS || Platform.isAndroid)
-                                      ? 0.78
-                                      : 0.55),
+                                  MediaQuery.of(context).size.width * 0.55,
                             ),
                             padding: const EdgeInsets.symmetric(
                               horizontal: 14,
                               vertical: 10,
                             ),
                             decoration: BoxDecoration(
-                              color: colorScheme.surfaceContainerLowest,
+                              color: bubbleColor,
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: SelectionArea(
@@ -1583,6 +1756,20 @@ class _BubbleArrow extends StatelessWidget {
   }
 }
 
+/// 向上箭头（移动端方案 A：头像在上，箭头指向头像）
+class _BubbleArrowUp extends StatelessWidget {
+  final Color color;
+  const _BubbleArrowUp({required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: const Size(12, 8),
+      painter: _ArrowUpPainter(color: color),
+    );
+  }
+}
+
 class _ArrowPainter extends CustomPainter {
   final bool isUser;
   final Color color;
@@ -1605,6 +1792,28 @@ class _ArrowPainter extends CustomPainter {
       path.lineTo(0, size.height / 2);
       path.lineTo(size.width, size.height);
     }
+    path.close();
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _ArrowUpPainter extends CustomPainter {
+  final Color color;
+  _ArrowUpPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+    final path = Path();
+    // △ 向上指向头像
+    path.moveTo(size.width / 2, 0);
+    path.lineTo(size.width, size.height);
+    path.lineTo(0, size.height);
     path.close();
     canvas.drawPath(path, paint);
   }
