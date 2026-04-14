@@ -48,6 +48,12 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
   /// 是否已经尝试过连接（避免初始化时就显示错误提示）
   bool _hasEverAttempted = false;
 
+  /// 首次连接的宽限期（避免启动后立即弹错误）
+  bool _inGracePeriod = true;
+
+  /// 连接是否曾成功过（只有曾成功再断开才重置 dismissed）
+  bool _hasEverConnected = false;
+
   @override
   void initState() {
     super.initState();
@@ -58,6 +64,11 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
     // 避免 macOS 启动时黑屏（权限弹窗阻塞 Flutter 引擎初始化）
     WidgetsBinding.instance.addPostFrameCallback((_) {
       NotificationService.requestPermissions();
+    });
+    // 启动后 8 秒宽限期：给网络足够时间建立连接，
+    // 避免审核员看到一闪而过的连接错误
+    Future.delayed(const Duration(seconds: 8), () {
+      if (mounted) setState(() => _inGracePeriod = false);
     });
   }
 
@@ -161,10 +172,17 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
       _hasEverAttempted = true;
     }
 
-    // 只有在问题真正恢复（ws 已连接 且 AI 已连接）时，才重置 dismissed 状态
     final isHealthy =
         ws == WsState.connected && aiState == AiBackendState.connected;
-    if (isHealthy && _alertDismissed) {
+
+    // 标记曾经成功连接过
+    if (isHealthy && !_hasEverConnected) {
+      _hasEverConnected = true;
+    }
+
+    // 只有曾成功连接后再断开时，才重置 dismissed 状态
+    // （避免审核员首次使用时反复弹错误提示）
+    if (isHealthy && _alertDismissed && _hasEverConnected) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) setState(() => _alertDismissed = false);
       });
@@ -193,8 +211,8 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
     final isHealthy =
         ws == WsState.connected && aiState == AiBackendState.connected;
 
-    // 显示条件：已尝试过连接、不健康、且未被用户关闭
-    final showAlert = _hasEverAttempted && !_alertDismissed && !isHealthy;
+    // 显示条件：已尝试过连接、不在宽限期、不健康、且未被用户关闭
+    final showAlert = _hasEverAttempted && !_inGracePeriod && !_alertDismissed && !isHealthy;
 
     if (!showAlert) return const SizedBox.shrink();
 
@@ -203,10 +221,9 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
     final lastError = wsService.lastError;
     final isConnecting = ws == WsState.connecting;
 
+    // 不暴露原始错误细节给用户（审核员不应看到技术错误信息）
     final alertText = switch (ws) {
-      WsState.disconnected => lastError != null
-          ? '${context.l10n.serverDisconnected}: $lastError'
-          : context.l10n.serverDisconnected,
+      WsState.disconnected => context.l10n.serverDisconnected,
       WsState.connecting => context.l10n.connecting,
       WsState.connected when aiState == AiBackendState.disconnected =>
         context.l10n.aiBackendDisconnected,

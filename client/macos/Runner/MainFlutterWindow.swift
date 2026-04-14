@@ -6,6 +6,11 @@ class MainFlutterWindow: NSWindow {
     let flutterViewController = FlutterViewController()
     self.contentViewController = flutterViewController
 
+    // 确保标题栏和红/黄/绿交通灯按钮可见（App Store 审核要求 Guideline 4）
+    self.styleMask.insert([.titled, .closable, .miniaturizable, .resizable])
+    self.titlebarAppearsTransparent = false
+    self.titleVisibility = .visible
+
     // 最小窗口尺寸
     self.minSize = NSSize(width: 800, height: 500)
 
