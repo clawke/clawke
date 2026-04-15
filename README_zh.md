@@ -98,6 +98,14 @@ clawke/
 > 📖 高级配置请参阅 [CONFIGURATION_zh.md](docs/CONFIGURATION_zh.md)。  
 > 🔌 自建网关接入请参阅 [GATEWAY_INTEGRATION.md](docs/GATEWAY_INTEGRATION.md)。
 
+## 版本演进
+
+<!-- README_CHANGELOG_START -->
+_Changelog 追踪已启用，下次发布后自动更新。_
+<!-- README_CHANGELOG_END -->
+
+> [完整版本记录](CHANGELOG_zh.md)
+
 ## 贡献
 
 1. Fork 本仓库

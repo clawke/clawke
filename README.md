@@ -98,6 +98,14 @@ clawke/
 > 📖 For advanced configuration, see [CONFIGURATION.md](docs/CONFIGURATION.md).  
 > 🔌 To build your own gateway, see [GATEWAY_INTEGRATION.md](docs/GATEWAY_INTEGRATION.md).
 
+## Changelog
+
+<!-- README_CHANGELOG_START -->
+_No releases yet since changelog tracking was added._
+<!-- README_CHANGELOG_END -->
+
+> [Full Changelog](CHANGELOG.md)
+
 ## Contributing
 
 1. Fork this repository
