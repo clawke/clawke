@@ -508,6 +508,16 @@ async function handleClawkeInbound(
     agentId: route.agentId,
     channel: "clawke",
     accountId: ctx.accountId,
+    // P1-1.1: Typing 指示器 — AI 开始回复前通知客户端显示"正在思考..."
+    typing: {
+      start: () => sendToClawkeServer({
+        type: "agent_typing",
+        to: clawkeTo,
+        account_id: ctx.accountId,
+        conversation_id: senderId,
+      }),
+      onStartError: (err) => ctx.log?.error(`typing failed: ${String(err)}`),
+    },
   });
 
   // 流式输出状态：跟踪已发送长度，计算差量
@@ -522,6 +532,9 @@ async function handleClawkeInbound(
   let lastThinkingLength = 0;
   let hasStreamedThinking = false;
 
+  // P1: 投递去重追踪器 — 防止同一内容被意外发送两次
+  const deliveredTexts = new Set<string>();
+
   const { dispatcher, replyOptions, markDispatchIdle } =
     core.channel.reply.createReplyDispatcherWithTyping({
       ...replyPipeline,  // P0-0.3: 标准 pipeline 配置（prefix + typing + transform）
@@ -532,6 +545,14 @@ async function handleClawkeInbound(
 
         // P0-0.1: disableBlockStreaming=true 后，deliver 只会收到 kind="final"
         // 无需处理 block 逻辑
+
+        // P1: deliveryTracker 去重 — 防止同一文本被重复投递
+        const dedupeKey = `${kind}:${replyText.slice(0, 200)}`;
+        if (deliveredTexts.has(dedupeKey)) {
+          ctx.log?.info(`⏭️ deliver SKIP duplicate: ${replyText.slice(0, 60)}`);
+          return;
+        }
+        deliveredTexts.add(dedupeKey);
 
         const mediaList = payload.mediaUrls?.length
           ? payload.mediaUrls
@@ -598,8 +619,11 @@ async function handleClawkeInbound(
       },
       onError: (error) => {
         ctx.log?.error(`Reply dispatch error: ${String(error)}`);
-        console.error(`[Clawke-GW] 🚨 LLM Reply Dispatch Error:`, error);
         lastError = error instanceof Error ? error : new Error(String(error));
+      },
+      // P1-1.6: onSkip — SDK 跳过某个 payload 时记录，便于排查和兜底
+      onSkip: (payload: ReplyPayload, info: { kind: string; reason: string }) => {
+        ctx.log?.info(`⏭️ SDK skipped ${info.kind} reply (reason=${info.reason}): ${(payload.text ?? '').slice(0, 60)}`);
       },
       onIdle: () => {
         ctx.log?.info(`Reply dispatch idle for message ${messageId}`);
@@ -739,6 +763,27 @@ async function handleClawkeInbound(
             message_id: streamMsgId,
             toolCallId,
             toolName,
+            account_id: ctx.accountId,
+            conversation_id: senderId,
+          });
+        },
+        // P1-1.4: 上下文压缩通知 — 长对话上下文窗口满时通知客户端
+        onCompactionStart: () => {
+          sendToClawkeServer({
+            type: "agent_status",
+            status: "compacting",
+            message_id: streamMsgId,
+            to: clawkeTo,
+            account_id: ctx.accountId,
+            conversation_id: senderId,
+          });
+        },
+        onCompactionEnd: () => {
+          sendToClawkeServer({
+            type: "agent_status",
+            status: "thinking",
+            message_id: streamMsgId,
+            to: clawkeTo,
             account_id: ctx.accountId,
             conversation_id: senderId,
           });
