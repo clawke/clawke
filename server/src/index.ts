@@ -37,6 +37,7 @@ import { handleMessage as mockHandleMessage, abortConversation as mockAbortConve
 import { createMockActionHandler } from './mock/mock-action-handler.js';
 import { handleReadFile } from './mock/mock-file-handler.js';
 import { CronService } from './services/cron-service.js';
+import { initLogger } from './logger.js';
 
 const serverDir = path.join(__dirname, '..');
 
@@ -66,6 +67,9 @@ function checkPortConflict(port: number, label: string): Promise<void> {
 }
 
 async function main() {
+  // 日志持久化：所有 console.log/error/warn 自动写入 ~/.clawke/logs/server-YYYY-MM-DD.log
+  initLogger();
+
   const config = loadConfig();
   const MODE = config.server.mode;
   const HTTP_PORT = config.server.httpPort;

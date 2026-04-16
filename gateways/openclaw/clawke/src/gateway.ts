@@ -4,10 +4,14 @@ import { createChannelReplyPipeline } from "openclaw/plugin-sdk/channel-reply-pi
 import type { ResolvedClawkeAccount } from "./config.js";
 import { getClawkeRuntime } from "./runtime.js";
 
+// 模块级状态（生命周期级，非请求级）
+// ws/gatewayCtx: 在 startClawkeGateway 建立连接时设置，在整个 gateway 生命周期内共享
+// pendingUsage/Model/Provider: 由 index.ts 的 llm_output hook 设置，deliver 时消费。
+//   限制：当前为模块级，而非请求级，因为 hook 和 handler 在不同文件中。
+//   缓解：handleClawkeInbound 入口处重置，确保每次请求从干净状态开始。
 let ws: WebSocket | null = null;
 let gatewayCtx: ChannelGatewayContext<ResolvedClawkeAccount> | null = null;
 
-// llm_output hook 捕获的 usage 数据，deliver 时合并到 text_done
 let pendingUsage: Record<string, number> | null = null;
 let pendingModel = '';
 let pendingProvider = '';
@@ -282,6 +286,11 @@ async function handleClawkeInbound(
   const core = getClawkeRuntime();
   const cfg = ctx.cfg;
 
+  // P2-2.1: 每次请求入口重置 pending 状态，缓解模块级变量的跨请求污染
+  pendingUsage = null;
+  pendingModel = '';
+  pendingProvider = '';
+
   // 注入 system-prompt（Gateway 侧负责，支持热更新）
   let text = msg.text || "";
   let systemPrompt = loadSystemPrompt(ctx);
@@ -376,7 +385,7 @@ async function handleClawkeInbound(
   const mediaRelativeUrls = msg.media?.relativeUrls;
   const csHttpBase = msg.media?.httpBase;
 
-  console.log(`[Clawke-GW] 🔍 handleClawkeInbound: httpBase=${csHttpBase}, relUrls=${JSON.stringify(mediaRelativeUrls)}, paths=${JSON.stringify(mediaPaths)}`);
+  ctx.log?.info(`handleClawkeInbound: httpBase=${csHttpBase}, relUrls=${JSON.stringify(mediaRelativeUrls)}, paths=${JSON.stringify(mediaPaths)}`);
 
   // Media resolution: try local file first, fall back to HTTP download.
   let resolvedMediaPaths = mediaPaths;
@@ -403,14 +412,14 @@ async function handleClawkeInbound(
             fileName,
           );
           resolvedMediaPaths.push(saved.path);
-          console.log(`[Clawke-GW] 📁 Local copy: ${localPaths[i]} → ${saved.path}`);
+          ctx.log?.info(`Local copy: ${localPaths[i]} → ${saved.path}`);
         } catch (e: any) {
-          console.error(`[Clawke-GW] ❌ Local copy error: ${e.message}`);
+          ctx.log?.error(`Local copy error: ${e.message}`);
         }
       }
     } else {
       // No local files found — clear resolvedMediaPaths so HTTP fallback kicks in
-      console.log(`[Clawke-GW] ⚠️ Local files not found: ${mediaPaths.join(', ')} → falling back to HTTP`);
+      ctx.log?.info(`Local files not found: ${mediaPaths.join(', ')} → falling back to HTTP`);
       resolvedMediaPaths = [];
     }
   }
@@ -437,12 +446,12 @@ async function handleClawkeInbound(
             fileName,
           );
           resolvedMediaPaths.push(saved.path);
-          console.log(`[Clawke-GW] 📥 Downloaded: ${fullUrl} → ${saved.path} (${buffer.length} bytes)`);
+          ctx.log?.info(`Downloaded: ${fullUrl} → ${saved.path} (${buffer.length} bytes)`);
         } else {
-          console.error(`[Clawke-GW] ❌ HTTP download failed: ${fullUrl} → ${resp.status}`);
+          ctx.log?.error(`HTTP download failed: ${fullUrl} → ${resp.status}`);
         }
       } catch (e: any) {
-        console.error(`[Clawke-GW] ❌ HTTP download error: ${fullUrl} → ${e.message}`);
+        ctx.log?.error(`HTTP download error: ${fullUrl} → ${e.message}`);
       }
     }
   }
@@ -793,7 +802,7 @@ async function handleClawkeInbound(
     queuedFinal = result.queuedFinal;
     counts = result.counts;
   } catch (dispatchError: any) {
-    console.error(`[Clawke-DEBUG] ❌ dispatchReplyFromConfig THREW:`, dispatchError?.message || dispatchError, dispatchError?.stack);
+    ctx.log?.error(`dispatchReplyFromConfig threw: ${dispatchError?.message || dispatchError}`);
   } finally {
     dispatcher.markComplete();
     try {
@@ -823,9 +832,9 @@ async function handleClawkeInbound(
   // 兜底：AI 没有产生任何回复（NO_REPLY 被静默过滤） → 发送友好引导
   if (!hasStreamedAny && counts.final === 0) {
     if (lastError) {
-      console.error(`[Clawke-GW] 🚨 AI silent due to LLM error. Sending error to client:`, lastError);
+      ctx.log?.error(`AI silent due to LLM error. Sending error to client: ${lastError}`);
     } else {
-      console.warn(`[Clawke-GW] ⚠️ AI silent with no error (0 tokens generated). Sending fallback reply.`);
+      ctx.log?.info(`AI silent with no error (0 tokens generated). Sending fallback reply.`);
     }
     const fallbackText = lastError 
       ? `请求大模型接口失败：${(lastError as Error).message}` 
@@ -844,13 +853,16 @@ async function handleClawkeInbound(
 
 /**
  * 向 Clawke Server 发送 JSON 消息（供 deliver 和 outbound adapter 使用）
+ * P2-2.3: 添加错误日志 + WebSocket 断连检测
  */
 export function sendToClawkeServer(jsonObj: Record<string, unknown>): void {
   if (ws && ws.readyState === WebSocket.OPEN) {
     try {
       ws.send(JSON.stringify(jsonObj));
-    } catch {
-      /* 发送失败忽略 */
+    } catch (err: any) {
+      gatewayCtx?.log?.error(`sendToClawkeServer failed: type=${jsonObj.type}, error=${err.message}`);
     }
+  } else {
+    gatewayCtx?.log?.error(`sendToClawkeServer: WebSocket not connected, dropping message: type=${jsonObj.type}`);
   }
 }
