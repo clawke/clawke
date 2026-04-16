@@ -1,6 +1,6 @@
 import WebSocket from "ws";
 import type { ChannelGatewayContext, ReplyPayload } from "openclaw/plugin-sdk";
-import { createReplyPrefixContext } from "openclaw/plugin-sdk/channel-runtime";
+import { createChannelReplyPipeline } from "openclaw/plugin-sdk/channel-reply-pipeline";
 import type { ResolvedClawkeAccount } from "./config.js";
 import { getClawkeRuntime } from "./runtime.js";
 
@@ -500,17 +500,22 @@ async function handleClawkeInbound(
     } : {}),
   });
 
-  // 3. 创建回复分发器
-  // Clawke 是流式频道，不需要 responsePrefix（那是为非流式频道设计的，
-  // 会导致 deliver 被调用两次产生重复消息）
-  const prefixContext = createReplyPrefixContext({ cfg, agentId: route.agentId });
+  // 3. 创建回复分发器（使用标准 Channel Reply Pipeline）
+  // P0-0.3: 使用 createChannelReplyPipeline 替代手动 createReplyPrefixContext，
+  // 获得标准的 typing/prefix/transform 支持
+  const { onModelSelected, ...replyPipeline } = createChannelReplyPipeline({
+    cfg,
+    agentId: route.agentId,
+    channel: "clawke",
+    accountId: ctx.accountId,
+  });
 
   // 流式输出状态：跟踪已发送长度，计算差量
-  const streamMsgId = `reply_${Date.now()}`;
+  let streamMsgId = `reply_${Date.now()}`;
+  let msgCounter = 0;  // 防止 streamMsgId 在毫秒内冲突
   let lastSentLength = 0;
   let lastFullText = "";
   let hasStreamedAny = false;
-  let hasDeliveredBlock = false;  // Clawke 是 append-only 渠道，跟踪是否已通过 block 投递
 
   // Thinking 流式状态
   const thinkingMsgId = `think_${Date.now()}`;
@@ -519,36 +524,14 @@ async function handleClawkeInbound(
 
   const { dispatcher, replyOptions, markDispatchIdle } =
     core.channel.reply.createReplyDispatcherWithTyping({
-      responsePrefix: undefined,
-      responsePrefixContextProvider: undefined,
-      humanDelay: core.channel.reply.resolveHumanDelayConfig(cfg, route.agentId),
+      ...replyPipeline,  // P0-0.3: 标准 pipeline 配置（prefix + typing + transform）
       deliver: async (payload: ReplyPayload, info?: { kind?: string }) => {
         const kind = info?.kind ?? "final";
         const replyText = payload.text ?? "";
-        ctx.log?.info(`🔍 deliver called: kind=${kind}, hasDeliveredBlock=${hasDeliveredBlock}, hasStreamedAny=${hasStreamedAny}, textLen=${replyText.length}`);
+        ctx.log?.info(`deliver: kind=${kind}, hasStreamedAny=${hasStreamedAny}, textLen=${replyText.length}`);
 
-        // Clawke 是 append-only 渠道（不支持消息编辑），block 已经投递了完整内容，
-        // final 只是给可编辑渠道（如 Telegram）做"终稿替换"用的，对 append-only 跳过。
-        if (kind === "final" && hasDeliveredBlock) {
-          ctx.log?.info(`⏭️ deliver SKIP final (append-only, block already delivered): ${replyText.slice(0, 60)}`);
-          // final 可能携带 usage，仍需发送给 Server
-          if (pendingUsage && pendingModel) {
-            sendToClawkeServer({
-              type: "agent_usage",
-              message_id: streamMsgId,
-              to: clawkeTo,
-              account_id: ctx.accountId,
-              conversation_id: senderId,
-              usage: pendingUsage,
-              model: pendingModel,
-              provider: pendingProvider,
-            });
-            pendingUsage = null;
-            pendingModel = '';
-            pendingProvider = '';
-          }
-          return;
-        }
+        // P0-0.1: disableBlockStreaming=true 后，deliver 只会收到 kind="final"
+        // 无需处理 block 逻辑
 
         const mediaList = payload.mediaUrls?.length
           ? payload.mediaUrls
@@ -595,20 +578,13 @@ async function handleClawkeInbound(
             conversation_id: senderId,
             ...(pendingModel ? { usage: pendingUsage ?? undefined, model: pendingModel, provider: pendingProvider } : {}),
           });
-          ctx.log?.info(`📤 Reply done (full): ${replyText.slice(0, 80)}`);
+          ctx.log?.info(`📤 deliver done (full): ${replyText.slice(0, 80)}`);
           pendingUsage = null;
           pendingModel = '';
           pendingProvider = '';
         }
 
-        // 标记 block 投递状态
-        if (kind === "block") hasDeliveredBlock = true;
-
-        // 重置流式状态（为下一段 block 准备）
-        lastSentLength = 0;
-        lastFullText = "";
-        hasStreamedAny = false;
-
+        // 发送媒体附件
         for (const mediaUrl of mediaList) {
           sendToClawkeServer({
             type: "agent_media",
@@ -673,11 +649,34 @@ async function handleClawkeInbound(
       } : {}),
       replyOptions: {
         ...replyOptions,
-        onModelSelected: prefixContext.onModelSelected,
+        // P0-0.1: 禁用 block streaming — Clawke 通过 onPartialReply 自己做流式，
+        // 不需要 SDK 通过 block 投递中间段。所有有自己流式实现的 channel 都设为 true。
+        disableBlockStreaming: true,
+        onModelSelected,
+        // P0-0.2: assistant message 边界处理 — 多段回复（工具调用后继续回复）时
+        // SDK 会在每个新 assistant message 开始时触发此回调，重置内部 delta 累积。
+        // 所有 L3 channel（Discord/Slack/Telegram/Matrix）都实现了此回调。
+        onAssistantMessageStart: () => {
+          // 结束上一段流式（如果有）
+          if (hasStreamedAny) {
+            sendToClawkeServer({
+              type: "agent_text_done",
+              message_id: streamMsgId,
+              fullText: lastFullText,
+              to: clawkeTo,
+              account_id: ctx.accountId,
+              conversation_id: senderId,
+            });
+          }
+          // 重置流式状态，准备接收新的 assistant message
+          streamMsgId = `reply_${Date.now()}_${++msgCounter}`;
+          lastSentLength = 0;
+          lastFullText = "";
+          hasStreamedAny = false;
+        },
         // 流式回调：每个 LLM token 片段到达时触发
         onPartialReply: (payload: ReplyPayload) => {
           const text = payload.text ?? "";
-          ctx.log?.info(`[DEBUG] onPartialReply called: textLen=${text.length}, lastSent=${lastSentLength}`);
           if (text.length > lastSentLength) {
             const delta = text.slice(lastSentLength);
             sendToClawkeServer({
