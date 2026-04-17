@@ -141,7 +141,7 @@ class ClawkeChannel(BaseChannel):
             elif paths:
                 media = paths
 
-        logger.info("📥 Inbound from Clawke: {}", text[:80])
+        logger.info("📥 Inbound from Clawke: {} (media={})", text[:80], bool(media))
 
         await self._handle_message(
             sender_id=sender_id,
@@ -150,6 +150,7 @@ class ClawkeChannel(BaseChannel):
             media=media if media else None,
             metadata={"message_id": client_msg_id},
         )
+        logger.info("📥 Dispatched to nanobot: chat_id={} msg_id={}", chat_id, client_msg_id)
 
     async def send(self, msg: OutboundMessage) -> None:
         """Send outbound message to Clawke Server via the gateway protocol."""
@@ -179,6 +180,7 @@ class ClawkeChannel(BaseChannel):
                     "account_id": self._account_id,
                     "conversation_id": conv_id,
                 }))
+                logger.info("📤 Tool call to Clawke: {} conv={}", text[:60], conv_id)
 
             elif is_progress:
                 # Thinking / intermediate progress → thinking_delta
@@ -190,6 +192,7 @@ class ClawkeChannel(BaseChannel):
                         "account_id": self._account_id,
                         "conversation_id": conv_id,
                     }))
+                    logger.debug("📤 Thinking delta to Clawke: {} conv={}", text[:40], conv_id)
 
             else:
                 # Final reply → close any thinking stream, then send full text

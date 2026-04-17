@@ -2,6 +2,7 @@ import WebSocket from "ws";
 import type { ChannelGatewayContext, ReplyPayload } from "openclaw/plugin-sdk";
 import { createChannelReplyPipeline } from "openclaw/plugin-sdk/channel-reply-pipeline";
 import type { ResolvedClawkeAccount } from "./config.js";
+import { GatewayMessageType, InboundMessageType, AgentStatus } from "./protocol.js";
 import { getClawkeRuntime } from "./runtime.js";
 
 // 模块级状态（生命周期级，非请求级）
@@ -46,6 +47,11 @@ function getBackoffMs(attempt: number): number {
 
 // 每个会话当前使用的模型（用于首次/变化时注入 /model）
 const sessionModels = new Map<string, string>();
+
+// Per-session 串行派发队列：确保同一 session 的消息按序执行，
+// 防止 OpenClaw ReplyRunRegistry 因并发 run 抛出 ReplyRunAlreadyActiveError。
+// key = senderId (即 conversation_id)，value = 上一次 dispatch 的 Promise
+const activeDispatches = new Map<string, Promise<void>>();
 
 /** 从 OpenClaw 配置中提取可用模型列表 */
 function getAvailableModels(ctx: ChannelGatewayContext<ResolvedClawkeAccount>): string[] {
@@ -180,7 +186,7 @@ export async function startClawkeGateway(
         reconnectAttempt = 0;
         // 握手：告知 Clawke Server 我的 accountId
         ws!.send(JSON.stringify({
-          type: "identify",
+          type: GatewayMessageType.Identify,
           accountId: ctx.accountId,
         }));
         ctx.setStatus({
@@ -194,27 +200,63 @@ export async function startClawkeGateway(
       ws.on("message", (raw) => {
         try {
           const msg = JSON.parse(raw.toString());
-          if (msg.type === "chat") {
+          if (msg.type === InboundMessageType.Chat) {
             const text = msg.text || "";
             ctx.log?.info(`📥 Inbound message: ${text.slice(0, 80)}`);
-            handleClawkeInbound(ctx, msg).catch((err) => {
-              ctx.log?.error(`Failed to dispatch inbound: ${String(err)}`);
-            });
-          } else if (msg.type === "abort") {
+            // 串行队列：同 session 的消息按序执行，不并发
+            const senderId = msg.conversation_id || "clawke_user";
+            const prevDispatch = activeDispatches.get(senderId);
+            const thisDispatch = (async () => {
+              if (prevDispatch) {
+                ctx.log?.info(`⏳ Session ${senderId} busy, queuing message: ${text.slice(0, 40)}`);
+                // 通知客户端：消息已排队等待
+                sendToClawkeServer({
+                  type: GatewayMessageType.AgentStatus,
+                  status: AgentStatus.Queued,
+                  to: `user:${senderId}`,
+                  account_id: ctx.accountId,
+                  conversation_id: senderId,
+                });
+                // 等待前一个 dispatch 完成
+                await prevDispatch.catch(() => {});
+                ctx.log?.info(`▶️  Session ${senderId} idle, executing queued message: ${text.slice(0, 40)}`);
+              }
+              await handleClawkeInbound(ctx, msg);
+            })();
+            // 跟踪当前 dispatch，完成后自动清理
+            activeDispatches.set(senderId, thisDispatch);
+            thisDispatch.catch((err) => ctx.log?.error(`Failed to dispatch inbound: ${String(err)}`)).finally(() => {
+                // 只在自己是最新的 dispatch 时清理（避免清掉后续入队的）
+                if (activeDispatches.get(senderId) === thisDispatch) {
+                  activeDispatches.delete(senderId);
+                }
+              });
+          } else if (msg.type === InboundMessageType.Abort) {
             ctx.log?.info(`📥 Abort request: conversation=${msg.conversation_id}`);
-          } else if (msg.type === "query_models") {
+            // 通过发送合成的 /abort 消息来复用 OpenClaw 完整的中止逻辑：
+            // - tryFastAbortFromMessage 会清理消息队列、终止子 Agent、更新会话状态
+            // - 比直接调用 replyRunRegistry.abort() 更可靠（不会留下"僵尸子进程"）
+            handleClawkeInbound(ctx, {
+              type: InboundMessageType.Chat,
+              conversation_id: msg.conversation_id,
+              text: "/abort",
+              client_msg_id: `abort_${Date.now()}`,
+            }).catch((err) => {
+              ctx.log?.error(`Failed to handle abort: ${String(err)}`);
+            });
+          } else if (msg.type === InboundMessageType.QueryModels) {
             // 查询可用模型列表
             const models = getAvailableModels(ctx);
-            ws!.send(JSON.stringify({ type: "models_response", models }));
+            ws!.send(JSON.stringify({ type: GatewayMessageType.ModelsResponse, models }));
             ctx.log?.info(`📤 Models response: ${models.length} models`);
-          } else if (msg.type === "query_skills") {
+          } else if (msg.type === InboundMessageType.QuerySkills) {
             // 查询可用 Skills 列表
             const skills = getAvailableSkills();
-            ws!.send(JSON.stringify({ type: "skills_response", skills }));
+            ws!.send(JSON.stringify({ type: GatewayMessageType.SkillsResponse, skills }));
             ctx.log?.info(`📤 Skills response: ${skills.length} skills`);
           }
-        } catch {
-          /* 非 JSON 消息忽略 */
+        } catch (err: any) {
+          ctx.log?.error(`Failed to parse inbound message: ${err.message}. Raw: ${raw.toString().slice(0, 50)}...`);
         }
       });
 
@@ -243,7 +285,7 @@ export async function startClawkeGateway(
 /**
  * 处理从 Clawke Server 收到的用户消息，派发给 OpenClaw Agent。
  *
- * 简化版流程（参考飞书 handleFeishuMessage + createFeishuReplyDispatcher）：
+ * 简化版流程：
  * 1. resolveAgentRoute → 路由
  * 2. finalizeInboundContext → 构建上下文
  * 3. createReplyDispatcherWithTyping → 创建带 deliver 回调的分发器
@@ -385,16 +427,15 @@ async function handleClawkeInbound(
   const mediaRelativeUrls = msg.media?.relativeUrls;
   const csHttpBase = msg.media?.httpBase;
 
-  ctx.log?.info(`handleClawkeInbound: httpBase=${csHttpBase}, relUrls=${JSON.stringify(mediaRelativeUrls)}, paths=${JSON.stringify(mediaPaths)}`);
-
   // Media resolution: try local file first, fall back to HTTP download.
   let resolvedMediaPaths = mediaPaths;
   const fs = await import("fs");
   const MAX_MEDIA_BYTES = 20 * 1024 * 1024;
   const httpBase = (csHttpBase || ctx.account.httpUrl).replace(/\/$/, "");
 
-
   if (mediaPaths && mediaPaths.length > 0) {
+    ctx.log?.info(`handleClawkeInbound: httpBase=${csHttpBase}, relUrls=${JSON.stringify(mediaRelativeUrls)}, paths=${JSON.stringify(mediaPaths)}`);
+
     // Try reading files from local disk (works when CS and GW are co-located)
     const localPaths = mediaPaths.filter(p => fs.existsSync(p));
     if (localPaths.length > 0) {
@@ -520,7 +561,7 @@ async function handleClawkeInbound(
     // P1-1.1: Typing 指示器 — AI 开始回复前通知客户端显示"正在思考..."
     typing: {
       start: () => sendToClawkeServer({
-        type: "agent_typing",
+        type: GatewayMessageType.AgentTyping,
         to: clawkeTo,
         account_id: ctx.accountId,
         conversation_id: senderId,
@@ -575,7 +616,7 @@ async function handleClawkeInbound(
           if (replyText.length > lastSentLength) {
             const delta = replyText.slice(lastSentLength);
             sendToClawkeServer({
-              type: "agent_text_delta",
+              type: GatewayMessageType.AgentTextDelta,
               message_id: streamMsgId,
               delta,
               to: clawkeTo,
@@ -585,7 +626,7 @@ async function handleClawkeInbound(
           }
 
           sendToClawkeServer({
-            type: "agent_text_done",
+            type: GatewayMessageType.AgentTextDone,
             message_id: streamMsgId,
             fullText: replyText,
             to: clawkeTo,
@@ -600,7 +641,7 @@ async function handleClawkeInbound(
         } else if (replyText.trim()) {
           // 没有流式输出（fallback），直接发完整文本
           sendToClawkeServer({
-            type: "agent_text",
+            type: GatewayMessageType.AgentText,
             message_id: streamMsgId,
             text: replyText,
             to: clawkeTo,
@@ -617,8 +658,8 @@ async function handleClawkeInbound(
         // 发送媒体附件
         for (const mediaUrl of mediaList) {
           sendToClawkeServer({
-            type: "agent_media",
-            message_id: `reply_${Date.now()}`,
+            type: GatewayMessageType.AgentMedia,
+            message_id: streamMsgId,
             mediaUrl,
             to: clawkeTo,
             account_id: ctx.accountId,
@@ -657,7 +698,7 @@ async function handleClawkeInbound(
     if (last && !('endTime' in last)) {
       const durationMs = Date.now() - last.startTime;
       sendToClawkeServer({
-        type: "agent_tool_result",
+        type: GatewayMessageType.AgentToolResult,
         message_id: streamMsgId,
         toolCallId: last.id,
         toolName: last.name,
@@ -693,7 +734,7 @@ async function handleClawkeInbound(
           // 结束上一段流式（如果有）
           if (hasStreamedAny) {
             sendToClawkeServer({
-              type: "agent_text_done",
+              type: GatewayMessageType.AgentTextDone,
               message_id: streamMsgId,
               fullText: lastFullText,
               to: clawkeTo,
@@ -713,7 +754,7 @@ async function handleClawkeInbound(
           if (text.length > lastSentLength) {
             const delta = text.slice(lastSentLength);
             sendToClawkeServer({
-              type: "agent_text_delta",
+              type: GatewayMessageType.AgentTextDelta,
               message_id: streamMsgId,
               delta,
               to: clawkeTo,
@@ -736,7 +777,7 @@ async function handleClawkeInbound(
           if (text.length > lastThinkingLength) {
             const delta = text.slice(lastThinkingLength);
             sendToClawkeServer({
-              type: "agent_thinking_delta",
+              type: GatewayMessageType.AgentThinkingDelta,
               message_id: thinkingMsgId,
               delta,
               to: clawkeTo,
@@ -751,7 +792,7 @@ async function handleClawkeInbound(
         onReasoningEnd: () => {
           if (hasStreamedThinking) {
             sendToClawkeServer({
-              type: "agent_thinking_done",
+              type: GatewayMessageType.AgentThinkingDone,
               message_id: thinkingMsgId,
               to: clawkeTo,
               account_id: ctx.accountId,
@@ -768,7 +809,7 @@ async function handleClawkeInbound(
           const toolCallId = `${streamMsgId}_tool_${++toolCallCounter}`;
           toolCalls.push({ name: toolName, startTime: Date.now(), id: toolCallId });
           sendToClawkeServer({
-            type: "agent_tool_call",
+            type: GatewayMessageType.AgentToolCall,
             message_id: streamMsgId,
             toolCallId,
             toolName,
@@ -779,8 +820,8 @@ async function handleClawkeInbound(
         // P1-1.4: 上下文压缩通知 — 长对话上下文窗口满时通知客户端
         onCompactionStart: () => {
           sendToClawkeServer({
-            type: "agent_status",
-            status: "compacting",
+            type: GatewayMessageType.AgentStatus,
+            status: AgentStatus.Compacting,
             message_id: streamMsgId,
             to: clawkeTo,
             account_id: ctx.accountId,
@@ -789,8 +830,8 @@ async function handleClawkeInbound(
         },
         onCompactionEnd: () => {
           sendToClawkeServer({
-            type: "agent_status",
-            status: "thinking",
+            type: GatewayMessageType.AgentStatus,
+            status: AgentStatus.Thinking,
             message_id: streamMsgId,
             to: clawkeTo,
             account_id: ctx.accountId,
@@ -818,7 +859,7 @@ async function handleClawkeInbound(
   // 发送本轮工具统计摘要给 Clawke Server（用于 Dashboard）
   if (toolCalls.length > 0) {
     sendToClawkeServer({
-      type: "agent_turn_stats",
+      type: GatewayMessageType.AgentTurnStats,
       message_id: streamMsgId,
       toolCallCount: toolCalls.length,
       tools: toolCalls.map((t) => t.name),
@@ -829,19 +870,19 @@ async function handleClawkeInbound(
 
   ctx.log?.info(`Dispatch complete: queuedFinal=${queuedFinal}, replies=${counts.final}, tools=${toolCalls.length}`);
 
-  // 兜底：AI 没有产生任何回复（NO_REPLY 被静默过滤） → 发送友好引导
+  // 兜底：AI 没有产生任何回复（NO_REPLY 被静默过滤）
   if (!hasStreamedAny && counts.final === 0) {
     if (lastError) {
       ctx.log?.error(`AI silent due to LLM error. Sending error to client: ${lastError}`);
     } else {
-      ctx.log?.info(`AI silent with no error (0 tokens generated). Sending fallback reply.`);
+      ctx.log?.warn(`AI silent with no error (0 tokens generated). Session may have been busy or LLM returned empty.`);
     }
     const fallbackText = lastError 
-      ? `请求大模型接口失败：${(lastError as Error).message}` 
-      : "嗯，能再详细说一下吗？😊";
+      ? `⚠️ 请求大模型接口失败：${(lastError as Error).message}` 
+      : "⚠️ AI 未能生成回复，请重试。如果问题持续出现，尝试发送 /new 开始新会话。";
       
     sendToClawkeServer({
-      type: "agent_text",
+      type: GatewayMessageType.AgentText,
       message_id: streamMsgId,
       text: fallbackText,
       to: clawkeTo,

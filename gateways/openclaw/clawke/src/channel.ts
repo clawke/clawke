@@ -1,5 +1,6 @@
 import type { ChannelPlugin } from "openclaw/plugin-sdk";
 import { clawkeConfig, type ResolvedClawkeAccount } from "./config.js";
+import { GatewayMessageType } from "./protocol.js";
 
 export const clawkePlugin: ChannelPlugin<ResolvedClawkeAccount> = {
   id: "clawke",
@@ -33,7 +34,7 @@ export const clawkePlugin: ChannelPlugin<ResolvedClawkeAccount> = {
       console.log(`[Clawke-sendText] ⚡ CALLED: to=${ctx.to}, conversation_id=${conversationId}, text=${ctx.text?.slice(0, 60)}`);
       const { sendToClawkeServer } = await import("./gateway.js");
       sendToClawkeServer({
-        type: "agent_text",
+        type: GatewayMessageType.AgentText,
         message_id: `msg_${Date.now()}`,
         text: ctx.text,
         to: ctx.to,
@@ -45,7 +46,7 @@ export const clawkePlugin: ChannelPlugin<ResolvedClawkeAccount> = {
     sendMedia: async (ctx) => {
       const { sendToClawkeServer } = await import("./gateway.js");
       sendToClawkeServer({
-        type: "agent_media",
+        type: GatewayMessageType.AgentMedia,
         message_id: `msg_${Date.now()}`,
         mediaUrl: ctx.mediaUrl,
         to: ctx.to,
