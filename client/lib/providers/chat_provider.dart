@@ -242,9 +242,9 @@ class WsMessageHandler with WidgetsBindingObserver {
   }
 
   void sendAbort() {
-    final convId = _ref.read(selectedConversationIdProvider) ?? 'default';
-    // 使用流式期间记录的 accountId（如 "OpenClaw"），确保 abort 能路由到正确的 upstream
-    final accountId = _streamingAccountId ?? 'default';
+    final conv = _ref.read(selectedConversationProvider)!;
+    final convId = conv.conversationId;
+    final accountId = conv.accountId;
 
     _ws.sendJson({
       'event_type': 'abort',

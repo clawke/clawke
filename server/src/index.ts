@@ -270,20 +270,12 @@ async function main() {
       configStore,
     }));
     registry.register('abort', createAbortHandler({
-      forwardToUpstream: (_clientAccountId: string, msg: unknown) => {
+      forwardToUpstream: (accountId: string, msg: unknown) => {
         const m = msg as Record<string, unknown>;
-        // 使用实际已连接的 Gateway accountId（如 "OpenClaw"），
-        // 而非客户端 accountId（"default"）。
-        // 客户端 abort event 的 ctx.accountId 是 "default"，
-        // 但 Gateway WebSocket 注册在 "OpenClaw" 下，用 "default" 找不到连接。
-        const gatewayAccounts = getConnectedAccountIds();
-        if (gatewayAccounts.length === 0) {
-          console.warn('[Gateway] ⚠️  No upstream gateway connected, cannot forward abort');
-          return;
-        }
-        const gatewayAccountId = gatewayAccounts[0];
-        const sessionKey = (m.conversation_id as string) || gatewayAccountId;
-        sendToOpenClaw(gatewayAccountId, { action: 'chat.abort', sessionKey });
+        const conversationId = (m.conversation_id as string) || '';
+        // 客户端已从 conversation 记录取正确的 accountId（如 "OpenClaw"），
+        // 格式必须匹配 Gateway 的 InboundMessageType.Abort = "abort"
+        sendToOpenClaw(accountId, { type: 'abort', conversation_id: conversationId });
       },
       messageRouter,
     }));

@@ -9,3 +9,11 @@ final conversationListProvider = StreamProvider<List<Conversation>>((ref) {
 
 /// 当前选中的会话 ID
 final selectedConversationIdProvider = StateProvider<String?>((ref) => null);
+
+/// 当前选中的会话对象（从 conversationList + selectedId 派生）
+final selectedConversationProvider = Provider<Conversation?>((ref) {
+  final convId = ref.watch(selectedConversationIdProvider);
+  if (convId == null) return null;
+  final conversations = ref.watch(conversationListProvider).valueOrNull;
+  return conversations?.where((c) => c.conversationId == convId).firstOrNull;
+});

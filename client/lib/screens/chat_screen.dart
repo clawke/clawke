@@ -205,10 +205,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final quoteId = editingMsg == null ? replyingTo?.messageId : null;
     final repo = ref.read(messageRepositoryProvider);
 
-    // 从 conversations 表查出真正的 accountId（新会话的 convId 是 UUID，不等于 accountId）
-    final convRepo = ref.read(conversationRepositoryProvider);
-    final conv = await convRepo.getConversation(convId);
-    final accountId = conv?.accountId ?? convId;
+    // 从当前会话对象取 accountId（convId 是 UUID，不等于 accountId）
+    final conv = ref.read(selectedConversationProvider)!;
+    final accountId = conv.accountId;
 
     // ── 立即清空 UI 状态（防重入 + 按钮立刻切换为 Stop）──
     ref.read(stagedAttachmentsProvider.notifier).clear();
@@ -486,10 +485,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               ),
               tooltip: context.l10n.conversationSettings,
               onPressed: () {
-                final conversations = ref.read(conversationListProvider).valueOrNull;
-                final conv = conversations
-                    ?.where((c) => c.conversationId == convId)
-                    .firstOrNull;
+                final conv = ref.read(selectedConversationProvider);
                 if (conv != null) {
                   ConversationSettingsSheet.show(
                     context,
@@ -522,13 +518,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (convId == null) {
       return const Text('Clawke');
     }
-    final conversationsAsync = ref.watch(conversationListProvider);
-    final name = conversationsAsync.valueOrNull
-        ?.where((c) => c.conversationId == convId)
-        .map((c) => c.name)
-        .firstOrNull;
+    final conv = ref.watch(selectedConversationProvider);
     return Text(
-      name ?? convId,
+      conv?.name ?? convId,
       overflow: TextOverflow.ellipsis,
     );
   }

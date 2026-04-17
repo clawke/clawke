@@ -53,9 +53,11 @@ const sessionModels = new Map<string, string>();
 // key = senderId (即 conversation_id)，value = 上一次 dispatch 的 Promise
 const activeDispatches = new Map<string, Promise<void>>();
 
-// 已中止的 session 集合：abort 时标记，排队中的消息 await 结束后检查此标记，
-// 若已标记则跳过执行，避免 abort 后排队消息自动执行。
-const cancelledSessions = new Set<string>();
+// Abort 代数计数器：每次 abort 递增，排队消息入队时快照当前代数，
+// await 结束后比较代数，若有变化说明期间发生了 abort，跳过执行。
+// 相比 boolean Set，generation counter 解决了以下竞态条件：
+//   abort → 新消息到达（清除标记）→ 旧排队消息 await 结束（标记已被清除，无法识别 abort）
+const abortGenerations = new Map<string, number>();
 
 /** 从 OpenClaw 配置中提取可用模型列表 */
 function getAvailableModels(ctx: ChannelGatewayContext<ResolvedClawkeAccount>): string[] {
@@ -209,8 +211,8 @@ export async function startClawkeGateway(
             ctx.log?.info(`📥 Inbound message: ${text.slice(0, 80)}`);
             // 串行队列：同 session 的消息按序执行，不并发
             const senderId = msg.conversation_id || "clawke_user";
-            // 新消息到达时清除 cancelled 标记（用户主动发了新消息，说明想继续对话）
-            cancelledSessions.delete(senderId);
+            // 快照当前 abort 代数（入队时刻的值）
+            const myAbortGen = abortGenerations.get(senderId) ?? 0;
             const prevDispatch = activeDispatches.get(senderId);
             const thisDispatch = (async () => {
               if (prevDispatch) {
@@ -225,10 +227,10 @@ export async function startClawkeGateway(
                 });
                 // 等待前一个 dispatch 完成
                 await prevDispatch.catch(() => {});
-                // abort 后检查：如果会话已被取消，跳过执行
-                if (cancelledSessions.has(senderId)) {
-                  ctx.log?.info(`🚫 Session ${senderId} was cancelled, dropping queued message: ${text.slice(0, 40)}`);
-                  cancelledSessions.delete(senderId);
+                // abort 代数检查：如果入队后发生过 abort，跳过执行
+                const currentGen = abortGenerations.get(senderId) ?? 0;
+                if (currentGen > myAbortGen) {
+                  ctx.log?.info(`🚫 Session ${senderId} aborted (gen ${myAbortGen}→${currentGen}), dropping queued message: ${text.slice(0, 40)}`);
                   return;
                 }
                 ctx.log?.info(`▶️  Session ${senderId} idle, executing queued message: ${text.slice(0, 40)}`);
@@ -246,11 +248,12 @@ export async function startClawkeGateway(
           } else if (msg.type === InboundMessageType.Abort) {
             const abortSenderId = msg.conversation_id || "clawke_user";
             ctx.log?.info(`📥 Abort request: conversation=${abortSenderId}`);
-            // 标记 session 为已取消，阻止排队中的消息在 await 后自动执行
-            cancelledSessions.add(abortSenderId);
-            // 清除 activeDispatches（排队消息已经 captured 了 prevDispatch 引用，
-            // 但后续新消息不需要再等这个被取消的链了）
-            activeDispatches.delete(abortSenderId);
+            // 递增 abort 代数：排队消息入队时快照了旧代数，
+            // await 后比较发现代数变化即可判断发生过 abort
+            abortGenerations.set(abortSenderId, (abortGenerations.get(abortSenderId) ?? 0) + 1);
+            // 注意：不删除 activeDispatches。被 abort 的 dispatch 仍在运行中，
+            // 新消息需要排队等它完成（被 abort 杀死后会 resolve），
+            // 否则新消息跳过队列直接执行，导致并发冲突。
             // 通过发送合成的 /abort 消息来复用 OpenClaw 完整的中止逻辑：
             // - tryFastAbortFromMessage 会清理消息队列、终止子 Agent、更新会话状态
             // - 比直接调用 replyRunRegistry.abort() 更可靠（不会留下"僵尸子进程"）

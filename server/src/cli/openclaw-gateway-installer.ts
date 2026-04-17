@@ -6,7 +6,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { execSync } from 'child_process';
+import { execSync, spawnSync } from 'child_process';
 
 const OPENCLAW_HOME = path.join(os.homedir(), '.openclaw');
 const OPENCLAW_CONFIG = path.join(OPENCLAW_HOME, 'openclaw.json');
@@ -114,18 +114,30 @@ function mergeOpenClawConfig(): void {
 }
 
 function restartOpenClaw(): void {
+  // 检测 openclaw 命令是否存在（远程部署场景下本机无此命令）
+  const which = spawnSync('which openclaw', { shell: true });
+  if (which.status !== 0) {
+    console.log('[clawke] ℹ️  openclaw not found locally (remote server scenario).');
+    console.log('  Please restart OpenClaw on the remote server:');
+    console.log('    openclaw gateway restart');
+    return;
+  }
+
   console.log('[clawke] 🔄 Restarting OpenClaw...');
   try {
-    execSync('npx openclaw gateway restart', {
+    const result = spawnSync('openclaw gateway restart', {
+      shell: true,
       stdio: 'inherit',
-      timeout: 30000,
     });
+    if (result.status !== 0) {
+      throw new Error(`exit code ${result.status}`);
+    }
     console.log('[clawke] ✅ Gateway installed and OpenClaw restarted');
   } catch {
     console.log('');
     console.log('[clawke] ⚠️  Could not restart OpenClaw automatically.');
     console.log('  Please restart manually:');
-    console.log('    npx openclaw gateway restart');
+    console.log('    openclaw gateway restart');
   }
 }
 
