@@ -236,6 +236,18 @@ export function translateToCup(
       };
     }
 
+    case 'agent_status':
+      return {
+        cupMessages: [{
+          message_id: msgId,
+          account_id: accountId,
+          conversation_id: msg.conversation_id,
+          payload_type: 'agent_status',
+          status: msg.status || 'thinking',
+        }],
+        metadata: {},
+      };
+
     default:
       console.warn('[Gateway] Unknown upstream message type:', msg.type);
       return null;

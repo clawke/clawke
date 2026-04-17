@@ -92,6 +92,7 @@ export function createUserMessageHandler(deps: UserMessageDeps) {
           if (convConfig.skillMode) upstreamMsg.skill_mode = convConfig.skillMode as 'priority' | 'exclusive';
           if (convConfig.systemPrompt) upstreamMsg.system_prompt = convConfig.systemPrompt;
           if (convConfig.workDir) upstreamMsg.work_dir = convConfig.workDir;
+          console.log(`[Tunnel] ⚙️  Config injected: conv=${conversationId} model=${convConfig.modelId || 'default'} skills=${convConfig.skills || 'none'} skillMode=${convConfig.skillMode || 'default'} workDir=${convConfig.workDir || 'default'} sysPrompt=${convConfig.systemPrompt ? convConfig.systemPrompt.slice(0, 40) + '...' : 'none'}`);
         }
       }
 
@@ -102,12 +103,14 @@ export function createUserMessageHandler(deps: UserMessageDeps) {
     // 3. 日志
     const msgType = data.type || 'text';
     const clientMsgId = ctx.payload.context?.client_msg_id || '';
+    const textContent = ((data.content || '') as string).slice(0, 60);
+    const mode = mockHandler ? 'mock' : 'openclaw';
     if (msgType === 'image') {
-      console.log(`[Tunnel] 🖼️  Image message: msgId=${clientMsgId}`);
+      console.log(`[Tunnel] 🖼️  Image: msgId=${clientMsgId} conv=${conversationId} account=${ctx.accountId} mode=${mode}`);
     } else if (msgType === 'file') {
-      console.log(`[Tunnel] 📎 File message: msgId=${clientMsgId}`);
+      console.log(`[Tunnel] 📎 File: msgId=${clientMsgId} conv=${conversationId} account=${ctx.accountId} mode=${mode}`);
     } else {
-      console.log(`[Tunnel] 💬 Text message: msgId=${clientMsgId}, type=${msgType}`);
+      console.log(`[Tunnel] 💬 Text: msgId=${clientMsgId} conv=${conversationId} account=${ctx.accountId} mode=${mode} text="${textContent}"`);
     }
   };
 }

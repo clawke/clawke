@@ -7,6 +7,7 @@
 import type { OpenClawMessage } from '../types/openclaw.js';
 import type { TranslatedResult, CupEncodedMessage } from '../translator/cup-encoder.js';
 import type { CupV2Handler } from '../protocol/cup-v2-handler.js';
+import type { ConversationStore } from '../store/conversation-store.js';
 
 /** 统计收集器接口（解耦具体实现） */
 export interface StatsCollectorLike {
@@ -34,6 +35,7 @@ export class MessageRouter {
     private cupHandler: CupV2Handler,
     private stats: StatsCollectorLike,
     private broadcast: BroadcastFn,
+    private conversationStore?: ConversationStore,
   ) {}
 
   /** 标记会话为已中止（以 conversationId 为 key） */
@@ -54,7 +56,25 @@ export class MessageRouter {
    * 处理上游消息
    */
   handleUpstreamMessage(msg: OpenClawMessage, accountId: string): void {
-    const conversationId = msg.conversation_id || accountId;
+    // 入口日志：记录原始上游消息摘要
+    const textPreview = ((msg as any).text || (msg as any).delta || '').slice(0, 60);
+    console.log(`[MessageRouter] ⬅️  Incoming: type=${msg.type} msgId=${msg.message_id || ''} conv=${msg.conversation_id || ''} account=${accountId}${textPreview ? ` text="${textPreview}"` : ''}`);
+
+    let conversationId = msg.conversation_id || accountId;
+
+    // 会话路由兜底：conversationId 不是已知会话时，回退到最近活跃的会话
+    // 解决 sendText 路径传入 peer 标识符（如 "clawke_user"）导致消息成为 DB 孤儿的问题
+    if (this.conversationStore) {
+      const existing = this.conversationStore.get(conversationId);
+      if (!existing) {
+        const allConvs = this.conversationStore.list();
+        if (allConvs.length > 0) {
+          const fallback = allConvs[0].id; // list() 按 updated_at DESC 排序
+          console.log(`[MessageRouter] Unknown conversation="${conversationId}", re-routing to default="${fallback}"`);
+          conversationId = fallback;
+        }
+      }
+    }
 
     // 中止拦截（以 conversationId 为 key）
     if (this.abortedSessions.has(conversationId)) {
@@ -94,6 +114,7 @@ export class MessageRouter {
       const { serverMsgId, seq, ts } = this.cupHandler.storeAgentMessage(
         accountId, conversationId, fullText, type, upstreamMsgId
       );
+      console.log(`[MessageRouter] 💾 Stored: serverMsgId=${serverMsgId} seq=${seq} conv=${conversationId} type=${type} len=${fullText.length}`);
       // 用实际 serverMsgId 和 seq 替换 cupMessages 中的占位
       for (const m of cupMessages) {
         if (m.payload_type === 'text_done' || m.payload_type === 'ui_component') {

@@ -65,6 +65,13 @@ export function startOpenClawListener(
         return;
       }
 
+      // 上行消息入口日志：记录 Gateway 发来的每条消息摘要
+      const pType = payload.type || '?';
+      const pMsgId = (payload.message_id as string) || '';
+      const pConvId = (payload.conversation_id as string) || '';
+      const pText = ((payload.text || payload.delta || '') as string).slice(0, 60);
+      console.log(`[Gateway] ⬆️  Upstream msg: type=${pType} msgId=${pMsgId} conv=${pConvId} account=${accountId}${pText ? ` text="${pText}"` : ''}`);
+
       messageHandler(payload);
     });
 

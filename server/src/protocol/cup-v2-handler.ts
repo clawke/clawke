@@ -53,6 +53,7 @@ export class CupV2Handler {
     const { serverMsgId, seq } = this.messageStore.append(
       accountId, conversationId, clientMsgId, 'local_user', type, content
     );
+    console.log(`[CUP] 📝 User msg stored: serverMsgId=${serverMsgId} seq=${seq} conv=${conversationId} clientMsgId=${clientMsgId} type=${type}`);
 
     return {
       payload_type: 'ctrl',

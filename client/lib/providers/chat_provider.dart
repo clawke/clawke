@@ -318,6 +318,15 @@ class WsMessageHandler with WidgetsBindingObserver {
         debugPrint('[WsMessageHandler] 收到 conv_changed，同步会话列表');
         _ref.read(conversationRepositoryProvider).syncFromServer();
         return;
+      case 'agent_status':
+        final status = json['status'] as String? ?? '';
+        final convId = json['conversation_id'] as String?;
+        debugPrint('[WsMessageHandler] 🔄 agent_status: status=$status, conv=$convId');
+        // queued 状态：消息已入队等待前一个请求完成，保持等待指示
+        if (status == 'queued' && convId != null) {
+          _ref.read(waitingForReplyProvider.notifier).state = convId;
+        }
+        return;
     }
 
     // thinking 处理
