@@ -53,6 +53,10 @@ const sessionModels = new Map<string, string>();
 // key = senderId (即 conversation_id)，value = 上一次 dispatch 的 Promise
 const activeDispatches = new Map<string, Promise<void>>();
 
+// 已中止的 session 集合：abort 时标记，排队中的消息 await 结束后检查此标记，
+// 若已标记则跳过执行，避免 abort 后排队消息自动执行。
+const cancelledSessions = new Set<string>();
+
 /** 从 OpenClaw 配置中提取可用模型列表 */
 function getAvailableModels(ctx: ChannelGatewayContext<ResolvedClawkeAccount>): string[] {
   try {
@@ -205,6 +209,8 @@ export async function startClawkeGateway(
             ctx.log?.info(`📥 Inbound message: ${text.slice(0, 80)}`);
             // 串行队列：同 session 的消息按序执行，不并发
             const senderId = msg.conversation_id || "clawke_user";
+            // 新消息到达时清除 cancelled 标记（用户主动发了新消息，说明想继续对话）
+            cancelledSessions.delete(senderId);
             const prevDispatch = activeDispatches.get(senderId);
             const thisDispatch = (async () => {
               if (prevDispatch) {
@@ -219,6 +225,12 @@ export async function startClawkeGateway(
                 });
                 // 等待前一个 dispatch 完成
                 await prevDispatch.catch(() => {});
+                // abort 后检查：如果会话已被取消，跳过执行
+                if (cancelledSessions.has(senderId)) {
+                  ctx.log?.info(`🚫 Session ${senderId} was cancelled, dropping queued message: ${text.slice(0, 40)}`);
+                  cancelledSessions.delete(senderId);
+                  return;
+                }
                 ctx.log?.info(`▶️  Session ${senderId} idle, executing queued message: ${text.slice(0, 40)}`);
               }
               await handleClawkeInbound(ctx, msg);
@@ -232,7 +244,13 @@ export async function startClawkeGateway(
                 }
               });
           } else if (msg.type === InboundMessageType.Abort) {
-            ctx.log?.info(`📥 Abort request: conversation=${msg.conversation_id}`);
+            const abortSenderId = msg.conversation_id || "clawke_user";
+            ctx.log?.info(`📥 Abort request: conversation=${abortSenderId}`);
+            // 标记 session 为已取消，阻止排队中的消息在 await 后自动执行
+            cancelledSessions.add(abortSenderId);
+            // 清除 activeDispatches（排队消息已经 captured 了 prevDispatch 引用，
+            // 但后续新消息不需要再等这个被取消的链了）
+            activeDispatches.delete(abortSenderId);
             // 通过发送合成的 /abort 消息来复用 OpenClaw 完整的中止逻辑：
             // - tryFastAbortFromMessage 会清理消息队列、终止子 Agent、更新会话状态
             // - 比直接调用 replyRunRegistry.abort() 更可靠（不会留下"僵尸子进程"）
