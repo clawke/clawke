@@ -62,6 +62,7 @@ scripts/
 client/test_download.dart
 
 # Private (local only)
+client/
 internal-docs/
 tests/
 
