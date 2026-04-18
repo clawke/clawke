@@ -67,7 +67,8 @@ clawke server start        # Start Clawke Server
 Prerequisites: [Node.js](https://nodejs.org/) >= 18, [Flutter](https://flutter.dev/) >= 3.x (for client)
 
 ```bash
-cd server
+git clone https://github.com/clawke/clawke.git
+cd clawke/server
 npm install                           # Installs dependencies + compiles TypeScript
 npx clawke gateway install             # Auto-detect and install gateway plugin
 npx clawke server start                # Start Clawke Server
@@ -75,10 +76,8 @@ npx clawke server start                # Start Clawke Server
 
 The server will:
 
-1. Copy config template to `~/.clawke/clawke.json` (first run)
-2. Initialize SQLite database at `~/.clawke/data/clawke.db`
-3. Start WebSocket server on port 8765 (client) and 8766 (upstream)
-4. Start HTTP/media server on port 8781
+1. Start WebSocket server on port 8765 (client) and 8766 (upstream)
+2. Start HTTP/media server on port 8781
 
 ### Build from Source
 

@@ -67,7 +67,8 @@ clawke server start        # 启动 Clawke 服务
 前置条件：[Node.js](https://nodejs.org/) >= 18，[Flutter](https://flutter.dev/) >= 3.x（客户端）
 
 ```bash
-cd server
+git clone https://github.com/clawke/clawke.git
+cd clawke/server
 npm install                              # 安装依赖 + 编译 TypeScript
 npx clawke gateway install                # 自动检测并安装 Gateway 插件
 npx clawke server start                   # 启动 Clawke 服务
@@ -75,10 +76,8 @@ npx clawke server start                   # 启动 Clawke 服务
 
 服务端会：
 
-1. 首次运行时将配置模板拷贝到 `~/.clawke/clawke.json`
-2. 在 `~/.clawke/data/clawke.db` 初始化 SQLite 数据库
-3. 启动 WebSocket 服务（8765 端口：客户端，8766 端口：上行）
-4. 启动 HTTP/媒体服务（8781 端口）
+1. 启动 WebSocket 服务（8765 端口：客户端，8766 端口：上行）
+2. 启动 HTTP/媒体服务（8781 端口）
 
 ### 从源码构建
 
