@@ -4,6 +4,32 @@
 
 <!-- CHANGELOG_START -->
 
+## v1.1.5 (2026-04-18)
+
+**[New Feature]** One-click installation and unified CLI commands.
+- Introduced `curl` based one-click install script for easy setup.
+- Added `npx clawke server <start|stop|restart|status>` commands for better server management.
+- Enabled password manager auto-fill hints for login and signup inputs on mobile.
+
+**[New Feature]** AI typing status indicators.
+- Added smooth spinner and status text to indicate when the AI is processing or typing.
+- Built-in bilingual changelog generation workflow.
+
+**[Enhancement]** Gateway pipeline optimizations.
+- Upgraded gateway protocol handling with detailed delivery tracking and message compaction.
+- Centralized logger and comprehensive state documentation for gateways.
+
+**[Bug Fix]** Comprehensive abort (stop generation) pipeline overhaul.
+- Fixed 3-layer abort synchronization across client, server, and gateway.
+- Cancel queued messages immediately upon abort to prevent them from executing later.
+- Fixed issue where AI would incorrectly "remember" and refer to the user's aborted requests.
+- Corrected account ID forwarding during abort operations.
+
+**[Bug Fix]** Fixed concurrent message and delivery state issues.
+- Fixed an issue where the LLM becomes unresponsive when multiple tasks are sent concurrently.
+- Fixed duplicate messages bug by implementing `disableBlockStreaming` constraints.
+- Resolved a sequence boundary error where the client would miss messages if `client_last_seq > server_currentSeq`.
+
 ## v1.1.3 (2026-04-15)
 
 **[New Feature]** Multi-session support with per-conversation AI configuration.

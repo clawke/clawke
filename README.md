@@ -112,6 +112,14 @@ clawke/
 ## Changelog
 
 <!-- README_CHANGELOG_START -->
+### v1.1.5 (2026-04-18)
+
+**[New Feature]** One-click installation and unified CLI commands.  
+**[New Feature]** AI typing status indicators.  
+**[Enhancement]** Gateway pipeline optimizations.  
+**[Bug Fix]** Comprehensive abort (stop generation) pipeline overhaul.  
+**[Bug Fix]** Fixed concurrent message and delivery state issues.  
+
 ### v1.1.3 (2026-04-15)
 
 **[New Feature]** Multi-session support with per-conversation AI configuration.  
