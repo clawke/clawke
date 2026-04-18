@@ -451,27 +451,26 @@ clone_repo() {
             log_info "Existing installation found, updating..."
             cd "$INSTALL_DIR"
 
-            local autostash_ref=""
+            local did_stash=false
             if [ -n "$(git status --porcelain)" ]; then
                 local stash_name
                 stash_name="clawke-install-autostash-$(date -u +%Y%m%d-%H%M%S)"
                 log_info "Local changes detected, stashing before update..."
                 git stash push --include-untracked -m "$stash_name"
-                autostash_ref="$(git rev-parse --verify refs/stash)"
+                did_stash=true
             fi
 
             git fetch origin
             git checkout "$BRANCH"
             git pull --ff-only origin "$BRANCH"
 
-            if [ -n "$autostash_ref" ]; then
+            if [ "$did_stash" = true ]; then
                 log_info "Restoring local changes..."
-                if git stash apply "$autostash_ref"; then
-                    git stash drop "$autostash_ref" > /dev/null
+                if git stash pop; then
                     log_warn "Local changes restored on top of updated codebase."
                 else
                     log_error "Restoring local changes failed. Your changes are in git stash."
-                    log_info "Resolve manually: git stash apply $autostash_ref"
+                    log_info "Resolve manually: cd $INSTALL_DIR && git stash pop"
                 fi
             fi
         else
