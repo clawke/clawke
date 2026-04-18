@@ -284,6 +284,24 @@ Flutter Client ←ws:8765→ Clawke Server ←ws:8766→ OpenClaw Gateway（192.
 - **🔴 线上环境红线**：**严禁直接 SSH 到线上生产环境（3.0.151.65 等远程服务器）执行任何操作**。必须将需要执行的命令和配置内容提供给用户，由用户确认后手动执行。SCP 上传文件可以执行，但 SSH 远程执行命令（创建文件、修改配置、重启服务等）必须经用户明确授权。此规则无例外。
 - **🔴 生产数据红线**：**严禁测试代码操作 `server/data/clawke.db` 生产数据库**。测试必须通过 `:memory:` 内存数据库隔离。修改 `reset()` 等数据清理函数时，严禁重置 `globalSeq`（客户端依赖此值做增量同步）。详见「自动化测试准则」章节。
 
+## Gateway 编码规范
+
+适用于 `gateways/openclaw/clawke/src/` 下所有 TypeScript 文件。
+
+- **模块导入**：使用 ESM `import`，禁止 `require()`。Node.js 内置模块使用 `node:` 前缀：
+  ```typescript
+  // ✅ 正确
+  import { readFileSync, existsSync } from "node:fs";
+  import { join } from "node:path";
+  import { homedir } from "node:os";
+  
+  // ❌ 禁止
+  const fs = require("fs");
+  ```
+- **日志输出**：统一使用 `ctx.log?.info/error/warn`，禁止 `console.log/error`
+- **错误处理**：`catch` 中必须记录日志（`ctx.log?.error`），禁止空 `catch {}`
+- **全局状态**：模块级变量仅用于生命周期级状态（如 `ws`），每次请求入口处必须重置请求级状态
+
 ## 字体规范
 
 - **基准字体：`bodyMedium` = 16sp**，所有其他文本样式基于此按比例放大/缩小

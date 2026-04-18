@@ -662,4 +662,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get hideToken => '隐藏 Token';
+
+  @override
+  String get aiThinking => '正在思考...';
 }

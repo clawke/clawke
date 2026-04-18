@@ -682,4 +682,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get hideToken => 'Hide Token';
+
+  @override
+  String get aiThinking => 'Thinking...';
 }

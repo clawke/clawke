@@ -1339,6 +1339,12 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'隐藏 Token'**
   String get hideToken;
+
+  /// No description provided for @aiThinking.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在思考...'**
+  String get aiThinking;
 }
 
 class _AppLocalizationsDelegate

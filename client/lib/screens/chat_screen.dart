@@ -532,10 +532,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     ThinkingMessage? streamingThinking,
   ) {
     final messagesAsync = ref.watch(chatMessagesProvider(convId));
+    final activeTool = ref.watch(activeToolProvider);
+    final waiting = ref.watch(waitingForReplyProvider);
+    final isWaitingOnly = waiting == convId && streamingMsg == null && streamingThinking == null && activeTool == null;
     // hasStreaming: 是否需要显示流式气泡
     // 如果只有 streamingThinking（没有 streamingMsg），需要检查 DB 中是否已有该消息
     // 已持久化的消息由 _buildDbMessageItem 渲染 thinking 块，不需要重复显示
-    bool hasStreaming = streamingMsg != null;
+    bool hasStreaming = streamingMsg != null || activeTool != null || isWaitingOnly;
     if (!hasStreaming && streamingThinking != null) {
       // thinking-only 模式：检查 DB 中是否已有该消息
       final dbMessages = messagesAsync.valueOrNull;
@@ -1239,13 +1242,107 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     return n.toString();
   }
 
-  /// 构建流式输出区域：thinking 块 + 文本气泡
+  /// 构建工具调用状态指示器
+  /// 构建 "AI 正在思考..." 的 typing 动画气泡（方案 #9：Spinner + 文字）
+  Widget _buildTypingBubble(ColorScheme colorScheme) {
+    final bubbleColor = colorScheme.surfaceContainerLowest;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildAvatar(false),
+            const SizedBox(width: 2),
+            // 箭头 + 气泡（与正式消息一致）
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 14),
+                  child: _BubbleArrow(isUser: false, color: bubbleColor),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: bubbleColor,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: colorScheme.primary.withValues(alpha: 0.7),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        context.l10n.aiThinking,
+                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildToolCallIndicator(String toolName) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, top: 4, bottom: 4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: colorScheme.primary.withValues(alpha: 0.7),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '🔧 $toolName',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 构建流式输出区域：thinking 块 + 工具调用指示 + 文本气泡
   Widget _buildStreamingItem(
     TextMessage? streamingMsg,
     ThinkingMessage? streamingThinking,
   ) {
     final colorScheme = Theme.of(context).colorScheme;
-    final isThinkingOnly = streamingThinking != null && streamingMsg == null;
+    final activeTool = ref.watch(activeToolProvider);
+
+    // 等待中（无流式内容）→ 显示 typing 动画气泡
+    if (streamingMsg == null && streamingThinking == null && activeTool == null) {
+      return _buildTypingBubble(colorScheme);
+    }
+
+    final isThinkingOnly = streamingThinking != null && streamingMsg == null && activeTool == null;
     final bubbleColor = colorScheme.surfaceContainerLowest;
 
     // 移动端：thinking 保持原位（头像右边），正文加宽 + 箭头向上
@@ -1284,6 +1381,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 Padding(
                   padding: const EdgeInsets.only(left: 2),
                   child: _buildAvatar(false),
+                ),
+              // 工具调用指示器
+              if (activeTool != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 40),
+                  child: _buildToolCallIndicator(activeTool),
                 ),
               // 文本气泡（如果有）
               if (streamingMsg != null) ...[
@@ -1364,6 +1467,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         isStreaming: isThinkingOnly,
                       ),
                     ),
+                  // 工具调用指示器
+                  if (activeTool != null)
+                    _buildToolCallIndicator(activeTool),
                   // 文本气泡（如果有）
                   if (streamingMsg != null) ...[
                     Row(
@@ -1713,7 +1819,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 final isMyStreaming =
                     (rawMsg != null && (rawMsg.conversationId == null || rawMsg.conversationId == convId)) ||
                     (rawThink != null && (rawThink.conversationId == null || rawThink.conversationId == convId)) ||
-                    (waiting != null && waiting == convId);
+                    (waiting != null && waiting == convId) ||
+                    ref.watch(activeToolProvider) != null;
                 return IconButton.filled(
                   onPressed: connected
                       ? (isMyStreaming

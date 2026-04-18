@@ -1,4 +1,7 @@
 import WebSocket from "ws";
+import { readFileSync, existsSync, readdirSync, type Dirent } from "node:fs";
+import { join } from "node:path";
+import { homedir } from "node:os";
 import type { ChannelGatewayContext, ReplyPayload } from "openclaw/plugin-sdk";
 import { createChannelReplyPipeline } from "openclaw/plugin-sdk/channel-reply-pipeline";
 import type { ResolvedClawkeAccount } from "./config.js";
@@ -69,13 +72,10 @@ const silentDispatches = new Set<string>();
 /** 从 OpenClaw 配置中提取可用模型列表 */
 function getAvailableModels(ctx: ChannelGatewayContext<ResolvedClawkeAccount>): string[] {
   try {
-    const fs = require("fs");
-    const path = require("path");
-    const os = require("os");
-    const configPath = path.join(os.homedir(), ".openclaw", "openclaw.json");
-    if (!fs.existsSync(configPath)) return [];
+    const configPath = join(homedir(), ".openclaw", "openclaw.json");
+    if (!existsSync(configPath)) return [];
 
-    const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    const config = JSON.parse(readFileSync(configPath, "utf-8"));
     const providers = config?.models?.providers;
     if (!providers || typeof providers !== "object") return [];
 
@@ -99,19 +99,16 @@ function getAvailableModels(ctx: ChannelGatewayContext<ResolvedClawkeAccount>): 
 /** 扫描 .openclaw/workspace/skills/ 目录获取可用 Skills */
 function getAvailableSkills(): Array<{ name: string; description: string }> {
   try {
-    const fs = require("fs");
-    const path = require("path");
-    const os = require("os");
-    const skillsDir = path.join(os.homedir(), ".openclaw", "workspace", "skills");
-    if (!fs.existsSync(skillsDir)) return [];
+    const skillsDir = join(homedir(), ".openclaw", "workspace", "skills");
+    if (!existsSync(skillsDir)) return [];
 
-    const entries = fs.readdirSync(skillsDir, { withFileTypes: true });
+    const entries = readdirSync(skillsDir, { withFileTypes: true }) as Dirent[];
     const skills: Array<{ name: string; description: string }> = [];
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
-      const skillMd = path.join(skillsDir, entry.name, "SKILL.md");
-      if (!fs.existsSync(skillMd)) continue;
-      const content = fs.readFileSync(skillMd, "utf-8");
+      const skillMd = join(skillsDir, entry.name, "SKILL.md");
+      if (!existsSync(skillMd)) continue;
+      const content = readFileSync(skillMd, "utf-8");
       // Extract description from YAML frontmatter or first non-header line
       let desc = entry.name;
       const fmMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
@@ -352,12 +349,9 @@ export async function startClawkeGateway(
 /** 加载 system-prompt（Gateway 侧注入，支持热更新） */
 function loadSystemPrompt(ctx: ChannelGatewayContext<ResolvedClawkeAccount>): string {
   try {
-    const fs = require("fs");
-    const path = require("path");
-    // system-prompt.md 放在 Gateway 运行目录的 config/ 下
-    const promptPath = path.join(process.cwd(), 'config', 'system-prompt.md');
-    if (fs.existsSync(promptPath)) {
-      return fs.readFileSync(promptPath, 'utf-8').trim();
+    const promptPath = join(process.cwd(), 'config', 'system-prompt.md');
+    if (existsSync(promptPath)) {
+      return readFileSync(promptPath, 'utf-8').trim();
     }
   } catch { /* ignore */ }
   return '';
@@ -796,6 +790,7 @@ async function handleClawkeInbound(
   // 工具调用追踪
   const toolCalls: Array<{ name: string; startTime: number; id: string }> = [];
   let toolCallCounter = 0;
+  let lastSentItemTitle = "";
 
   // 结束上一个工具调用（如有），发送 agent_tool_result
   const finalizeLastTool = () => {
@@ -909,20 +904,13 @@ async function handleClawkeInbound(
             hasStreamedThinking = false;
           }
         },
-        // 工具调用开始
+        // 工具调用开始（仅追踪，不发消息 — onItemEvent 负责带 title 的通知）
         onToolStart: (payload: { name?: string; phase?: string }) => {
           finalizeLastTool();
           const toolName = payload.name || "tool";
           const toolCallId = `${streamMsgId}_tool_${++toolCallCounter}`;
           toolCalls.push({ name: toolName, startTime: Date.now(), id: toolCallId });
-          _sendToClawkeServer({
-            type: GatewayMessageType.AgentToolCall,
-            message_id: streamMsgId,
-            toolCallId,
-            toolName,
-            account_id: ctx.accountId,
-            conversation_id: senderId,
-          });
+          ctx.log?.info(`🔧 onToolStart: name=${toolName}, phase=${payload.phase}, id=${toolCallId}`);
         },
         // P1-1.4: 上下文压缩通知 — 长对话上下文窗口满时通知客户端
         onCompactionStart: () => {
@@ -941,6 +929,41 @@ async function handleClawkeInbound(
             status: AgentStatus.Thinking,
             message_id: streamMsgId,
             to: clawkeTo,
+            account_id: ctx.accountId,
+            conversation_id: senderId,
+          });
+        },
+        // P0-0.3: 工具执行详情 — 提供 exec 的具体指令/标题
+        // SDK 的 onItemEvent 含 title（如 "exec fetch url, `curl ...`"）
+        // kind=tool 和 kind=command 内容相同，用 lastSentItemTitle 去重
+        onItemEvent: (payload: {
+          itemId?: string; kind?: string; title?: string; name?: string;
+          phase?: string; status?: string; summary?: string; progressText?: string;
+        }) => {
+          if (payload.phase !== "start") return;
+          const rawTitle = payload.title || payload.name || "";
+          if (!rawTitle) return;
+          // 提取干净的显示标题：截取反引号内的命令部分
+          let displayTitle = rawTitle;
+          const backtickMatch = rawTitle.match(/`([^`]+)`/);
+          if (backtickMatch) {
+            const cmd = backtickMatch[1];
+            displayTitle = cmd.length > 60 ? cmd.slice(0, 57) + "..." : cmd;
+          } else {
+            displayTitle = rawTitle.replace(/^(exec|command)\s+/i, "");
+            if (displayTitle.length > 60) displayTitle = displayTitle.slice(0, 57) + "...";
+          }
+          // 去重：同一个命令不重复发送
+          if (displayTitle === lastSentItemTitle) return;
+          lastSentItemTitle = displayTitle;
+          const lastTool = toolCalls[toolCalls.length - 1];
+          ctx.log?.info(`📋 onItemEvent: title=${displayTitle}`);
+          _sendToClawkeServer({
+            type: GatewayMessageType.AgentToolCall,
+            message_id: streamMsgId,
+            toolCallId: lastTool?.id || `${streamMsgId}_item_${Date.now()}`,
+            toolName: lastTool?.name || payload.name || "tool",
+            toolTitle: displayTitle,
             account_id: ctx.accountId,
             conversation_id: senderId,
           });

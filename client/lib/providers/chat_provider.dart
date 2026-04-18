@@ -30,6 +30,9 @@ final streamingThinkingProvider = StateProvider<ThinkingMessage?>(
 // 存储正在等待回复的 conversationId（null = 不在等待）
 final waitingForReplyProvider = StateProvider<String?>((ref) => null);
 
+// 当前正在执行的工具名称（null = 没有工具调用中）
+final activeToolProvider = StateProvider<String?>((ref) => null);
+
 // 全局 SDUI 弹窗组件（如 Dashboard, CronList 等），通过 ref.listen 在 UI 顶层展示
 final globalSduiProvider = StateProvider<SduiMessage?>((ref) => null);
 
@@ -318,6 +321,13 @@ class WsMessageHandler with WidgetsBindingObserver {
         debugPrint('[WsMessageHandler] 收到 conv_changed，同步会话列表');
         _ref.read(conversationRepositoryProvider).syncFromServer();
         return;
+      case 'typing_start':
+        final typingConvId = json['conversation_id'] as String?;
+        debugPrint('[WsMessageHandler] ⌨️ typing_start: conv=$typingConvId');
+        if (typingConvId != null) {
+          _ref.read(waitingForReplyProvider.notifier).state = typingConvId;
+        }
+        return;
       case 'agent_status':
         final status = json['status'] as String? ?? '';
         final convId = json['conversation_id'] as String?;
@@ -326,6 +336,23 @@ class WsMessageHandler with WidgetsBindingObserver {
         if (status == 'queued' && convId != null) {
           _ref.read(waitingForReplyProvider.notifier).state = convId;
         }
+        return;
+      case 'tool_call_start':
+        final toolTitle = json['tool_title'] as String? ?? '';
+        final toolName = json['tool_name'] as String? ?? 'tool';
+        // 优先显示 tool_title（具体指令如 "curl ..."），否则显示工具名
+        final displayName = toolTitle.isNotEmpty ? toolTitle : toolName;
+        // 已有丰富描述且新消息无 title → 不覆盖
+        final current = _ref.read(activeToolProvider);
+        if (current != null && toolTitle.isEmpty) return;
+        debugPrint('[WsMessageHandler] 🔧 tool_call_start: $displayName');
+        _ref.read(activeToolProvider.notifier).state = displayName;
+        return;
+      case 'tool_call_done':
+        final doneToolName = json['tool_name'] as String? ?? 'tool';
+        final durationMs = json['duration_ms'] as int? ?? 0;
+        debugPrint('[WsMessageHandler] ✅ tool_call_done: $doneToolName (${durationMs}ms)');
+        // 不清除 activeToolProvider — 保持工具指示器显示，直到 text_delta 到达
         return;
     }
 
@@ -653,7 +680,8 @@ class WsMessageHandler with WidgetsBindingObserver {
     }
     if (current == null || current.messageId != messageId) {
       // 首个 delta — 立即显示（不等 debounce）
-      _ref.read(waitingForReplyProvider.notifier).state = null;
+      // waitingForReply 不在此清除 — isWaitingOnly 会自动失效（streamingMsg != null）
+      _ref.read(activeToolProvider.notifier).state = null;  // 工具执行结束
       _streamingAccountId = accountId;
       _streamingConversationId = conversationId;
       _textBuffer = delta;
@@ -711,7 +739,7 @@ class WsMessageHandler with WidgetsBindingObserver {
     final current = _ref.read(streamingThinkingProvider);
     if (current == null || current.messageId != messageId) {
       // 首个 delta — 立即显示
-      _ref.read(waitingForReplyProvider.notifier).state = null;
+      // waitingForReply 不在此清除 — isWaitingOnly 会自动失效（streamingThinking != null）
       _thinkingBuffer = delta;
       _thinkingBufferMsgId = messageId;
       _ref.read(streamingThinkingProvider.notifier).state = ThinkingMessage(
@@ -821,6 +849,7 @@ class WsMessageHandler with WidgetsBindingObserver {
 
       // DB 写入完成后清除流式状态
       _ref.read(waitingForReplyProvider.notifier).state = null;
+      _ref.read(activeToolProvider.notifier).state = null;
       _ref.read(streamingMessageProvider.notifier).state = null;
       // 让出事件循环，等 Drift watchMessages 流通知 UI 刷新后再清 thinking → 无闪烁
       await Future<void>.delayed(Duration.zero);

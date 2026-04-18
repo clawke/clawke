@@ -222,5 +222,6 @@
   "later": "Later",
   "reLogin": "Log In Again",
   "showToken": "Show Token",
-  "hideToken": "Hide Token"
+  "hideToken": "Hide Token",
+  "aiThinking": "Thinking..."
 }

@@ -59,6 +59,7 @@ export interface OpenClawMessage {
   // tool 相关
   toolCallId?: string;
   toolName?: string;
+  toolTitle?: string;
   durationMs?: number;
   resultSummary?: string;
   error?: string;

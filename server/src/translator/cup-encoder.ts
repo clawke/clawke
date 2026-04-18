@@ -54,6 +54,18 @@ export function translateToCup(
   const msgId = msg.message_id || `msg_${Date.now()}`;
 
   switch (msg.type) {
+    case 'agent_typing': {
+      return {
+        cupMessages: [{
+          message_id: `typing_${Date.now()}`,
+          account_id: accountId,
+          payload_type: 'typing_start',
+          conversation_id: msg.conversation_id || '',
+        }],
+        metadata: {},
+      };
+    }
+
     case 'agent_text_delta': {
       const content = msg.delta || '';
       if (!content) return null;
@@ -170,6 +182,7 @@ export function translateToCup(
           message_id: `${msgId}_tool_call`,
           tool_call_id: msg.toolCallId || `${msgId}_tool`,
           tool_name: msg.toolName || 'tool',
+          tool_title: msg.toolTitle || '',
           tool_input_summary: '',
           account_id: accountId,
           payload_type: 'tool_call_start',

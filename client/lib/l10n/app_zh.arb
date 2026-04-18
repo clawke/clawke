@@ -241,5 +241,6 @@
   "later": "稍后",
   "reLogin": "重新登录",
   "showToken": "显示 Token",
-  "hideToken": "隐藏 Token"
+  "hideToken": "隐藏 Token",
+  "aiThinking": "正在思考..."
 }
