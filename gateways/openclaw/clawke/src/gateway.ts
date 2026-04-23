@@ -1,5 +1,5 @@
 import WebSocket from "ws";
-import { readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync, rmSync, type Dirent } from "node:fs";
+import { readFileSync, existsSync, readdirSync, type Dirent } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import type { ChannelGatewayContext, ReplyPayload } from "openclaw/plugin-sdk";
@@ -69,26 +69,6 @@ const abortedPartials = new Map<string, string>();
 // 标记某个 senderId 正在执行合成 stop dispatch（回复应被静默丢弃）
 const silentDispatches = new Set<string>();
 
-const PERSONAL_SKILLS_DIR = join(homedir(), ".agents", "skills");
-const SKILLS_STATE_PATH = join(PERSONAL_SKILLS_DIR, ".skills-state.json");
-
-interface SkillSummary {
-  name: string;
-  description: string;
-  dir_name: string;
-  source: string;
-  disabled: boolean;
-}
-
-interface ResolvedSkill extends SkillSummary {
-  skill_path: string;
-}
-
-interface SkillMutationResult {
-  ok: boolean;
-  error?: string;
-}
-
 /** 从 OpenClaw 配置中提取可用模型列表 */
 function getAvailableModels(ctx: ChannelGatewayContext<ResolvedClawkeAccount>): string[] {
   try {
@@ -116,84 +96,54 @@ function getAvailableModels(ctx: ChannelGatewayContext<ResolvedClawkeAccount>): 
   return [];
 }
 
-function isValidDirName(dirName: string): boolean {
-  return /^[a-zA-Z0-9._-]+$/.test(dirName);
-}
-
-function loadDisabledSkillDirNames(): Set<string> {
-  try {
-    if (!existsSync(SKILLS_STATE_PATH)) return new Set<string>();
-    const raw = JSON.parse(readFileSync(SKILLS_STATE_PATH, "utf-8"));
-    const list = Array.isArray(raw?.disabled) ? raw.disabled : [];
-    return new Set<string>(
-      list
-        .filter((name) => typeof name === "string")
-        .map((name) => name.trim())
-        .filter((name) => name.length > 0),
-    );
-  } catch {
-    return new Set<string>();
-  }
-}
-
-function saveDisabledSkillDirNames(disabled: Set<string>): void {
-  mkdirSync(PERSONAL_SKILLS_DIR, { recursive: true });
-  const body = {
-    disabled: Array.from(disabled).sort(),
-  };
-  writeFileSync(SKILLS_STATE_PATH, `${JSON.stringify(body, null, 2)}\n`, "utf-8");
-}
-
-function parseSkillMeta(content: string, fallbackName: string): { name: string; description: string } {
-  let name = fallbackName;
-  let description = fallbackName;
-  const fmMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
-  if (fmMatch) {
-    const nameMatch = fmMatch[1].match(/name:\s*(.+)/i);
-    if (nameMatch) name = nameMatch[1].trim();
-    const descMatch = fmMatch[1].match(/description:\s*(.+)/i);
-    if (descMatch) description = descMatch[1].trim();
-  } else {
-    const firstLine = content
-      .split("\n")
-      .find((line) => line.trim() && !line.startsWith("#") && !line.startsWith("---"));
-    if (firstLine) description = firstLine.trim().slice(0, 120);
-  }
-  return { name, description };
-}
-
-function getWorkspaceDir(): string {
+/**
+ * 扫描 OpenClaw 所有 skill 目录获取可用 Skills（对齐 OpenClaw workspace.ts loadSkillEntries）
+ *
+ * OpenClaw 原生扫描 6 个来源（优先级从低到高，同名 skill 后者覆盖前者）：
+ *   1. openclaw-extra     — openclaw.json > skills.load.extraDirs + plugin skills
+ *   2. openclaw-bundled   — <openclaw-package>/skills/
+ *   3. openclaw-managed   — ~/.openclaw/skills/   (openclaw skills install)
+ *   4. agents-personal    — ~/.agents/skills/
+ *   5. agents-project     — <workspace>/.agents/skills/
+ *   6. openclaw-workspace — <workspace>/skills/
+ *
+ * 我们的 Gateway 作为 plugin 无法 import OpenClaw 内部 API，所以复刻目录扫描逻辑。
+ * 对于 extraDirs / plugin skills 暂不扫描（需要 config 解析），对于 bundled skills 使用启发式。
+ */
+function getAvailableSkills(ctx: ChannelGatewayContext<ResolvedClawkeAccount>): Array<{ name: string; description: string }> {
   const home = homedir();
   const configDir = join(home, ".openclaw");
-  let workspaceDir = join(configDir, "workspace");
 
+  // 推断 workspaceDir：从 OpenClaw 配置中读取，fallback 到 ~/.openclaw/workspace
+  let workspaceDir = join(configDir, "workspace"); // OpenClaw 默认 workspace
   try {
     const configPath = join(configDir, "openclaw.json");
-    if (!existsSync(configPath)) return workspaceDir;
-    const config = JSON.parse(readFileSync(configPath, "utf-8"));
-    const agents = config?.agents;
-    if (!agents || typeof agents !== "object") return workspaceDir;
-
-    if (agents.defaults?.workspace) {
-      workspaceDir = agents.defaults.workspace;
-    }
-    const agentList = agents.list;
-    if (Array.isArray(agentList)) {
-      const defaultAgent = agentList.find((a: any) => a.default) || agentList[0];
-      if (defaultAgent?.workspace) {
-        workspaceDir = defaultAgent.workspace;
+    if (existsSync(configPath)) {
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      const agents = config?.agents;
+      if (agents && typeof agents === "object") {
+        // OpenClaw 配置结构：agents.defaults.workspace
+        if (agents.defaults?.workspace) {
+          workspaceDir = agents.defaults.workspace;
+        }
+        // 也检查 per-agent 的 workspace 配置
+        const agentList = agents.list;
+        if (Array.isArray(agentList)) {
+          const defaultAgent = agentList.find((a: any) => a.default) || agentList[0];
+          if (defaultAgent?.workspace) {
+            workspaceDir = defaultAgent.workspace;
+          }
+        }
       }
     }
-  } catch {
-    return workspaceDir;
-  }
+  } catch { /* ignore */ }
 
-  return workspaceDir;
-}
-
-function getBundledSkillsDir(): string | undefined {
+  // 推断 bundled skills 目录
+  let bundledSkillsDir: string | undefined;
   try {
+    // 方法 1: 可执行文件旁的 skills/ 目录（bun --compile 场景）
     const execDir = join(process.execPath, "..");
+    // 方法 2: 当前模块向上查找（npm/dev 场景）
     const moduleDir = new URL(".", import.meta.url).pathname;
     const candidates = [
       join(execDir, "skills"),
@@ -201,38 +151,30 @@ function getBundledSkillsDir(): string | undefined {
       join(moduleDir, "..", "..", "skills"),
       join(moduleDir, "..", "..", "..", "skills"),
     ];
-    for (const candidate of candidates) {
-      if (existsSync(candidate)) return candidate;
+    for (const c of candidates) {
+      if (existsSync(c)) { bundledSkillsDir = c; break; }
     }
-  } catch {
-    return undefined;
-  }
-  return undefined;
-}
+  } catch { /* ignore */ }
 
-function getSkillScanDirs(): Array<{ dir: string; source: string }> {
-  const home = homedir();
-  const configDir = join(home, ".openclaw");
-  const workspaceDir = getWorkspaceDir();
-  const bundledSkillsDir = getBundledSkillsDir();
-
+  // 6 个扫描目录（按优先级从低到高）
   const scanDirs: Array<{ dir: string; source: string }> = [];
+
+  // 2. openclaw-bundled
   if (bundledSkillsDir) {
     scanDirs.push({ dir: bundledSkillsDir, source: "openclaw-bundled" });
   }
+  // 3. openclaw-managed
   scanDirs.push({ dir: join(configDir, "skills"), source: "openclaw-managed" });
-  scanDirs.push({ dir: PERSONAL_SKILLS_DIR, source: "agents-skills-personal" });
+  // 4. agents-skills-personal
+  scanDirs.push({ dir: join(home, ".agents", "skills"), source: "agents-skills-personal" });
+  // 5. agents-skills-project
   scanDirs.push({ dir: join(workspaceDir, ".agents", "skills"), source: "agents-skills-project" });
+  // 6. openclaw-workspace
   scanDirs.push({ dir: join(workspaceDir, "skills"), source: "openclaw-workspace" });
-  return scanDirs;
-}
 
-function getAvailableSkills(ctx: ChannelGatewayContext<ResolvedClawkeAccount>): SkillSummary[] {
-  const disabled = loadDisabledSkillDirNames();
-  const merged = new Map<string, ResolvedSkill>();
-  const scanDirs = getSkillScanDirs();
+  const merged = new Map<string, { name: string; description: string }>();
 
-  for (const { dir, source } of scanDirs) {
+  for (const { dir } of scanDirs) {
     try {
       if (!existsSync(dir)) continue;
       const entries = readdirSync(dir, { withFileTypes: true }) as Dirent[];
@@ -241,150 +183,32 @@ function getAvailableSkills(ctx: ChannelGatewayContext<ResolvedClawkeAccount>): 
         const skillMd = join(dir, entry.name, "SKILL.md");
         if (!existsSync(skillMd)) continue;
         const content = readFileSync(skillMd, "utf-8");
-        const { name, description } = parseSkillMeta(content, entry.name);
-        merged.set(name, {
-          name,
-          description,
-          dir_name: entry.name,
-          source,
-          disabled: disabled.has(entry.name),
-          skill_path: skillMd,
-        });
+        // Extract name and description from YAML frontmatter
+        let name = entry.name;
+        let desc = entry.name;
+        const fmMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
+        if (fmMatch) {
+          const nameMatch = fmMatch[1].match(/name:\s*(.+)/i);
+          if (nameMatch) name = nameMatch[1].trim();
+          const descMatch = fmMatch[1].match(/description:\s*(.+)/i);
+          if (descMatch) desc = descMatch[1].trim();
+        } else {
+          const firstLine = content.split("\n").find(
+            (l: string) => l.trim() && !l.startsWith("#") && !l.startsWith("---")
+          );
+          if (firstLine) desc = firstLine.trim().slice(0, 120);
+        }
+        // 后加载覆盖先加载（同名 skill 以高优先级为准）
+        merged.set(name, { name, description: desc });
       }
-    } catch {
-      // ignore per-directory scan failures
-    }
+    } catch { /* ignore individual dir failures */ }
   }
 
-  const skills = Array.from(merged.values())
-    .sort((a, b) => a.name.localeCompare(b.name))
-    .map(({ name, description, dir_name, source, disabled: isDisabled }) => ({
-      name,
-      description,
-      dir_name,
-      source,
-      disabled: isDisabled,
-    }));
+  const skills = Array.from(merged.values()).sort((a, b) => a.name.localeCompare(b.name));
   ctx.log?.info(`📦 Skills discovered: ${skills.length} skills from ${scanDirs.filter(d => existsSync(d.dir)).length} dirs`);
   return skills;
 }
 
-function resolveSkillByDirName(ctx: ChannelGatewayContext<ResolvedClawkeAccount>, dirName: string): ResolvedSkill | null {
-  const disabled = loadDisabledSkillDirNames();
-  const scanDirs = getSkillScanDirs();
-  for (let i = scanDirs.length - 1; i >= 0; i--) {
-    const entry = scanDirs[i];
-    const skillPath = join(entry.dir, dirName, "SKILL.md");
-    if (!existsSync(skillPath)) continue;
-    const content = readFileSync(skillPath, "utf-8");
-    const { name, description } = parseSkillMeta(content, dirName);
-    return {
-      name,
-      description,
-      dir_name: dirName,
-      source: entry.source,
-      disabled: disabled.has(dirName),
-      skill_path: skillPath,
-    };
-  }
-  ctx.log?.warn(`resolveSkillByDirName not found: ${dirName}`);
-  return null;
-}
-
-function getSkillDetail(
-  ctx: ChannelGatewayContext<ResolvedClawkeAccount>,
-  dirName: string,
-): { ok: true; skill: ResolvedSkill; content: string } | { ok: false; error: string } {
-  if (!isValidDirName(dirName)) {
-    return { ok: false, error: "invalid dir_name" };
-  }
-  const skill = resolveSkillByDirName(ctx, dirName);
-  if (!skill) return { ok: false, error: "skill not found" };
-  try {
-    const content = readFileSync(skill.skill_path, "utf-8");
-    return { ok: true, skill, content };
-  } catch (e: any) {
-    return { ok: false, error: `read skill failed: ${e.message}` };
-  }
-}
-
-function saveSkill(
-  ctx: ChannelGatewayContext<ResolvedClawkeAccount>,
-  dirName: string,
-  content: string,
-): SkillMutationResult {
-  if (!isValidDirName(dirName)) {
-    return { ok: false, error: "invalid dir_name" };
-  }
-  if (!content.trim()) {
-    return { ok: false, error: "content is empty" };
-  }
-
-  const existing = resolveSkillByDirName(ctx, dirName);
-  if (existing && existing.source !== "agents-skills-personal") {
-    return { ok: false, error: "skill is read-only (non personal source)" };
-  }
-
-  const skillDir = join(PERSONAL_SKILLS_DIR, dirName);
-  const skillMdPath = join(skillDir, "SKILL.md");
-  try {
-    mkdirSync(skillDir, { recursive: true });
-    writeFileSync(skillMdPath, content, "utf-8");
-    return { ok: true };
-  } catch (e: any) {
-    return { ok: false, error: `save skill failed: ${e.message}` };
-  }
-}
-
-function deleteSkill(
-  ctx: ChannelGatewayContext<ResolvedClawkeAccount>,
-  dirName: string,
-): SkillMutationResult {
-  if (!isValidDirName(dirName)) {
-    return { ok: false, error: "invalid dir_name" };
-  }
-  const skill = resolveSkillByDirName(ctx, dirName);
-  if (!skill) return { ok: false, error: "skill not found" };
-  if (skill.source !== "agents-skills-personal") {
-    return { ok: false, error: "skill is read-only (non personal source)" };
-  }
-
-  const skillDir = join(PERSONAL_SKILLS_DIR, dirName);
-  if (!existsSync(skillDir)) return { ok: false, error: "skill directory not found" };
-
-  try {
-    rmSync(skillDir, { recursive: true, force: false });
-    const disabled = loadDisabledSkillDirNames();
-    if (disabled.delete(dirName)) {
-      saveDisabledSkillDirNames(disabled);
-    }
-    return { ok: true };
-  } catch (e: any) {
-    return { ok: false, error: `delete skill failed: ${e.message}` };
-  }
-}
-
-function toggleSkillDisabled(
-  ctx: ChannelGatewayContext<ResolvedClawkeAccount>,
-  dirName: string,
-  disabled: boolean,
-): SkillMutationResult {
-  if (!isValidDirName(dirName)) {
-    return { ok: false, error: "invalid dir_name" };
-  }
-  if (!resolveSkillByDirName(ctx, dirName)) {
-    return { ok: false, error: "skill not found" };
-  }
-  try {
-    const current = loadDisabledSkillDirNames();
-    if (disabled) current.add(dirName);
-    else current.delete(dirName);
-    saveDisabledSkillDirNames(current);
-    return { ok: true };
-  } catch (e: any) {
-    return { ok: false, error: `toggle skill failed: ${e.message}` };
-  }
-}
 
 /**
  * Gateway 启动入口：建立 WebSocket 连接到 Clawke Server，断线自动重连。
@@ -566,58 +390,6 @@ export async function startClawkeGateway(
             const skills = getAvailableSkills(ctx);
             ws!.send(JSON.stringify({ type: GatewayMessageType.SkillsResponse, skills }));
             ctx.log?.info(`📤 Skills response: ${skills.length} skills`);
-          } else if (msg.type === InboundMessageType.QuerySkillsDetail) {
-            const dirName = String(msg.dir_name || "");
-            const detail = getSkillDetail(ctx, dirName);
-            if (!detail.ok) {
-              ws!.send(JSON.stringify({
-                type: GatewayMessageType.SkillsDetailResponse,
-                ok: false,
-                dir_name: dirName,
-                error: detail.error,
-              }));
-              return;
-            }
-            ws!.send(JSON.stringify({
-              type: GatewayMessageType.SkillsDetailResponse,
-              ok: true,
-              dir_name: dirName,
-              name: detail.skill.name,
-              description: detail.skill.description,
-              source: detail.skill.source,
-              disabled: detail.skill.disabled,
-              content: detail.content,
-            }));
-          } else if (msg.type === InboundMessageType.SkillSave) {
-            const dirName = String(msg.dir_name || "");
-            const content = String(msg.content || "");
-            const result = saveSkill(ctx, dirName, content);
-            ws!.send(JSON.stringify({
-              type: GatewayMessageType.SkillSaveResponse,
-              ok: result.ok,
-              dir_name: dirName,
-              ...(result.error ? { error: result.error } : {}),
-            }));
-          } else if (msg.type === InboundMessageType.SkillDelete) {
-            const dirName = String(msg.dir_name || "");
-            const result = deleteSkill(ctx, dirName);
-            ws!.send(JSON.stringify({
-              type: GatewayMessageType.SkillDeleteResponse,
-              ok: result.ok,
-              dir_name: dirName,
-              ...(result.error ? { error: result.error } : {}),
-            }));
-          } else if (msg.type === InboundMessageType.SkillToggle) {
-            const dirName = String(msg.dir_name || "");
-            const disabled = msg.disabled === true;
-            const result = toggleSkillDisabled(ctx, dirName, disabled);
-            ws!.send(JSON.stringify({
-              type: GatewayMessageType.SkillToggleResponse,
-              ok: result.ok,
-              dir_name: dirName,
-              disabled,
-              ...(result.error ? { error: result.error } : {}),
-            }));
           }
         } catch (err: any) {
           ctx.log?.error(`Failed to parse inbound message: ${err.message}. Raw: ${raw.toString().slice(0, 50)}...`);

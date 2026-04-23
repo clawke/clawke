@@ -248,25 +248,10 @@ async function main() {
       configStore,
       queryModels: async () => (['mock-model']),
       querySkills: async () => ([]),
-      querySkillDetail: async (_accountId: string, dirName: string) => ({ ok: false, dir_name: dirName, error: 'mock mode' }),
-      saveSkill: async () => ({ ok: false, error: 'mock mode' }),
-      deleteSkill: async () => ({ ok: false, error: 'mock mode' }),
-      toggleSkill: async () => ({ ok: false, error: 'mock mode' }),
     });
 
   } else if (MODE === 'openclaw') {
-    const {
-      startOpenClawListener,
-      sendToOpenClaw,
-      isUpstreamConnected,
-      getConnectedAccountIds,
-      queryGatewayModels,
-      queryGatewaySkills,
-      queryGatewaySkillDetail,
-      sendGatewaySkillSave,
-      sendGatewaySkillDelete,
-      sendGatewaySkillToggle,
-    } =
+    const { startOpenClawListener, sendToOpenClaw, isUpstreamConnected, getConnectedAccountIds, queryGatewayModels, queryGatewaySkills } =
       await import('./upstream/openclaw-listener.js');
     const { initConfigRoutes } = await import('./routes/config-routes.js');
     const { initConversationRoutes } = await import('./routes/conversation-routes.js');
@@ -276,10 +261,6 @@ async function main() {
       configStore,
       queryModels: queryGatewayModels,
       querySkills: queryGatewaySkills,
-      querySkillDetail: queryGatewaySkillDetail,
-      saveSkill: sendGatewaySkillSave,
-      deleteSkill: sendGatewaySkillDelete,
-      toggleSkill: sendGatewaySkillToggle,
     });
 
     // 初始化会话路由
