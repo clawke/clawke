@@ -15,6 +15,10 @@ export const GatewayMessageType = {
   Identify:           "identify",
   ModelsResponse:     "models_response",
   SkillsResponse:     "skills_response",
+  SkillsDetailResponse: "skills_detail_response",
+  SkillSaveResponse:    "skill_save_response",
+  SkillDeleteResponse:  "skill_delete_response",
+  SkillToggleResponse:  "skill_toggle_response",
 
   // 流式输出
   AgentTyping:        "agent_typing",
@@ -53,6 +57,10 @@ export const InboundMessageType = {
   Abort:        "abort",
   QueryModels:  "query_models",
   QuerySkills:  "query_skills",
+  QuerySkillsDetail: "query_skills_detail",
+  SkillSave:    "skill_save",
+  SkillDelete:  "skill_delete",
+  SkillToggle:  "skill_toggle",
 } as const;
 
 export type InboundMessageType = (typeof InboundMessageType)[keyof typeof InboundMessageType];
