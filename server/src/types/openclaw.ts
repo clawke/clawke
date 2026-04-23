@@ -26,7 +26,10 @@ export type OpenClawMessageType =
   | 'agent_status'
   | 'agent_turn_stats'
   // 用量
-  | 'agent_usage';
+  | 'agent_usage'
+  // 交互式请求（Gateway ↔ Client 透传）
+  | 'approval_request'
+  | 'clarify_request';
 
 /** Token 用量信息 */
 export interface TokenUsage {
@@ -71,4 +74,15 @@ export interface OpenClawMessage {
 
   // status 相关
   status?: string;
+
+  // 交互式请求（Approval / Clarify）
+  command?: string;
+  description?: string;
+  pattern_keys?: string[];
+  question?: string;
+  choices?: string[];
+
+  // 错误分类（Gateway 异常时发送结构化错误码）
+  error_code?: string;
+  error_detail?: string;
 }

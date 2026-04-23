@@ -71,23 +71,14 @@ export class CupV2Handler {
     let lastSeq = (data?.last_seq as number) || 0;
     const currentSeq = this.messageStore.getCurrentSeq();
 
-    // 新设备（last_seq=0）：不拉历史
-    if (lastSeq === 0) {
-      console.log(`[Tunnel] 📥 sync request: new device (last_seq=0), returning 0 messages (currentSeq=${currentSeq})`);
-      return {
-        payload_type: 'sync_response',
-        id: payload.id || null,
-        current_seq: currentSeq,
-        messages: [],
-      };
-    }
-
-    // 客户端 seq 超过服务端（切换 Server 或 Server seq 被重置） → 返回全部消息，客户端按 message_id 去重
+    // 客户端 seq 超过服务端（Server 重装导致 seq 重置）→ 从头返回，客户端按 message_id 去重
     if (lastSeq > currentSeq) {
       console.log(`[Tunnel] ⚠️ seq mismatch: client last_seq=${lastSeq} > server currentSeq=${currentSeq} → returning all messages`);
       lastSeq = 0;
     }
 
+    // last_seq=0（新设备首次 sync）：返回全量历史，由 getAfterSeq 的 LIMIT 500 兜底
+    // last_seq=0 (new device): return full history, capped by getAfterSeq's LIMIT 500
     const messages = this.messageStore.getAfterSeq(lastSeq);
     console.log(`[Tunnel] 📥 sync request: last_seq=${lastSeq}, returning ${messages.length} messages (currentSeq=${currentSeq})`);
     return {

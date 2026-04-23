@@ -351,3 +351,176 @@ gateways/
             ├── gateway.ts        # WebSocket client & message handling
             └── runtime.ts        # Runtime API bridge
 ```
+
+## Approval & Clarify Protocol
+
+Some AI backends support interactive workflows where the AI requests user confirmation before executing commands, or asks clarifying questions.
+
+### Approval Flow
+
+#### `approval_request` — AI requests permission to execute a command
+
+```json
+{
+  "type": "approval_request",
+  "requestId": "approval_1234567890",
+  "command": "rm -rf /tmp/test_output",
+  "description": "Delete temporary test files",
+  "riskLevel": "medium",
+  "account_id": "your-account-id",
+  "conversation_id": "conv_abc123"
+}
+```
+
+#### `approval_response` — User approves or denies (Server → Gateway)
+
+```json
+{
+  "type": "approval_response",
+  "conversation_id": "conv_abc123",
+  "choice": "approve"
+}
+```
+
+### Clarify Flow
+
+#### `clarify_request` — AI asks a clarifying question with options
+
+```json
+{
+  "type": "clarify_request",
+  "requestId": "clarify_1234567890",
+  "question": "Which test framework do you prefer?",
+  "options": ["pytest", "unittest", "nose2"],
+  "account_id": "your-account-id",
+  "conversation_id": "conv_abc123"
+}
+```
+
+#### `clarify_response` — User selects an option (Server → Gateway)
+
+```json
+{
+  "type": "clarify_response",
+  "conversation_id": "conv_abc123",
+  "response": "pytest"
+}
+```
+
+## Error Classification
+
+When the AI backend encounters an error, gateways should send a structured `error_code` instead of human-readable text, allowing the client to display localized error messages:
+
+```json
+{
+  "type": "agent_text",
+  "message_id": "reply_1234567890",
+  "text": "",
+  "error_code": "network_error",
+  "error_detail": "Connection refused: 192.168.0.7:8080",
+  "account_id": "your-account-id",
+  "conversation_id": "conv_abc123"
+}
+```
+
+### Standard Error Codes
+
+| Code | Meaning |
+|------|---------|
+| `auth_failed` | API key invalid or authentication failure |
+| `network_error` | Connection timeout, DNS failure, or network error |
+| `rate_limited` | Too many requests (HTTP 429 or quota exceeded) |
+| `model_unavailable` | Requested model not found or unavailable |
+| `no_reply` | AI produced no output (0 tokens generated) |
+| `agent_error` | Generic/unclassified error (include `error_detail`) |
+
+> **Note:** The `error_detail` field contains the first 100 characters of the original exception message, used as a fallback when the client does not recognize the `error_code`.
+
+## Hermes Gateway Reference
+
+The Hermes gateway is a **standalone Python process** that directly instantiates the Hermes `AIAgent` — no HTTP or IPC overhead.
+
+### Architecture Difference
+
+| | OpenClaw Gateway | Hermes Gateway |
+|---|---|---|
+| Language | TypeScript | Python |
+| Runtime | In-process plugin (loaded by OpenClaw) | Standalone process |
+| AI Integration | Plugin API hooks | Direct `AIAgent` instantiation |
+| Installation | Manual deploy to OpenClaw extensions | `npx clawke hermes-gateway install` |
+
+### Configuration
+
+Managed via `~/.clawke/clawke.json`:
+
+```json
+{
+  "gateways": {
+    "hermes": [
+      {
+        "name": "hermes",
+        "accountId": "hermes",
+        "wsUrl": "ws://127.0.0.1:8766",
+        "enabled": true
+      }
+    ]
+  }
+}
+```
+
+### Additional Message Types
+
+Beyond the standard text/thinking/tool messages, Hermes Gateway supports:
+
+- `approval_request` / `approval_response` — Command execution approval
+- `clarify_request` / `clarify_response` — Clarifying question flow
+- `query_models` / `models_response` — Available model listing
+- `query_skills` / `skills_response` — Available skill listing
+
+### File Structure
+
+```
+gateways/hermes/clawke/
+├── clawke_channel.py    # Gateway main logic (WS client + AIAgent bridge)
+├── config.py            # Configuration loader
+├── run.py               # Entry point script
+├── requirements.txt     # Python dependencies
+└── README.md            # Setup instructions
+```
+
+### Minimal Example (Python)
+
+```python
+import asyncio
+import json
+import websockets
+
+async def main():
+    uri = "ws://127.0.0.1:8766"
+    async with websockets.connect(uri) as ws:
+        # Step 1: Identify
+        await ws.send(json.dumps({
+            "type": "identify",
+            "accountId": "my-python-agent",
+        }))
+
+        async for raw in ws:
+            msg = json.loads(raw)
+
+            if msg.get("type") == "chat":
+                reply_id = f"reply_{int(asyncio.get_event_loop().time() * 1000)}"
+
+                # Step 2: Call your AI provider
+                response = "Hello from Python!"
+
+                # Step 3: Send response
+                await ws.send(json.dumps({
+                    "type": "agent_text",
+                    "message_id": reply_id,
+                    "text": response,
+                    "account_id": "my-python-agent",
+                }))
+
+asyncio.run(main())
+```
+

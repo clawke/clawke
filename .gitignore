@@ -91,3 +91,8 @@ client/android/local.properties
 .openclaw/
 .clawke/
 client/demo/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo

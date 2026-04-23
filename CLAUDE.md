@@ -71,10 +71,10 @@ clawke/
 
 ### 文档分类规则
 
-| 目录 | 性质 | Git 追踪 | 内容 |
-|------|------|---------|------|
-| `docs/` | **开源文档** | ✅ 提交到仓库 | 产品文档、架构说明、用户指南 — 面向开源社区和外部用户 |
-| `internal-docs/` | **内部文档** | ❌ `.gitignore` 排除 | 开发笔记、分析报告、调试记录 — 仅供团队内部参考 |
+| 目录             | 性质         | Git 追踪             | 内容                                                  |
+| ---------------- | ------------ | -------------------- | ----------------------------------------------------- |
+| `docs/`          | **开源文档** | ✅ 提交到仓库        | 产品文档、架构说明、用户指南 — 面向开源社区和外部用户 |
+| `internal-docs/` | **内部文档** | ❌ `.gitignore` 排除 | 开发笔记、分析报告、调试记录 — 仅供团队内部参考       |
 
 **决策原则**：涉及内部实现细节、调试过程、竞品分析等敏感内容放 `internal-docs/`；产品架构、协议规范、使用说明等适合公开的放 `docs/`。
 
@@ -95,6 +95,7 @@ clawke/
 3. **DB 只存消息和会话元数据**，不存业务状态
 4. **平台差异用 `LayoutBuilder` / `MediaQuery` 适配**，避免 `if (Platform.isMacOS)` 式的硬分支
 5. **共享代码放 `lib/core/`、`lib/models/`、`lib/providers/`**，平台特定 UI 放 `lib/screens/` 或 `lib/widgets/`
+
 ### Gateway 反腐败层（Anti-Corruption Layer）
 
 Gateway 层是**唯一允许理解上游 Agent 私有协议的地方**。上游 Agent（如 OpenClaw）的格式变化、API 升级、协议变更，**必须全部在 Gateway 层吸收**，不得传导到 CS Server 或 Client：
@@ -106,6 +107,7 @@ Flutter Client ←CUP→ CS Server ←CUP→ Gateway A (OpenClaw)
 ```
 
 **核心规则**：
+
 1. **Gateway → CS Server 的输出必须是标准化 CUP 消息**，不含任何 Agent 特定的格式/术语
 2. **CS Server 和 Client 永远不知道**后面接的是 OpenClaw 还是其他 Agent
 3. **OpenClaw 升级时只改 Gateway 层**，CS Server 和 Client 代码零修改
@@ -143,18 +145,18 @@ Flutter Client ←ws:8765→ Clawke Server ←ws:8766→ OpenClaw Gateway（192.
 
 ## 关键配置
 
-| 配置项                  | 位置                                                  | 默认值                                                               |
-| ----------------------- | ----------------------------------------------------- | -------------------------------------------------------------------- |
-| Client → Server 地址    | `client/lib/core/ws_service.dart:9`                   | `ws://127.0.0.1:8765`                                                |
-| Server 客户端端口       | `server/.env` `CLIENT_PORT`                           | `8765`                                                               |
-| Server 上游端口         | `server/.env` `UPSTREAM_PORT`                         | `8766`                                                               |
-| Server 运行模式         | `server/.env` `MODE`                                  | `openclaw`                                                           |
-| OpenClaw → Server 地址  | `gateways/openclaw/clawke/src/config.ts:32` | `ws://127.0.0.1:8766`                                                |
-| OpenClaw 渠道开关       | OpenClaw 配置文件 `channels.clawke.enabled`           | `false`                                                              |
-| OpenClaw 生产部署服务器 | 局域网内独立服务器（**仅生产**）                      | `192.168.0.7`                                                        |
-| Clawke 插件生产路径     | macMini 上 OpenClaw 加载的插件目录（**仅生产**）      | `samy@192.168.0.7:~/.openclaw/extensions/clawke/` |
-| OpenClaw 启动命令       | 在 192.168.0.7 的 OpenClaw 项目目录下执行             | `pnpm dev gateway --force`                                           |
-| OpenClaw 环境变量       | `~/.openclaw/gateway/.env`（192.168.0.7）             | `BRAVE_API_KEY`, `GOOGLE_API_KEY`                                    |
+| 配置项                  | 位置                                             | 默认值                                            |
+| ----------------------- | ------------------------------------------------ | ------------------------------------------------- |
+| Client → Server 地址    | `client/lib/core/ws_service.dart:9`              | `ws://127.0.0.1:8765`                             |
+| Server 客户端端口       | `server/.env` `CLIENT_PORT`                      | `8765`                                            |
+| Server 上游端口         | `server/.env` `UPSTREAM_PORT`                    | `8766`                                            |
+| Server 运行模式         | `server/.env` `MODE`                             | `openclaw`                                        |
+| OpenClaw → Server 地址  | `gateways/openclaw/clawke/src/config.ts:32`      | `ws://127.0.0.1:8766`                             |
+| OpenClaw 渠道开关       | OpenClaw 配置文件 `channels.clawke.enabled`      | `false`                                           |
+| OpenClaw 生产部署服务器 | 局域网内独立服务器（**仅生产**）                 | `192.168.0.7`                                     |
+| Clawke 插件生产路径     | macMini 上 OpenClaw 加载的插件目录（**仅生产**） | `samy@192.168.0.7:~/.openclaw/extensions/clawke/` |
+| OpenClaw 启动命令       | 在 192.168.0.7 的 OpenClaw 项目目录下执行        | `pnpm dev gateway --force`                        |
+| OpenClaw 环境变量       | `~/.openclaw/gateway/.env`（192.168.0.7）        | `BRAVE_API_KEY`, `GOOGLE_API_KEY`                 |
 
 ### ⚠️ 开发模式规则
 
@@ -257,6 +259,7 @@ Flutter Client ←ws:8765→ Clawke Server ←ws:8766→ OpenClaw Gateway（192.
 **严禁测试代码操作生产数据库 `server/data/clawke.db`。** 测试必须使用独立的内存数据库（`:memory:`），由 `db.js` 中 `process.env.NODE_TEST` 环境变量自动切换。
 
 此规则的背景教训：
+
 - `message-store.js` 的 `reset()` 函数会执行 `DELETE FROM messages` 清空消息表
 - 如果测试直接使用生产 DB，每次 `beforeEach → reset()` 都会**永久删除用户的真实聊天记录**
 - `globalSeq` 是全局递增序列号，客户端持久化了 `last_seq`。一旦 `globalSeq` 被重置或回退，客户端 sync 时 `last_seq > currentSeq`，会永久丢失消息同步能力
@@ -278,8 +281,10 @@ Flutter Client ←ws:8765→ Clawke Server ←ws:8766→ OpenClaw Gateway（192.
 - **安全沙箱**：Server 对客户端上报的文件路径严格校验，防止 `../../` 路径注入。vApp WebView 沙箱：CSP 策略限制外部请求、域名白名单、禁止本地文件访问、屏蔽危险 API
 - **DRY / YAGNI**：不提前设计，最小可验证为准。先用最简方案跑通功能，遇到真实性能瓶颈再优化。例如：Drift `.watch()` 优先于手动 EventBus，移动端真正出现性能问题时再局部替换
 - **公共方法提取（DRY 准则）**：在多个地方涉及相同的具体业务流（代码处理逻辑一样）时，**必须第一时间提取为公共辅助方法**，坚决避免复制粘贴式编程。这是为了防止在后续多次迭代、修改 Bug 时，因遗漏某个重复代码块而引发回归问题。
+- **🔴 代码来源不标注**：借鉴或参考外部代码（包括 GitHub 开源项目、第三方库源码、其他 AI 框架实现等）时，**严禁在代码注释中标注来源**（如 `// 参考自 xxx.py:123`、`// Adapted from github.com/xxx`）。这可能引发版权抄袭争议。实现时应理解思路后用自己的方式重写，注释只描述功能意图，不提及参考源。内部设计文档（`internal-docs/`）中可以记录参考来源，但代码和公开文档中不可以。
 - **验证优先**：修改代码后，AI 必须先自行通过日志、源码审查或 Mock 测试确认功能正确，再交给用户验收。用户是最终验收者，不是测试员。严禁未经验证就让用户反复测试
 - **🔴 根因定位优先**：修复 Bug 前，**必须先通过日志或源码确认根本原因**，严禁凭猜测提出修复方案。未经确认就修改代码，不仅可能无法修复问题，还会引入新 Bug。流程：① 收集证据（日志、断点、源码追踪）→ ② 形成假设 → ③ 验证假设 → ④ 确认根因 → ⑤ 再提出修复方案
+- **🔴 日志佐证原则**：**非 100% 确定的问题，严禁直接修改代码**。必须先添加调试日志，让用户跑一轮拿到日志证据后，再根据日志做精准修复。「可能是 X 导致的」→ 加日志确认。「应该是 Y 的问题」→ 加日志确认。绝不在没有日志佐证的情况下修改业务代码，防止代码变成屎山。
 - **文档同步**：执行有设计文档/计划文档的任务时，完成一个子任务后必须立即更新文档中该任务的状态（如 `[ ]` → `[x]`），不要等到全部完成才批量更新
 - **🔴 线上环境红线**：**严禁直接 SSH 到线上生产环境（3.0.151.65 等远程服务器）执行任何操作**。必须将需要执行的命令和配置内容提供给用户，由用户确认后手动执行。SCP 上传文件可以执行，但 SSH 远程执行命令（创建文件、修改配置、重启服务等）必须经用户明确授权。此规则无例外。
 - **🟡 测试服务器（192.168.0.7）**：局域网 Mac mini 测试服务器，即"OpenClaw 服务端"。可自由 SSH 登录**只读查看**（日志、DB 查询等）。**修改操作**（文件写入、配置变更、服务重启等）必须经用户同意。
@@ -290,15 +295,17 @@ Flutter Client ←ws:8765→ Clawke Server ←ws:8766→ OpenClaw Gateway（192.
 适用于 `gateways/openclaw/clawke/src/` 下所有 TypeScript 文件。
 
 - **模块导入**：使用 ESM `import`，禁止 `require()`。Node.js 内置模块使用 `node:` 前缀：
+
   ```typescript
   // ✅ 正确
   import { readFileSync, existsSync } from "node:fs";
   import { join } from "node:path";
   import { homedir } from "node:os";
-  
+
   // ❌ 禁止
   const fs = require("fs");
   ```
+
 - **日志输出**：统一使用 `ctx.log?.info/error/warn`，禁止 `console.log/error`
 - **错误处理**：`catch` 中必须记录日志（`ctx.log?.error`），禁止空 `catch {}`
 - **全局状态**：模块级变量仅用于生命周期级状态（如 `ws`），每次请求入口处必须重置请求级状态
@@ -331,10 +338,10 @@ Flutter Client ←ws:8765→ Clawke Server ←ws:8766→ OpenClaw Gateway（192.
 
 ### 关键参考项目
 
-| 项目             | 路径                                    | 特点                                                         |
-| ---------------- | --------------------------------------- | ------------------------------------------------------------ |
-| Mixin Messenger  | `../clawke_extends/IM/mixin/`           | 最完整的 Flutter IM，消息处理、DB 设计、排序逻辑最具参考价值 |
-| FluffyChat       | `../clawke_extends/IM/fluffychat/`      | Matrix 协议客户端，UI 组件和聊天交互参考                     |
+| 项目             | 路径                                     | 特点                                                         |
+| ---------------- | ---------------------------------------- | ------------------------------------------------------------ |
+| Mixin Messenger  | `../clawke_extends/IM/mixin/`            | 最完整的 Flutter IM，消息处理、DB 设计、排序逻辑最具参考价值 |
+| FluffyChat       | `../clawke_extends/IM/fluffychat/`       | Matrix 协议客户端，UI 组件和聊天交互参考                     |
 | Wildfire Flutter | `../clawke_extends/IM/wildfire-flutter/` | 轻量 IM，架构简洁清晰                                        |
 
 ### 从 Mixin 学到的消息处理模式
@@ -357,39 +364,39 @@ Flutter Client ←ws:8765→ Clawke Server ←ws:8766→ OpenClaw Gateway（192.
 
 ### 可用技能列表
 
-| 技能 | 说明 |
-| --- | --- |
-| `/office-hours` | YC Office Hours — 创业模式或 Builder 模式的头脑风暴 |
-| `/plan-ceo-review` | CEO/创始人视角的计划评审，挑战前提、扩展范围 |
-| `/plan-eng-review` | 工程经理视角的计划评审，锁定架构和执行方案 |
-| `/plan-design-review` | 设计师视角的计划评审，评估 UI/UX 维度 |
-| `/design-consultation` | 设计咨询，创建完整设计系统和 DESIGN.md |
-| `/design-shotgun` | 生成多个 AI 设计变体进行比较和迭代 |
-| `/design-html` | 将设计稿转化为生产级 HTML/CSS |
-| `/review` | PR 预着陆代码审查 |
-| `/ship` | 完整发布流程：测试、版本号、CHANGELOG、PR |
-| `/land-and-deploy` | 合并 PR、等待 CI、部署、验证生产健康 |
-| `/canary` | 部署后金丝雀监控 |
-| `/benchmark` | 性能基准检测和回归分析 |
-| `/browse` | 快速无头浏览器，用于 QA 测试和网站验证 |
-| `/connect-chrome` | 启动真实 Chrome 并通过 Side Panel 控制 |
-| `/qa` | 系统化 QA 测试并修复发现的 Bug |
-| `/qa-only` | 仅报告模式的 QA 测试，不修复 |
-| `/design-review` | 设计师视角的视觉 QA 审查并修复问题 |
-| `/setup-browser-cookies` | 导入浏览器 Cookie 用于认证测试 |
-| `/setup-deploy` | 配置部署设置 |
-| `/retro` | 每周工程回顾，分析提交历史和代码质量 |
-| `/investigate` | 系统化调试，四阶段根因分析 |
-| `/document-release` | 发布后文档更新和同步 |
-| `/codex` | OpenAI Codex CLI 集成：审查、挑战、咨询 |
-| `/cso` | 首席安全官模式，全方位安全审计 |
-| `/autoplan` | 自动化全流程评审（CEO + 设计 + 工程） |
-| `/careful` | 破坏性命令安全防护 |
-| `/freeze` | 限制文件编辑范围到指定目录 |
-| `/guard` | 完整安全模式：命令防护 + 目录锁定 |
-| `/unfreeze` | 解除 freeze 限制 |
-| `/gstack-upgrade` | 升级 gstack 到最新版本 |
-| `/learn` | 管理项目学习记录 |
+| 技能                     | 说明                                                |
+| ------------------------ | --------------------------------------------------- |
+| `/office-hours`          | YC Office Hours — 创业模式或 Builder 模式的头脑风暴 |
+| `/plan-ceo-review`       | CEO/创始人视角的计划评审，挑战前提、扩展范围        |
+| `/plan-eng-review`       | 工程经理视角的计划评审，锁定架构和执行方案          |
+| `/plan-design-review`    | 设计师视角的计划评审，评估 UI/UX 维度               |
+| `/design-consultation`   | 设计咨询，创建完整设计系统和 DESIGN.md              |
+| `/design-shotgun`        | 生成多个 AI 设计变体进行比较和迭代                  |
+| `/design-html`           | 将设计稿转化为生产级 HTML/CSS                       |
+| `/review`                | PR 预着陆代码审查                                   |
+| `/ship`                  | 完整发布流程：测试、版本号、CHANGELOG、PR           |
+| `/land-and-deploy`       | 合并 PR、等待 CI、部署、验证生产健康                |
+| `/canary`                | 部署后金丝雀监控                                    |
+| `/benchmark`             | 性能基准检测和回归分析                              |
+| `/browse`                | 快速无头浏览器，用于 QA 测试和网站验证              |
+| `/connect-chrome`        | 启动真实 Chrome 并通过 Side Panel 控制              |
+| `/qa`                    | 系统化 QA 测试并修复发现的 Bug                      |
+| `/qa-only`               | 仅报告模式的 QA 测试，不修复                        |
+| `/design-review`         | 设计师视角的视觉 QA 审查并修复问题                  |
+| `/setup-browser-cookies` | 导入浏览器 Cookie 用于认证测试                      |
+| `/setup-deploy`          | 配置部署设置                                        |
+| `/retro`                 | 每周工程回顾，分析提交历史和代码质量                |
+| `/investigate`           | 系统化调试，四阶段根因分析                          |
+| `/document-release`      | 发布后文档更新和同步                                |
+| `/codex`                 | OpenAI Codex CLI 集成：审查、挑战、咨询             |
+| `/cso`                   | 首席安全官模式，全方位安全审计                      |
+| `/autoplan`              | 自动化全流程评审（CEO + 设计 + 工程）               |
+| `/careful`               | 破坏性命令安全防护                                  |
+| `/freeze`                | 限制文件编辑范围到指定目录                          |
+| `/guard`                 | 完整安全模式：命令防护 + 目录锁定                   |
+| `/unfreeze`              | 解除 freeze 限制                                    |
+| `/gstack-upgrade`        | 升级 gstack 到最新版本                              |
+| `/learn`                 | 管理项目学习记录                                    |
 
 ## Skill routing
 
@@ -398,6 +405,7 @@ tool as your FIRST action. Do NOT answer directly, do NOT use other tools first.
 The skill has specialized workflows that produce better results than ad-hoc answers.
 
 Key routing rules:
+
 - Product ideas, "is this worth building", brainstorming → invoke office-hours
 - Bugs, errors, "why is this broken", 500 errors → invoke investigate
 - Ship, deploy, push, create PR → invoke ship
@@ -410,3 +418,68 @@ Key routing rules:
 - Architecture review → invoke plan-eng-review
 - Save progress, checkpoint, resume → invoke checkpoint
 - Code quality, health check → invoke health
+
+## 搜索规则
+
+- **禁止搜索 `venv/` 目录**：搜索代码时排除所有虚拟环境目录（`venv/`、`.venv/`、`node_modules/`），避免超时。用 `--exclude-dir` 或指定具体子目录搜索。
+
+# CLAUDE.md
+
+旨在减少常见大模型（LLM）编码错误的最佳行为准则。可根据需要与项目特定的说明合并使用。
+**权衡：** 这些准则偏向于谨慎而非速度。对于简单的任务，请自行判断。
+
+## 1. 编码前先思考
+
+**不要假设。不要掩盖困惑。将权衡点摆在台面上。**
+在实现之前：
+
+- 明确陈述你的假设。如果不确定，请提问。
+- 如果存在多种解释方案，请将它们全部列出 - 不要默默地做出选择。
+- 如果存在更简单的实现方式，请指出来。必要时要提出反对意见。
+- 如果有不清楚的地方，停下来。指出让你困惑的地方，并提问。
+- 解决bug时，千万不要“认为”、“可能”或简单推测就直接修改代码，而是应该通过实际证明、日志或源码分析100%确定，再修改代码解决bug。
+
+## 2. 简单至上
+
+**用最少的代码解决问题。不要进行任何猜测性开发。**
+
+- 除了要求的功能之外，不要开发任何多余的特性。
+- 不要为一次性代码做抽象。
+- 不要添加未经要求的“灵活性”或“可配置性”。
+- 不要为不可能发生的场景编写错误处理。
+- 如果你写了 200 行代码但其实 50 行就能搞定，请重写它。
+  问问你自己：“高级工程师会觉得这太复杂了吗？”如果是，请将其简化。
+
+## 3. 外科手术式的修改
+
+**只触碰你必须修改的部分。只清理你自己制造的烂摊子。**
+在编辑现有代码时：
+
+- 不要去“改进”相邻的代码、注释或格式。
+- 不要去重构没有损坏的东西。
+- 遵循现有的代码风格，即使你更倾向于用不同的方式。
+- 如果你注意到了不相关的死代码，可以提一句 - 但不要删除它。
+  当你的修改产生了孤立（不再被引用）的代码时：
+- 删除因**你的修改**而变得未被使用的导入/变量/函数。
+- 除非用户要求，否则不要删除之前就存在的死代码,但可以注释掉。
+  检验标准：你修改的每一行代码，都应该能直接追溯到用户的具体请求。
+
+## 4. 目标驱动执行
+
+**定义成功的标准。循环执行直至验证通过。**
+将任务转化为可验证的目标：
+
+- "添加验证" → "编写处理无效输入的测试，然后让它们通过"
+- "修复 Bug" → "编写能够复现该 Bug 的测试，然后让它通过"
+- "重构 X" → "确保在重构前后测试都能通过"
+  对于多步骤任务，请陈述一个简短的计划：
+
+```
+1. [步骤] → 验证: [检查]
+2. [步骤] → 验证: [检查]
+3. [步骤] → 验证: [检查]
+```
+
+## 强有力的成功标准能让你独立进行循环迭代。软弱的标准（比如“让它跑起来”）则需要不断地澄清。
+
+**如何判断这些准则正在发挥作用：** Diff 中的无效更改减少了，因过度设计导致的重写变少了，提出澄清问题发生在实施之前，而不是在犯错之后。

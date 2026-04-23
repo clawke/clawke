@@ -13,6 +13,7 @@ const assert = require('node:assert/strict');
 const { Database } = require('../dist/store/database');
 const { MessageStore } = require('../dist/store/message-store');
 const { ConversationStore } = require('../dist/store/conversation-store');
+const { ConversationConfigStore } = require('../dist/store/conversation-config-store');
 const { CupV2Handler } = require('../dist/protocol/cup-v2-handler');
 const { EventRegistry } = require('../dist/event-registry');
 const { MessageRouter } = require('../dist/upstream/message-router');
@@ -71,12 +72,12 @@ describe('TS: MessageStore', () => {
     const db = new Database(':memory:');
     const store = new MessageStore(db);
 
-    const r1 = store.append('conv1', 'cmsg_1', 'user', 'text', 'hello');
+    const r1 = store.append('acc1', 'conv1', 'cmsg_1', 'user', 'text', 'hello');
     assert.ok(r1.serverMsgId.startsWith('smsg_'));
     assert.ok(r1.seq > 0);
     assert.ok(r1.ts > 0);
 
-    const r2 = store.append('conv1', 'cmsg_2', 'agent', 'text', 'world');
+    const r2 = store.append('acc1', 'conv1', 'cmsg_2', 'agent', 'text', 'world');
     assert.equal(r2.seq, r1.seq + 1);
 
     // getAfterSeq
@@ -93,8 +94,8 @@ describe('TS: MessageStore', () => {
     const db = new Database(':memory:');
     const store = new MessageStore(db);
 
-    const r1 = store.append('conv1', 'dup_id', 'user', 'text', 'first');
-    const r2 = store.append('conv1', 'dup_id', 'user', 'text', 'second');
+    const r1 = store.append('acc1', 'conv1', 'dup_id', 'user', 'text', 'first');
+    const r2 = store.append('acc1', 'conv1', 'dup_id', 'user', 'text', 'second');
     assert.equal(r2.serverMsgId, r1.serverMsgId, 'same serverMsgId');
     assert.equal(r2.seq, r1.seq, 'same seq');
     db.close();
@@ -104,6 +105,7 @@ describe('TS: MessageStore', () => {
 describe('TS: ConversationStore', () => {
   it('ensure creates and returns conversation', () => {
     const db = new Database(':memory:');
+    new ConversationConfigStore(db);  // 确保 conversation_configs 表存在 — Ensure table exists
     const store = new ConversationStore(db);
 
     const conv = store.ensure('conv_1');
@@ -128,6 +130,7 @@ describe('TS: ConversationStore', () => {
 describe('TS: CupV2Handler', () => {
   function createHandler() {
     const db = new Database(':memory:');
+    new ConversationConfigStore(db);  // 确保 conversation_configs 表存在 — Ensure table exists
     const ms = new MessageStore(db);
     const cs = new ConversationStore(db);
     return { handler: new CupV2Handler(ms, cs), db, ms };
@@ -158,14 +161,15 @@ describe('TS: CupV2Handler', () => {
     const seq0 = handler.handleSync({
       event_type: 'sync', data: { last_seq: 0 },
     });
-    assert.equal(seq0.messages.length, 0, 'new device gets 0 messages');
+    // last_seq=0 → 拉取全量历史（最多 500 条）— Pull full history (up to LIMIT 500)
+    assert.equal(seq0.messages.length, 1, 'new device gets all stored messages');
     assert.ok(seq0.current_seq > 0);
     db.close();
   });
 
   it('storeAgentMessage stores and returns seq', () => {
     const { handler, db } = createHandler();
-    const r = handler.storeAgentMessage('acc', 'AI reply', 'text', 'upstream_1');
+    const r = handler.storeAgentMessage('acc', 'conv1', 'AI reply', 'text', 'upstream_1');
     assert.ok(r.serverMsgId.startsWith('smsg_'));
     assert.ok(r.seq > 0);
     db.close();
@@ -226,6 +230,34 @@ describe('TS: translateToCup (pure function)', () => {
   it('empty delta returns null', () => {
     const r = translateToCup({ type: 'agent_text_delta', delta: '' }, 'acc');
     assert.equal(r, null);
+  });
+
+  it('agent_text with error_code passes through to text_done', () => {
+    const r = translateToCup({
+      type: 'agent_text',
+      text: '',
+      error_code: 'network_error',
+      error_detail: 'Connection refused',
+    }, 'acc1');
+
+    assert.ok(r);
+    const textDone = r.cupMessages.find(m => m.payload_type === 'text_done');
+    assert.ok(textDone, 'text_done message exists');
+    assert.equal(textDone.error_code, 'network_error');
+    assert.equal(textDone.error_detail, 'Connection refused');
+  });
+
+  it('agent_text without error_code omits error fields', () => {
+    const r = translateToCup({
+      type: 'agent_text',
+      text: 'Normal reply',
+    }, 'acc1');
+
+    assert.ok(r);
+    const textDone = r.cupMessages.find(m => m.payload_type === 'text_done');
+    assert.ok(textDone, 'text_done message exists');
+    assert.equal(textDone.error_code, undefined, 'no error_code');
+    assert.equal(textDone.error_detail, undefined, 'no error_detail');
   });
 });
 
@@ -297,6 +329,7 @@ describe('TS: ActionRouter', () => {
 describe('TS: MessageRouter', () => {
   function createRouter() {
     const db = new Database(':memory:');
+    new ConversationConfigStore(db);  // 确保 conversation_configs 表存在 — Ensure table exists
     const ms = new MessageStore(db);
     const cs = new ConversationStore(db);
     const cupHandler = new CupV2Handler(ms, cs);
@@ -367,10 +400,12 @@ describe('TS: MessageRouter', () => {
     router.handleUpstreamMessage({
       type: 'agent_text_done', message_id: 'm4', fullText: '',
     }, 'acc1');
-    // text_done itself was also discarded (abort + done = clear)
+    // abort 标记只由 clearAbort() 显式清除（user_message handler 调用），text_done 不清除
+    // abort state is only cleared by explicit clearAbort(), not by text_done
     assert.equal(broadcasted.length, 0);
 
-    // Now sending should work
+    // 显式清除 abort 后消息应通过 — After explicit clear, messages should pass through
+    router.clearAbort('acc1');
     router.handleUpstreamMessage({
       type: 'agent_text_delta', message_id: 'm5', delta: 'back',
     }, 'acc1');

@@ -54,11 +54,18 @@ def _setup_hermes_path() -> None:
 
 def main() -> None:
     """Entry point."""
-    # Setup logging
+    # Setup logging — console + file
+    log_dir = Path.home() / ".clawke" / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
         datefmt="%H:%M:%S",
+        handlers=[
+            logging.StreamHandler(),
+            logging.FileHandler(log_dir / "hermes-gateway.log"),
+        ],
     )
 
     # Ensure hermes-agent is importable

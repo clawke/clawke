@@ -26,6 +26,7 @@ import { createAbortHandler } from './event-handlers/abort.js';
 import { createDashboardHandler } from './event-handlers/request-dashboard.js';
 import { createPingHandler } from './event-handlers/ping.js';
 import { translateToCup } from './translator/cup-encoder.js';
+import { createApprovalResponseHandler, createClarifyResponseHandler } from './event-handlers/interactive-response.js';
 
 import { startClientServer, broadcastToClients, sendToClient } from './downstream/client-server.js';
 import { startUnifiedServer } from './http-server.js';
@@ -33,7 +34,7 @@ import { startMediaServer } from './media-server.js';
 import { processMessageMedia } from './services/file-upload.js';
 import { FrpcManager } from './tunnel/frpc-manager.js';
 import { DeviceAuth } from './tunnel/device-auth.js';
-import { handleMessage as mockHandleMessage, abortConversation as mockAbortConversation } from './mock/mock-handler.js';
+import { handleMessage as mockHandleMessage, abortConversation as mockAbortConversation, handleMockApprovalResponse, handleMockClarifyResponse } from './mock/mock-handler.js';
 import { createMockActionHandler } from './mock/mock-action-handler.js';
 import { handleReadFile } from './mock/mock-file-handler.js';
 import { CronService } from './services/cron-service.js';
@@ -211,6 +212,22 @@ async function main() {
     registry.register('read_file', (ctx) => {
       handleReadFile(ctx.ws as any, ctx.payload);
     });
+    registry.register('approval_response', createApprovalResponseHandler({
+      forwardToUpstream: (_accountId, msg) => {
+        const m = msg as Record<string, unknown>;
+        const convId = (m.conversation_id as string) || '';
+        const choice = (m.choice as string) || 'deny';
+        handleMockApprovalResponse(convId, choice);
+      },
+    }));
+    registry.register('clarify_response', createClarifyResponseHandler({
+      forwardToUpstream: (_accountId, msg) => {
+        const m = msg as Record<string, unknown>;
+        const convId = (m.conversation_id as string) || '';
+        const response = (m.response as string) || '';
+        handleMockClarifyResponse(convId, response);
+      },
+    }));
 
     // Mock 模式下客户端连接 → 通知 ai_connected
     clientWss.on('connection', (ws: unknown) => {
@@ -222,6 +239,16 @@ async function main() {
     });
 
     console.log(`[Server] Mock FAST_MODE=${config.server.fastMode || false}`);
+
+    // Mock 模式下也初始化会话和配置路由（客户端需要 REST API）
+    const { initConversationRoutes } = await import('./routes/conversation-routes.js');
+    const { initConfigRoutes } = await import('./routes/config-routes.js');
+    initConversationRoutes({ conversationStore });
+    initConfigRoutes({
+      configStore,
+      queryModels: async () => (['mock-model']),
+      querySkills: async () => ([]),
+    });
 
   } else if (MODE === 'openclaw') {
     const { startOpenClawListener, sendToOpenClaw, isUpstreamConnected, getConnectedAccountIds, queryGatewayModels, queryGatewaySkills } =
@@ -273,11 +300,17 @@ async function main() {
       forwardToUpstream: (accountId: string, msg: unknown) => {
         const m = msg as Record<string, unknown>;
         const conversationId = (m.conversation_id as string) || '';
-        // 客户端已从 conversation 记录取正确的 accountId（如 "OpenClaw"），
-        // 格式必须匹配 Gateway 的 InboundMessageType.Abort = "abort"
         sendToOpenClaw(accountId, { type: 'abort', conversation_id: conversationId });
       },
       messageRouter,
+    }));
+    // Hermes Gateway 专用：结构化审批/澄清响应透传 — Hermes-only: structured approval/clarify response passthrough
+    // OpenClaw 不使用此路径 — 其审批通过 Markdown 按钮 → 普通 chat 消息实现
+    registry.register('approval_response', createApprovalResponseHandler({
+      forwardToUpstream: (accountId, msg) => sendToOpenClaw(accountId, msg),
+    }));
+    registry.register('clarify_response', createClarifyResponseHandler({
+      forwardToUpstream: (accountId, msg) => sendToOpenClaw(accountId, msg),
     }));
 
     // 上游消息处理 — 使用 MessageRouter

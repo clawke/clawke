@@ -14,6 +14,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import readline from 'readline';
+import { spawn, execSync, type ChildProcess } from 'child_process';
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -56,6 +57,18 @@ function detectAvailableGateways(): GatewayInfo[] {
     installFn: async () => {
       const { installNanobotGateway } = await import('./nanobot-gateway-installer.js');
       await installNanobotGateway();
+    },
+  });
+
+  // Hermes: 检查 ~/.hermes/
+  const hermesHome = path.join(os.homedir(), '.hermes');
+  gateways.push({
+    name: 'hermes',
+    displayName: 'Hermes',
+    configPath: hermesHome,
+    installFn: async () => {
+      const { installHermesGateway } = await import('./hermes-gateway-installer.js');
+      await installHermesGateway();
     },
   });
 
@@ -130,6 +143,146 @@ async function installGateway(): Promise<void> {
 const CLAWKE_HOME = path.join(os.homedir(), '.clawke');
 const PID_FILE = path.join(CLAWKE_HOME, 'server.pid');
 
+// ────────────── Gateway 进程管理 ──────────────
+
+const gatewayChildren: ChildProcess[] = [];
+
+interface GatewayInstance {
+  id: string;
+  start_shell: string;
+  hermes_home?: string;
+}
+
+function loadGatewayInstances(): GatewayInstance[] {
+  const configPath = path.join(CLAWKE_HOME, 'clawke.json');
+  if (!fs.existsSync(configPath)) return [];
+  try {
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    if (!config.gateways) return [];
+    const instances: GatewayInstance[] = [];
+    for (const [, list] of Object.entries(config.gateways)) {
+      if (Array.isArray(list)) {
+        instances.push(...(list as GatewayInstance[]));
+      }
+    }
+    return instances;
+  } catch {
+    return [];
+  }
+}
+
+function readGatewayPid(id: string): number | null {
+  try {
+    const pidFile = path.join(CLAWKE_HOME, `${id}-gateway.pid`);
+    const pid = parseInt(fs.readFileSync(pidFile, 'utf-8').trim(), 10);
+    return isNaN(pid) ? null : pid;
+  } catch {
+    return null;
+  }
+}
+
+function writeGatewayPid(id: string, pid: number): void {
+  fs.writeFileSync(path.join(CLAWKE_HOME, `${id}-gateway.pid`), String(pid));
+}
+
+function removeGatewayPid(id: string): void {
+  try { fs.unlinkSync(path.join(CLAWKE_HOME, `${id}-gateway.pid`)); } catch {}
+}
+
+// 验证 PID 是否属于目标 gateway 进程，防止误杀 — Verify PID belongs to gateway before kill
+function isGatewayProcess(pid: number, gwId: string): boolean {
+  try {
+    const cmd = execSync(`ps -p ${pid} -o command=`, { encoding: 'utf-8' }).trim();
+    return cmd.includes(gwId) || cmd.includes('gateway') || cmd.includes('run.py') || cmd.includes('clawke');
+  } catch {
+    return false; // 进程已退出 — Process already exited
+  }
+}
+
+async function startGateways(): Promise<void> {
+  const instances = loadGatewayInstances();
+  if (instances.length === 0) return;
+
+  console.log(`[clawke] 🔌 Starting ${instances.length} gateway(s)...`);
+
+  for (const gw of instances) {
+    // Kill old process if running (code may have been updated)
+    const oldPid = readGatewayPid(gw.id);
+    if (oldPid && isProcessAlive(oldPid)) {
+      if (!isGatewayProcess(oldPid, gw.id)) {
+        console.warn(`[clawke] ⚠️ PID ${oldPid} alive but not ${gw.id} gateway, skipping kill`);
+        removeGatewayPid(gw.id);
+      } else {
+        console.log(`[clawke] 🔄 Killing old ${gw.id} gateway (PID ${oldPid})...`);
+        try { process.kill(oldPid, 'SIGTERM'); } catch {}
+        // Brief wait for graceful shutdown
+        let waited = 0;
+        while (isProcessAlive(oldPid) && waited < 3000) {
+          await new Promise(r => setTimeout(r, 200));
+          waited += 200;
+        }
+        if (isProcessAlive(oldPid)) {
+          try { process.kill(oldPid, 'SIGKILL'); } catch {}
+        }
+        removeGatewayPid(gw.id);
+      }
+    }
+
+    // 通过 shell 启动，正确处理含空格路径和引号参数 — Use shell to handle spaces/quotes in paths
+    const child = spawn(gw.start_shell, [], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      detached: false,
+      shell: true,
+    });
+
+    if (child.pid) {
+      writeGatewayPid(gw.id, child.pid);
+      gatewayChildren.push(child);
+      console.log(`[clawke] ✅ ${gw.id} gateway started (PID ${child.pid})`);
+
+      // Pipe gateway output to server console
+      child.stdout?.on('data', (data: Buffer) => {
+        process.stdout.write(`[${gw.id}] ${data}`);
+      });
+      child.stderr?.on('data', (data: Buffer) => {
+        process.stderr.write(`[${gw.id}] ${data}`);
+      });
+
+      child.on('exit', (code) => {
+        console.log(`[clawke] ⚠️  ${gw.id} gateway exited (code ${code})`);
+        removeGatewayPid(gw.id);
+      });
+
+      // 兜底：命令不存在等场景的 spawn 错误 — Catch spawn errors (e.g. command not found)
+      child.on('error', (err) => {
+        console.error(`[clawke] ❌ ${gw.id} gateway spawn error: ${err.message}`);
+        removeGatewayPid(gw.id);
+      });
+    } else {
+      console.error(`[clawke] ❌ Failed to start ${gw.id} gateway: ${gw.start_shell}`);
+    }
+  }
+}
+
+function stopAllGateways(): void {
+  // Kill tracked child processes
+  for (const child of gatewayChildren) {
+    if (child.pid && isProcessAlive(child.pid)) {
+      try { child.kill('SIGTERM'); } catch {}
+    }
+  }
+
+  // Also kill by PID file (in case we didn't spawn them)
+  const instances = loadGatewayInstances();
+  for (const gw of instances) {
+    const pid = readGatewayPid(gw.id);
+    if (pid && isProcessAlive(pid)) {
+      try { process.kill(pid, 'SIGTERM'); } catch {}
+    }
+    removeGatewayPid(gw.id);
+  }
+}
+
 function writePid(): void {
   fs.mkdirSync(CLAWKE_HOME, { recursive: true });
   fs.writeFileSync(PID_FILE, String(process.pid));
@@ -183,14 +336,20 @@ async function serverStart(): Promise<void> {
   // 写入 PID 文件 — Write PID file
   writePid();
 
-  // 进程退出时清理 PID 文件 — Cleanup PID file on exit
-  const cleanup = () => { removePidFile(); };
+  // 进程退出时清理 PID 文件 + Gateway 子进程 — Cleanup on exit
+  const cleanup = () => { stopAllGateways(); removePidFile(); };
   process.on('exit', cleanup);
   process.on('SIGINT', () => { cleanup(); process.exit(0); });
   process.on('SIGTERM', () => { cleanup(); process.exit(0); });
 
   // 加载 server 入口 — Load server entry
   await import('../index.js');
+
+  // Server 启动后启动 Gateway — Start gateways after server is ready
+  // 延迟 1s 确保 WS 端口就绪
+  setTimeout(async () => {
+    await startGateways();
+  }, 1000);
 }
 
 function serverStop(): void {
@@ -205,6 +364,9 @@ function serverStop(): void {
     removePidFile();
     return;
   }
+
+  // 先停 Gateway
+  stopAllGateways();
 
   console.log(`[clawke] Stopping server (PID ${pid})...`);
   try {
@@ -288,6 +450,10 @@ async function main(): Promise<void> {
     const { installNanobotGateway } = await import('./nanobot-gateway-installer.js');
     await installNanobotGateway();
 
+  } else if (command === 'hermes-gateway' && subCommand === 'install') {
+    const { installHermesGateway } = await import('./hermes-gateway-installer.js');
+    await installHermesGateway();
+
   } else if (command === 'server') {
     switch (subCommand) {
       case 'start':   await serverStart(); break;
@@ -323,6 +489,7 @@ function printHelp(): void {
   Legacy Commands:
     openclaw-gateway install   Install OpenClaw gateway (same as gateway install)
     nanobot-gateway install    Install nanobot gateway (same as gateway install)
+    hermes-gateway install     Install Hermes gateway
 
   Options:
     --help, -h                 Show this help message

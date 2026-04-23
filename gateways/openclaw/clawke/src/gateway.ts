@@ -96,38 +96,119 @@ function getAvailableModels(ctx: ChannelGatewayContext<ResolvedClawkeAccount>): 
   return [];
 }
 
-/** 扫描 .openclaw/workspace/skills/ 目录获取可用 Skills */
-function getAvailableSkills(): Array<{ name: string; description: string }> {
-  try {
-    const skillsDir = join(homedir(), ".openclaw", "workspace", "skills");
-    if (!existsSync(skillsDir)) return [];
+/**
+ * 扫描 OpenClaw 所有 skill 目录获取可用 Skills（对齐 OpenClaw workspace.ts loadSkillEntries）
+ *
+ * OpenClaw 原生扫描 6 个来源（优先级从低到高，同名 skill 后者覆盖前者）：
+ *   1. openclaw-extra     — openclaw.json > skills.load.extraDirs + plugin skills
+ *   2. openclaw-bundled   — <openclaw-package>/skills/
+ *   3. openclaw-managed   — ~/.openclaw/skills/   (openclaw skills install)
+ *   4. agents-personal    — ~/.agents/skills/
+ *   5. agents-project     — <workspace>/.agents/skills/
+ *   6. openclaw-workspace — <workspace>/skills/
+ *
+ * 我们的 Gateway 作为 plugin 无法 import OpenClaw 内部 API，所以复刻目录扫描逻辑。
+ * 对于 extraDirs / plugin skills 暂不扫描（需要 config 解析），对于 bundled skills 使用启发式。
+ */
+function getAvailableSkills(ctx: ChannelGatewayContext<ResolvedClawkeAccount>): Array<{ name: string; description: string }> {
+  const home = homedir();
+  const configDir = join(home, ".openclaw");
 
-    const entries = readdirSync(skillsDir, { withFileTypes: true }) as Dirent[];
-    const skills: Array<{ name: string; description: string }> = [];
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      const skillMd = join(skillsDir, entry.name, "SKILL.md");
-      if (!existsSync(skillMd)) continue;
-      const content = readFileSync(skillMd, "utf-8");
-      // Extract description from YAML frontmatter or first non-header line
-      let desc = entry.name;
-      const fmMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
-      if (fmMatch) {
-        const descMatch = fmMatch[1].match(/description:\s*(.+)/i);
-        if (descMatch) desc = descMatch[1].trim();
-      } else {
-        const firstLine = content.split("\n").find(
-          (l: string) => l.trim() && !l.startsWith("#") && !l.startsWith("---")
-        );
-        if (firstLine) desc = firstLine.trim().slice(0, 120);
+  // 推断 workspaceDir：从 OpenClaw 配置中读取，fallback 到 ~/.openclaw/workspace
+  let workspaceDir = join(configDir, "workspace"); // OpenClaw 默认 workspace
+  try {
+    const configPath = join(configDir, "openclaw.json");
+    if (existsSync(configPath)) {
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      const agents = config?.agents;
+      if (agents && typeof agents === "object") {
+        // OpenClaw 配置结构：agents.defaults.workspace
+        if (agents.defaults?.workspace) {
+          workspaceDir = agents.defaults.workspace;
+        }
+        // 也检查 per-agent 的 workspace 配置
+        const agentList = agents.list;
+        if (Array.isArray(agentList)) {
+          const defaultAgent = agentList.find((a: any) => a.default) || agentList[0];
+          if (defaultAgent?.workspace) {
+            workspaceDir = defaultAgent.workspace;
+          }
+        }
       }
-      skills.push({ name: entry.name, description: desc });
     }
-    return skills;
-  } catch {
-    return [];
+  } catch { /* ignore */ }
+
+  // 推断 bundled skills 目录
+  let bundledSkillsDir: string | undefined;
+  try {
+    // 方法 1: 可执行文件旁的 skills/ 目录（bun --compile 场景）
+    const execDir = join(process.execPath, "..");
+    // 方法 2: 当前模块向上查找（npm/dev 场景）
+    const moduleDir = new URL(".", import.meta.url).pathname;
+    const candidates = [
+      join(execDir, "skills"),
+      join(moduleDir, "..", "skills"),
+      join(moduleDir, "..", "..", "skills"),
+      join(moduleDir, "..", "..", "..", "skills"),
+    ];
+    for (const c of candidates) {
+      if (existsSync(c)) { bundledSkillsDir = c; break; }
+    }
+  } catch { /* ignore */ }
+
+  // 6 个扫描目录（按优先级从低到高）
+  const scanDirs: Array<{ dir: string; source: string }> = [];
+
+  // 2. openclaw-bundled
+  if (bundledSkillsDir) {
+    scanDirs.push({ dir: bundledSkillsDir, source: "openclaw-bundled" });
   }
+  // 3. openclaw-managed
+  scanDirs.push({ dir: join(configDir, "skills"), source: "openclaw-managed" });
+  // 4. agents-skills-personal
+  scanDirs.push({ dir: join(home, ".agents", "skills"), source: "agents-skills-personal" });
+  // 5. agents-skills-project
+  scanDirs.push({ dir: join(workspaceDir, ".agents", "skills"), source: "agents-skills-project" });
+  // 6. openclaw-workspace
+  scanDirs.push({ dir: join(workspaceDir, "skills"), source: "openclaw-workspace" });
+
+  const merged = new Map<string, { name: string; description: string }>();
+
+  for (const { dir } of scanDirs) {
+    try {
+      if (!existsSync(dir)) continue;
+      const entries = readdirSync(dir, { withFileTypes: true }) as Dirent[];
+      for (const entry of entries) {
+        if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+        const skillMd = join(dir, entry.name, "SKILL.md");
+        if (!existsSync(skillMd)) continue;
+        const content = readFileSync(skillMd, "utf-8");
+        // Extract name and description from YAML frontmatter
+        let name = entry.name;
+        let desc = entry.name;
+        const fmMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
+        if (fmMatch) {
+          const nameMatch = fmMatch[1].match(/name:\s*(.+)/i);
+          if (nameMatch) name = nameMatch[1].trim();
+          const descMatch = fmMatch[1].match(/description:\s*(.+)/i);
+          if (descMatch) desc = descMatch[1].trim();
+        } else {
+          const firstLine = content.split("\n").find(
+            (l: string) => l.trim() && !l.startsWith("#") && !l.startsWith("---")
+          );
+          if (firstLine) desc = firstLine.trim().slice(0, 120);
+        }
+        // 后加载覆盖先加载（同名 skill 以高优先级为准）
+        merged.set(name, { name, description: desc });
+      }
+    } catch { /* ignore individual dir failures */ }
+  }
+
+  const skills = Array.from(merged.values()).sort((a, b) => a.name.localeCompare(b.name));
+  ctx.log?.info(`📦 Skills discovered: ${skills.length} skills from ${scanDirs.filter(d => existsSync(d.dir)).length} dirs`);
+  return skills;
 }
+
 
 /**
  * Gateway 启动入口：建立 WebSocket 连接到 Clawke Server，断线自动重连。
@@ -306,7 +387,7 @@ export async function startClawkeGateway(
             ctx.log?.info(`📤 Models response: ${models.length} models`);
           } else if (msg.type === InboundMessageType.QuerySkills) {
             // 查询可用 Skills 列表
-            const skills = getAvailableSkills();
+            const skills = getAvailableSkills(ctx);
             ws!.send(JSON.stringify({ type: GatewayMessageType.SkillsResponse, skills }));
             ctx.log?.info(`📤 Skills response: ${skills.length} skills`);
           }
@@ -1010,19 +1091,42 @@ async function handleClawkeInbound(
     } else {
       ctx.log?.warn(`AI silent with no error (0 tokens generated). Session may have been busy or LLM returned empty.`);
     }
-    const fallbackText = lastError 
-      ? `⚠️ 请求大模型接口失败：${(lastError as Error).message}` 
-      : "⚠️ AI 未能生成回复，请重试。如果问题持续出现，尝试发送 /new 开始新会话。";
-      
+    const errorInfo = lastError
+      ? _classifyError((lastError as Error).message)
+      : { error_code: "no_reply", detail: "" };
+
     _sendToClawkeServer({
       type: GatewayMessageType.AgentText,
       message_id: streamMsgId,
-      text: fallbackText,
+      text: errorInfo.detail || `[${errorInfo.error_code}]`,
+      error_code: errorInfo.error_code,
+      error_detail: errorInfo.detail,
       to: clawkeTo,
       account_id: ctx.accountId,
       conversation_id: senderId,
     });
   }
+}
+
+/** 将异常消息分类为结构化错误码，供客户端 i18n 翻译 */
+// ⚠️ 关键词表需与 Hermes Gateway (clawke_channel.py _classify_error) 保持同步
+function _classifyError(msg: string): { error_code: string; detail: string } {
+  const lower = msg.toLowerCase();
+  const detail = msg.slice(0, 100);
+
+  if (["api key", "authentication", "unauthorized", "403", "invalid_api_key"].some(kw => lower.includes(kw)))
+    return { error_code: "auth_failed", detail };
+
+  if (["timeout", "connect", "connection refused", "dns", "econnrefused"].some(kw => lower.includes(kw)))
+    return { error_code: "network_error", detail };
+
+  if (["rate limit", "429", "too many requests", "quota"].some(kw => lower.includes(kw)))
+    return { error_code: "rate_limited", detail };
+
+  if (["model not found", "model_not_found", "does not exist"].some(kw => lower.includes(kw)))
+    return { error_code: "model_unavailable", detail };
+
+  return { error_code: "agent_error", detail };
 }
 
 /**

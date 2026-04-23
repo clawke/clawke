@@ -44,7 +44,10 @@ export type GatewayMessageType = (typeof GatewayMessageType)[keyof typeof Gatewa
 // Server → Gateway（上行：用户输入 / 控制）
 // ─────────────────────────────────────────────
 
-/** Server 发送给 Gateway 的消息类型 */
+/** Server 发送给 Gateway 的消息类型 — Server → Gateway inbound message types */
+// 注意：不含 approval_response / clarify_response — 那些是 Hermes Gateway 专用协议
+// Note: no approval_response / clarify_response — those are Hermes-only;
+// OpenClaw handles approvals via markdown buttons → plain text chat messages
 export const InboundMessageType = {
   Chat:         "chat",
   Abort:        "abort",

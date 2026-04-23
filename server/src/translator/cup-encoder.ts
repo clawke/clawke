@@ -118,6 +118,17 @@ export function translateToCup(
       const text = msg.text || '';
       const usage = msg.usage;
 
+      // 构建 text_done 消息，透传 error_code/error_detail 供客户端 i18n
+      const textDone: CupEncodedMessage = {
+        message_id: `msg_${Date.now()}`,
+        account_id: accountId,
+        payload_type: 'text_done',
+      };
+      if (msg.error_code) {
+        textDone.error_code = msg.error_code;
+        textDone.error_detail = msg.error_detail || '';
+      }
+
       const cupMessages: CupEncodedMessage[] = [
         {
           message_id: `msg_${Date.now()}`,
@@ -125,11 +136,7 @@ export function translateToCup(
           payload_type: 'text_delta',
           content: text,
         },
-        {
-          message_id: `msg_${Date.now()}`,
-          account_id: accountId,
-          payload_type: 'text_done',
-        },
+        textDone,
       ];
 
       if (usage || msg.model) {
@@ -257,6 +264,34 @@ export function translateToCup(
           conversation_id: msg.conversation_id,
           payload_type: 'agent_status',
           status: msg.status || 'thinking',
+        }],
+        metadata: {},
+      };
+
+    // ── Approval / Clarify 透传（Gateway ↔ Client，不存储不统计）──
+    case 'approval_request':
+      return {
+        cupMessages: [{
+          message_id: msgId,
+          account_id: accountId,
+          payload_type: 'approval_request',
+          command: msg.command || '',
+          description: msg.description || '',
+          pattern_keys: msg.pattern_keys || [],
+          conversation_id: msg.conversation_id || '',
+        }],
+        metadata: {},
+      };
+
+    case 'clarify_request':
+      return {
+        cupMessages: [{
+          message_id: msgId,
+          account_id: accountId,
+          payload_type: 'clarify_request',
+          question: msg.question || '',
+          choices: msg.choices || [],
+          conversation_id: msg.conversation_id || '',
         }],
         metadata: {},
       };

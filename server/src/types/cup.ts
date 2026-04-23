@@ -15,6 +15,8 @@ export type EventType =
   | 'abort'
   | 'user_action'
   | 'request_dashboard'
+  | 'approval_response'
+  | 'clarify_response'
   | 'ping';
 
 /** 客户端上报的完整 payload */
@@ -48,6 +50,8 @@ export type CupPayloadType =
   | 'usage_report'
   | 'tool_call_start'
   | 'tool_call_done'
+  | 'approval_request'
+  | 'clarify_request'
   | 'ctrl'
   | 'sync_response'
   | 'update_info';
@@ -72,6 +76,10 @@ export interface TextDoneMessage extends CupMessageBase {
   payload_type: 'text_done';
   seq: number;
   created_at: string;
+  /** 结构化错误码（Gateway 异常分类），客户端根据此码做 i18n 翻译 */
+  error_code?: string;
+  /** 错误详情（原始异常摘要），客户端 i18n 找不到 error_code 时 fallback 显示 */
+  error_detail?: string;
 }
 
 /** Thinking delta 消息 */
