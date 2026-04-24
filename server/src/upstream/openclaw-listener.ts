@@ -140,6 +140,11 @@ export function isUpstreamConnected(accountId?: string): boolean {
   return false;
 }
 
+export function getUpstreamConnection(accountId: string): WebSocket | undefined {
+  const ws = upstreamConnections.get(accountId);
+  return ws && ws.readyState === 1 ? ws : undefined;
+}
+
 export function getConnectedAccountIds(): string[] {
   const ids: string[] = [];
   for (const [id, ws] of upstreamConnections) {
@@ -217,5 +222,4 @@ function _queryGateway<T>(
     ws.send(JSON.stringify({ type: queryType }));
   });
 }
-
 
