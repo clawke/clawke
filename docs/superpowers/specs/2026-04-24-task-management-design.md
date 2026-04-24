@@ -200,6 +200,26 @@ OpenClaw 仍然负责调度和任务执行。
 
 页面的主要工作流不依赖聊天消息或 SDUI message card。Flutter 结构应和 Skills 管理页一致：typed model、Dio API service、Riverpod controller、完整管理视图。
 
+### 桌面端布局
+
+桌面端采用方案 A：三栏 operations console。
+
+- 最左侧是 Clawke 全局导航 rail，包含 Chat、Dashboard、Tasks、Skills、Settings，Tasks 处于选中状态。
+- 中间是 gateway/account 列表栏，展示 Hermes、OpenClaw 等连接状态、任务数量、失败提示和最近同步时间。
+- 右侧主区域是任务管理工作区，包含顶部统计、搜索筛选、新建任务入口和任务列表。
+- 最右侧可打开任务详情/运行输出 drawer，用于查看选中任务的最近 runs、完整输出、错误信息和手动触发结果。
+- 主区域保持管理台风格：高信息密度、明确状态、稳定操作按钮，不使用聊天气泡或营销化卡片。
+
+### 移动端布局
+
+移动端参考 Skills 管理页面的移动端方案。
+
+- 使用单列信息流，顶部展示标题、当前 gateway 选择器、统计和新建任务按钮。
+- Gateway/account 列表收进顶部选择器或底部 sheet，避免固定三栏压缩主内容。
+- 搜索和筛选位于任务列表上方，必要时折叠为 filter sheet。
+- 任务详情、编辑表单、运行记录和输出查看使用全屏 dialog 或 bottom sheet。
+- 操作优先使用清晰的图标按钮和菜单，保证任务卡片在窄屏下仍可扫描。
+
 ## 错误处理
 
 - 如果没有 gateway account 连接，页面展示 disconnected 状态，HTTP 返回 `503`。
