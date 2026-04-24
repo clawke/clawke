@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import sys
+import threading
+import time
 import types
 from pathlib import Path
 
@@ -34,6 +36,14 @@ def cron_jobs(monkeypatch, tmp_path):
             "prompt": "Weekly wrap",
             "enabled": False,
             "skills": ["writing"],
+        },
+        {
+            "id": "job_3",
+            "name": "Structured schedule",
+            "schedule": {"type": "daily", "hour": 9},
+            "schedule_display": "Every day at 9:00 AM",
+            "prompt": "Structured prompt",
+            "enabled": True,
         },
     ]
 
@@ -116,7 +126,7 @@ def adapter(cron_jobs):
 def test_list_tasks_maps_cron_jobs_to_normalized_tasks(adapter, cron_jobs):
     tasks = adapter.list_tasks("acct_1")
 
-    assert [task["id"] for task in tasks] == ["job_1", "job_2"]
+    assert [task["id"] for task in tasks] == ["job_1", "job_2", "job_3"]
     assert tasks[0] == {
         "id": "job_1",
         "account_id": "acct_1",
@@ -134,6 +144,8 @@ def test_list_tasks_maps_cron_jobs_to_normalized_tasks(adapter, cron_jobs):
     }
     assert tasks[1]["schedule"] == "0 17 * * 5"
     assert tasks[1]["status"] == "paused"
+    assert tasks[2]["schedule"] == "Every day at 9:00 AM"
+    assert tasks[2]["schedule_text"] == "Every day at 9:00 AM"
     assert cron_jobs.calls[0] == ("list_jobs", True)
 
 
@@ -235,6 +247,18 @@ def test_list_runs_and_get_output_read_output_files(adapter, cron_jobs):
     assert adapter.get_output("job_1", "missing") == ""
 
 
+def test_output_reads_reject_path_traversal(adapter):
+    outside_dir = adapter._output_dir().parent
+    (outside_dir / "outside.txt").write_text("outside", encoding="utf-8")
+
+    assert adapter.list_runs("../job_1") == []
+    assert adapter.list_runs("nested/job_1") == []
+    assert adapter.get_output("../job_1", "run_a") == ""
+    assert adapter.get_output("job_1", "../run_a") == ""
+    assert adapter.get_output("job_1", "nested/run_a") == ""
+    assert adapter.get_output("..", "outside") == ""
+
+
 @pytest.mark.asyncio
 async def test_run_task_invokes_scheduler_and_returns_running_summary(adapter, cron_jobs, monkeypatch):
     scheduler_mod = types.ModuleType("cron.scheduler")
@@ -253,6 +277,30 @@ async def test_run_task_invokes_scheduler_and_returns_running_summary(adapter, c
     assert run["id"].startswith("manual_")
     assert ("get_job", "job_1") in cron_jobs.calls
     assert scheduler_mod.calls == [("run_job", "job_1")]
+
+
+def test_run_task_starts_scheduler_in_background(adapter, cron_jobs, monkeypatch):
+    scheduler_mod = types.ModuleType("cron.scheduler")
+    started = threading.Event()
+    release = threading.Event()
+
+    def run_job(job):
+        started.set()
+        release.wait(timeout=1)
+
+    scheduler_mod.run_job = run_job
+    monkeypatch.setitem(sys.modules, "cron.scheduler", scheduler_mod)
+
+    start = time.monotonic()
+    run = adapter.run_task("job_1")
+    elapsed = time.monotonic() - start
+
+    try:
+        assert run["status"] == "running"
+        assert elapsed < 0.2
+        assert started.wait(timeout=0.2)
+    finally:
+        release.set()
 
 
 def test_channel_declares_task_inbound_message_types():
@@ -298,6 +346,51 @@ async def test_channel_task_command_sends_response(monkeypatch):
         "ok": True,
         "tasks": [{"id": "job_1", "account_id": "acct_1"}],
     }]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("msg", "expected"), [
+    ({"type": "task_create", "task": {"name": "New"}}, {"type": "task_mutation_response", "task": {"id": "created"}}),
+    ({"type": "task_update", "task_id": "job_1", "patch": {"name": "Renamed"}}, {"type": "task_mutation_response", "task": {"id": "updated"}}),
+    ({"type": "task_delete", "task_id": "job_1"}, {"type": "task_mutation_response", "deleted": True}),
+    ({"type": "task_set_enabled", "task_id": "job_1", "enabled": False}, {"type": "task_mutation_response", "task": {"id": "enabled"}}),
+    ({"type": "task_run", "task_id": "job_1"}, {"type": "task_run_response", "runs": [{"id": "run_1"}]}),
+])
+async def test_channel_task_command_response_contract(msg, expected):
+    from clawke_channel import ClawkeHermesGateway, GatewayConfig
+
+    class FakeAdapter:
+        def create_task(self, account_id, task):
+            return {"id": "created"}
+
+        def update_task(self, account_id, task_id, patch):
+            return {"id": "updated"}
+
+        def delete_task(self, task_id):
+            return True
+
+        def set_enabled(self, account_id, task_id, enabled):
+            return {"id": "enabled"}
+
+        def run_task(self, task_id):
+            return {"id": "run_1"}
+
+    sent = []
+    gateway = ClawkeHermesGateway(GatewayConfig(account_id="acct_1"))
+    gateway._task_adapter = FakeAdapter()
+
+    async def capture(data):
+        sent.append(data)
+
+    gateway._send = capture
+    outbound = {"request_id": "req_contract", "account_id": "acct_1", **msg}
+
+    await gateway._handle_task_command(outbound)
+
+    assert sent[0]["request_id"] == "req_contract"
+    assert sent[0]["ok"] is True
+    for key, value in expected.items():
+        assert sent[0][key] == value
 
 
 @pytest.mark.asyncio

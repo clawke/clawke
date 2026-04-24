@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -72,6 +73,8 @@ class HermesTaskAdapter:
         return self._normalize_task(account_id, job)
 
     def list_runs(self, task_id: str) -> list[dict[str, Any]]:
+        if not self._is_safe_id(task_id):
+            return []
         task_dir = self._output_dir() / task_id
         if not task_dir.is_dir():
             return []
@@ -87,6 +90,8 @@ class HermesTaskAdapter:
         return runs
 
     def get_output(self, task_id: str, run_id: str) -> str:
+        if not self._is_safe_id(task_id) or not self._is_safe_id(run_id):
+            return ""
         task_dir = self._output_dir() / task_id
         for suffix in (".md", ".txt"):
             path = task_dir / f"{run_id}{suffix}"
@@ -98,7 +103,12 @@ class HermesTaskAdapter:
         job = self._jobs().get_job(task_id)
         if not job:
             raise ValueError(f"Task not found: {task_id}")
-        self._scheduler().run_job(job)
+        thread = threading.Thread(
+            target=self._scheduler().run_job,
+            args=(job,),
+            daemon=True,
+        )
+        thread.start()
         now = self._timestamp()
         return {
             "id": f"manual_{int(time.time() * 1000)}",
@@ -109,7 +119,9 @@ class HermesTaskAdapter:
 
     def _normalize_task(self, account_id: str, job: Any) -> dict[str, Any]:
         raw = self._as_dict(job)
-        schedule = raw.get("schedule") or raw.get("cron") or ""
+        raw_schedule = raw.get("schedule") or raw.get("cron") or ""
+        schedule = raw.get("schedule_display") or raw_schedule
+        schedule_text = raw.get("schedule_text") or raw.get("schedule_display") or schedule
         enabled = bool(raw.get("enabled", True))
         return {
             "id": str(raw.get("id") or raw.get("job_id") or raw.get("name") or ""),
@@ -117,7 +129,7 @@ class HermesTaskAdapter:
             "agent": self.agent,
             "name": str(raw.get("name") or ""),
             "schedule": str(schedule),
-            "schedule_text": str(raw.get("schedule_text") or schedule),
+            "schedule_text": str(schedule_text),
             "prompt": str(raw.get("prompt") or ""),
             "enabled": enabled,
             "status": "active" if enabled else "paused",
@@ -142,6 +154,13 @@ class HermesTaskAdapter:
 
     def _output_dir(self) -> Path:
         return Path(self._jobs().OUTPUT_DIR)
+
+    @staticmethod
+    def _is_safe_id(value: str) -> bool:
+        if not value or value in {".", ".."}:
+            return False
+        path = Path(value)
+        return not path.is_absolute() and len(path.parts) == 1 and path.parts[0] == value
 
     @staticmethod
     def _jobs():

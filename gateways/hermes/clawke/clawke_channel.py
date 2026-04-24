@@ -943,7 +943,7 @@ class ClawkeHermesGateway:
         msg_type = str(msg.get("type") or "")
         request_id = msg.get("request_id", "")
         response: dict[str, Any] = {
-            "type": f"{msg_type}_response",
+            "type": self._task_response_type(msg_type),
             "request_id": request_id,
         }
 
@@ -965,7 +965,7 @@ class ClawkeHermesGateway:
             elif msg_type == InboundMessageType.TaskSetEnabled:
                 response.update({"ok": True, "task": adapter.set_enabled(account_id, task_id, bool(msg.get("enabled")))})
             elif msg_type == InboundMessageType.TaskRun:
-                response.update({"ok": True, "run": adapter.run_task(task_id)})
+                response.update({"ok": True, "runs": [adapter.run_task(task_id)]})
             elif msg_type == InboundMessageType.TaskRuns:
                 response.update({"ok": True, "runs": adapter.list_runs(task_id)})
             elif msg_type == InboundMessageType.TaskOutput:
@@ -981,6 +981,17 @@ class ClawkeHermesGateway:
             })
 
         await self._send(response)
+
+    @staticmethod
+    def _task_response_type(msg_type: str) -> str:
+        if msg_type in {
+            InboundMessageType.TaskCreate,
+            InboundMessageType.TaskUpdate,
+            InboundMessageType.TaskDelete,
+            InboundMessageType.TaskSetEnabled,
+        }:
+            return "task_mutation_response"
+        return f"{msg_type}_response"
 
     def _get_task_adapter(self):
         """Lazily instantiate the Hermes task adapter."""
