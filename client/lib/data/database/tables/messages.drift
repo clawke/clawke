@@ -1,0 +1,42 @@
+-- messages.drift
+import 'conversations.drift';
+
+CREATE TABLE messages (
+    message_id       TEXT    NOT NULL PRIMARY KEY,
+    server_id        TEXT,
+    account_id       TEXT    NOT NULL,
+    conversation_id  TEXT    NOT NULL DEFAULT 'default',
+    sender_id        TEXT    NOT NULL,
+    type             TEXT    NOT NULL,
+    content          TEXT,
+    thinking_content TEXT,
+    quote_id         TEXT,
+    status           TEXT    NOT NULL DEFAULT 'sending',
+    seq              INTEGER DEFAULT 0,
+    edited_at        INTEGER,
+    created_at       INTEGER NOT NULL,
+    input_tokens     INTEGER,
+    output_tokens    INTEGER,
+    model_name       TEXT,
+    FOREIGN KEY(conversation_id) REFERENCES conversations(conversation_id)
+        ON DELETE CASCADE
+);
+
+CREATE INDEX idx_msg_conv_created ON messages(conversation_id, created_at DESC);
+
+watchMessagesInConversation:
+  SELECT * FROM messages
+  WHERE conversation_id = :conversationId AND status != 'baseline'
+  ORDER BY created_at DESC
+  LIMIT :limit;
+
+getMessageById:
+  SELECT * FROM messages
+  WHERE message_id = :id;
+
+getMessagesByStatus:
+  SELECT * FROM messages
+  WHERE status = :status;
+
+getMaxSeq:
+  SELECT MAX(seq) AS max_seq FROM messages WHERE seq > 0;

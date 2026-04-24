@@ -31,10 +31,15 @@ server/data/
 client/ios/Pods/
 client/ios/.symlinks/
 client/ios/ExportOptions.plist
+client/ios/Flutter/Generated.xcconfig
+client/ios/Flutter/flutter_export_environment.sh
+client/ios/Flutter/ephemeral/
 
 # macOS
 client/macos/Pods/
 client/macos/.symlinks/
+client/linux/flutter/ephemeral/
+client/windows/flutter/ephemeral/
 
 # Android
 client/android/key.properties
@@ -62,7 +67,6 @@ scripts/
 client/test_download.dart
 
 # Private (local only)
-client/
 internal-docs/
 tests/
 
@@ -87,6 +91,7 @@ MEMORY.md
 memory/
 
 # Local config
+client/.git/
 client/android/local.properties
 .openclaw/
 .clawke/

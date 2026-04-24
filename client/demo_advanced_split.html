@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>方案 C 定稿</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+    background: #000;
+    color: #fff;
+    display: flex;
+    justify-content: center;
+    padding: 40px 20px;
+  }
+  .phone {
+    width: 375px;
+    min-height: 720px;
+    background: #1c1c1e;
+    border-radius: 40px;
+    overflow: hidden;
+    border: 3px solid #333;
+  }
+  .phone-header {
+    padding: 16px 20px 12px;
+    text-align: center;
+    font-size: 16px;
+    font-weight: 600;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    position: relative;
+  }
+  .phone-header .back {
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #0a7aff;
+    font-size: 20px;
+  }
+  .phone-body { padding: 16px; }
+  .label {
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.35);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 0 4px 8px;
+  }
+
+  /* ========= 通用图标盒 ========= */
+  .icon-box {
+    width: 30px; height: 30px;
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  .icon-box.purple { background: rgba(139,92,246,0.15); color: #a78bfa; }
+  .icon-box.green  { background: rgba(52,211,153,0.15); color: #34d399; }
+  .icon-box.blue   { background: rgba(96,165,250,0.15); color: #60a5fa; }
+  .icon-box.gray   { background: rgba(148,163,184,0.12); color: #94a3b8; }
+
+  .row-label { font-size: 15px; font-weight: 500; flex: 1; }
+  .row-value { font-size: 14px; color: rgba(255,255,255,0.45); }
+  .chevron { font-size: 14px; color: rgba(255,255,255,0.25); margin-left: 4px; }
+
+  /* ========= 模型行 ========= */
+  .model-card {
+    background: rgba(255,255,255,0.06);
+    border-radius: 12px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  /* ========= Skill 面板 ========= */
+  .skill-card {
+    background: rgba(255,255,255,0.06);
+    border-radius: 12px;
+    margin-bottom: 20px;
+    overflow: hidden;
+  }
+  .skill-header {
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .skill-item {
+    padding: 10px 16px;
+    border-top: 1px solid rgba(255,255,255,0.04);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .skill-dot {
+    width: 6px; height: 6px;
+    border-radius: 3px;
+    background: #34d399;
+    flex-shrink: 0;
+  }
+  .skill-name { font-size: 14px; font-weight: 500; }
+  .skill-desc { font-size: 12px; color: rgba(255,255,255,0.35); margin-top: 1px; }
+  .skill-badge {
+    font-size: 12px;
+    font-weight: 600;
+    color: #0a7aff;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  /* ========= 方案 C: 图标+内容卡片 ========= */
+  .c-card {
+    background: rgba(255,255,255,0.06);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 56px;
+  }
+  .c-card .content {
+    flex: 1;
+    font-size: 13px;
+    line-height: 1.5;
+    color: rgba(255,255,255,0.5);
+    max-height: 60px;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+  }
+  .c-card .content.empty {
+    color: rgba(255,255,255,0.18);
+    font-style: italic;
+  }
+  .c-card .chevron-right {
+    font-size: 16px;
+    color: rgba(255,255,255,0.2);
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+
+<div class="phone">
+  <div class="phone-header">
+    <span class="back">‹</span>
+    会话设置
+  </div>
+  <div class="phone-body">
+    <div class="label">配置</div>
+    <div class="model-card">
+      <div class="icon-box purple">⬡</div>
+      <span class="row-label">模型</span>
+      <span class="row-value">MiniMax-M2.7</span>
+      <span class="chevron">›</span>
+    </div>
+
+    <div class="label">SKILLS</div>
+    <div class="skill-card">
+      <div class="skill-header">
+        <div class="icon-box green">🔧</div>
+        <div style="flex:1">
+          <div style="font-size:15px;font-weight:500">1 个已启用</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.3);margin-top:2px">点击修改 Skills 配置</div>
+        </div>
+        <span class="skill-badge">优先触发</span>
+        <span class="chevron">›</span>
+      </div>
+      <div class="skill-item">
+        <span class="skill-dot"></span>
+        <div style="flex:1">
+          <div class="skill-name">web-search</div>
+          <div class="skill-desc">联网搜索和信息检索</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="label">系统提示词</div>
+    <div class="c-card">
+      <div class="icon-box blue">📄</div>
+      <div class="content">你是一位资深 CEO 顾问，擅长战略规划和商业分析。请用简洁专业的语言回答。</div>
+      <span class="chevron-right">›</span>
+    </div>
+
+    <div class="label">工作目录</div>
+    <div class="c-card">
+      <div class="icon-box gray">📁</div>
+      <div class="content">~/projects/clawke</div>
+      <span class="chevron-right">›</span>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

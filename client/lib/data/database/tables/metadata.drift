@@ -1,0 +1,6 @@
+-- Key-value metadata table for per-user settings.
+-- Used to store sync state (last_sync_seq) and other user-scoped config.
+CREATE TABLE IF NOT EXISTS metadata (
+  "key"   TEXT NOT NULL PRIMARY KEY,
+  value   TEXT NOT NULL
+);
