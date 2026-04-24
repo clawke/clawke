@@ -25,7 +25,7 @@ class _TimeoutTasksApiService extends TasksApiService {
 }
 
 void main() {
-  testWidgets('task gateway errors stay centered until dismissed', (
+  testWidgets('task gateway errors show bottom alert and gateway issue badge', (
     tester,
   ) async {
     await pumpApp(
@@ -46,15 +46,23 @@ void main() {
     await tester.pump();
 
     expect(find.byType(SnackBar), findsNothing);
-    expect(find.byKey(const ValueKey('tasks_error_panel')), findsOneWidget);
+    expect(find.byKey(const ValueKey('app_notice_bar')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('tasks_gateway_issue_hermes')),
+      findsOneWidget,
+    );
     expect(
       find.text('Hermes 网关响应超时，请确认 Hermes Gateway 正在运行后重试。'),
       findsOneWidget,
     );
 
-    await tester.tap(find.byKey(const ValueKey('tasks_error_close')));
+    await tester.tap(find.byKey(const ValueKey('app_notice_close')));
     await tester.pump();
 
-    expect(find.byKey(const ValueKey('tasks_error_panel')), findsNothing);
+    expect(find.byKey(const ValueKey('app_notice_bar')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('tasks_gateway_issue_hermes')),
+      findsNothing,
+    );
   });
 }

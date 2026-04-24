@@ -27,6 +27,7 @@ class TasksState {
   final Set<String> busyTaskIds;
   final Set<String> togglingTaskIds;
   final String? errorMessage;
+  final String? errorAccountId;
 
   const TasksState({
     this.accounts = const [],
@@ -41,6 +42,7 @@ class TasksState {
     this.busyTaskIds = const <String>{},
     this.togglingTaskIds = const <String>{},
     this.errorMessage,
+    this.errorAccountId,
   });
 
   TaskAccount? get selectedAccount {
@@ -66,6 +68,7 @@ class TasksState {
     Set<String>? busyTaskIds,
     Set<String>? togglingTaskIds,
     String? errorMessage,
+    String? errorAccountId,
     bool clearError = false,
   }) {
     return TasksState(
@@ -87,6 +90,9 @@ class TasksState {
       busyTaskIds: busyTaskIds ?? this.busyTaskIds,
       togglingTaskIds: togglingTaskIds ?? this.togglingTaskIds,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
+      errorAccountId: clearError
+          ? null
+          : (errorAccountId ?? this.errorAccountId),
     );
   }
 }
@@ -142,6 +148,7 @@ class TasksController extends StateNotifier<TasksState> {
       state = state.copyWith(
         isLoading: false,
         errorMessage: _taskErrorMessage(e, accountId: selected),
+        errorAccountId: selected,
       );
     }
   }
@@ -172,6 +179,7 @@ class TasksController extends StateNotifier<TasksState> {
       state = state.copyWith(
         isSaving: false,
         errorMessage: _taskErrorMessage(e, accountId: draft.accountId),
+        errorAccountId: draft.accountId,
       );
       rethrow;
     }
@@ -190,6 +198,7 @@ class TasksController extends StateNotifier<TasksState> {
       state = state.copyWith(
         busyTaskIds: _withoutBusy(id),
         errorMessage: _taskErrorMessage(e, accountId: draft.accountId),
+        errorAccountId: draft.accountId,
       );
       rethrow;
     }
@@ -220,6 +229,7 @@ class TasksController extends StateNotifier<TasksState> {
         tasks: before,
         togglingTaskIds: _withoutToggling(task.id),
         errorMessage: _taskErrorMessage(e, accountId: task.accountId),
+        errorAccountId: task.accountId,
       );
       rethrow;
     }
@@ -240,6 +250,7 @@ class TasksController extends StateNotifier<TasksState> {
       state = state.copyWith(
         busyTaskIds: _withoutBusy(task.id),
         errorMessage: _taskErrorMessage(e, accountId: task.accountId),
+        errorAccountId: task.accountId,
       );
       rethrow;
     }
@@ -260,6 +271,7 @@ class TasksController extends StateNotifier<TasksState> {
       state = state.copyWith(
         busyTaskIds: _withoutBusy(task.id),
         errorMessage: _taskErrorMessage(e, accountId: task.accountId),
+        errorAccountId: task.accountId,
       );
       rethrow;
     }
@@ -279,6 +291,7 @@ class TasksController extends StateNotifier<TasksState> {
       state = state.copyWith(
         isLoadingRuns: false,
         errorMessage: _taskErrorMessage(e, accountId: task.accountId),
+        errorAccountId: task.accountId,
       );
     }
   }
@@ -293,6 +306,7 @@ class TasksController extends StateNotifier<TasksState> {
     } catch (e) {
       state = state.copyWith(
         errorMessage: _taskErrorMessage(e, accountId: task.accountId),
+        errorAccountId: task.accountId,
       );
     }
   }

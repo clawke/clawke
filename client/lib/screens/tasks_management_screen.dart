@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:client/models/managed_task.dart';
 import 'package:client/providers/tasks_provider.dart';
 import 'package:client/providers/ws_state_provider.dart';
+import 'package:client/widgets/app_notice_bar.dart';
 
 enum _TaskStatusFilter { all, enabled, disabled, error }
 
@@ -64,6 +65,7 @@ class _TasksManagementScreenState extends ConsumerState<TasksManagementScreen> {
                   _GatewaySidebar(
                     accounts: state.accounts,
                     selectedAccountId: state.selectedAccountId,
+                    errorAccountId: state.errorAccountId,
                     isLoading: state.isLoading,
                     onSelected: _selectAccount,
                   ),
@@ -79,10 +81,15 @@ class _TasksManagementScreenState extends ConsumerState<TasksManagementScreen> {
             },
           ),
           if (state.errorMessage != null)
-            Positioned.fill(
-              child: Center(
-                child: _TaskErrorPanel(
+            Positioned(
+              left: 24,
+              right: 24,
+              bottom: 28,
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: AppNoticeBar(
                   message: state.errorMessage!,
+                  severity: AppNoticeSeverity.warning,
                   onDismiss: () =>
                       ref.read(tasksControllerProvider.notifier).clearError(),
                 ),
@@ -377,12 +384,14 @@ class _TasksManagementScreenState extends ConsumerState<TasksManagementScreen> {
 class _GatewaySidebar extends StatelessWidget {
   final List<TaskAccount> accounts;
   final String? selectedAccountId;
+  final String? errorAccountId;
   final bool isLoading;
   final ValueChanged<String> onSelected;
 
   const _GatewaySidebar({
     required this.accounts,
     required this.selectedAccountId,
+    required this.errorAccountId,
     required this.isLoading,
     required this.onSelected,
   });
@@ -420,6 +429,7 @@ class _GatewaySidebar extends StatelessWidget {
                 child: _GatewayTile(
                   account: account,
                   selected: account.accountId == selectedAccountId,
+                  hasIssue: account.accountId == errorAccountId,
                   enabled: !isLoading,
                   onTap: () => onSelected(account.accountId),
                 ),
@@ -433,12 +443,14 @@ class _GatewaySidebar extends StatelessWidget {
 class _GatewayTile extends StatelessWidget {
   final TaskAccount account;
   final bool selected;
+  final bool hasIssue;
   final bool enabled;
   final VoidCallback onTap;
 
   const _GatewayTile({
     required this.account,
     required this.selected,
+    required this.hasIssue,
     required this.enabled,
     required this.onTap,
   });
@@ -446,58 +458,92 @@ class _GatewayTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Material(
-      color: selected
-          ? colorScheme.primaryContainer
-          : colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
-      borderRadius: BorderRadius.circular(8),
-      child: InkWell(
-        onTap: enabled ? onTap : null,
-        borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              Icon(
-                Icons.hub_outlined,
-                color: selected
-                    ? colorScheme.onPrimaryContainer
-                    : colorScheme.onSurfaceVariant,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      account.agentName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: selected
-                            ? colorScheme.onPrimaryContainer
-                            : colorScheme.onSurface,
-                      ),
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Material(
+          color: selected
+              ? colorScheme.primaryContainer
+              : colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+          borderRadius: BorderRadius.circular(8),
+          child: InkWell(
+            onTap: enabled ? onTap : null,
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.hub_outlined,
+                    color: selected
+                        ? colorScheme.onPrimaryContainer
+                        : colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          account.agentName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.labelLarge
+                              ?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: selected
+                                    ? colorScheme.onPrimaryContainer
+                                    : colorScheme.onSurface,
+                              ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          account.accountId,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: selected
+                                    ? colorScheme.onPrimaryContainer
+                                    : colorScheme.onSurfaceVariant,
+                              ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      account.accountId,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: selected
-                            ? colorScheme.onPrimaryContainer
-                            : colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
-      ),
+        if (hasIssue)
+          Positioned(
+            right: 8,
+            bottom: 8,
+            child: Tooltip(
+              message: _localized(context, 'Gateway issue', 'Gateway 异常'),
+              child: Container(
+                key: ValueKey('tasks_gateway_issue_${account.accountId}'),
+                width: 20,
+                height: 20,
+                decoration: BoxDecoration(
+                  color: colorScheme.tertiaryContainer,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: selected
+                        ? colorScheme.onPrimaryContainer.withValues(alpha: 0.5)
+                        : colorScheme.tertiary.withValues(alpha: 0.65),
+                  ),
+                ),
+                child: Icon(
+                  Icons.priority_high_rounded,
+                  size: 15,
+                  color: colorScheme.onTertiaryContainer,
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -1246,64 +1292,6 @@ class _DisconnectedPanel extends StatelessWidget {
         context,
         'Task management becomes available after Hermes or OpenClaw connects.',
         'Hermes 或 OpenClaw 连接后即可管理任务。',
-      ),
-    );
-  }
-}
-
-class _TaskErrorPanel extends StatelessWidget {
-  final String message;
-  final VoidCallback onDismiss;
-
-  const _TaskErrorPanel({required this.message, required this.onDismiss});
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 620),
-        child: Material(
-          key: const ValueKey('tasks_error_panel'),
-          color: colorScheme.errorContainer,
-          elevation: 8,
-          shadowColor: colorScheme.shadow.withValues(alpha: 0.18),
-          borderRadius: BorderRadius.circular(8),
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(20, 18, 10, 18),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: colorScheme.error.withValues(alpha: 0.35),
-              ),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(Icons.error_outline, color: colorScheme.onErrorContainer),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    message,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: colorScheme.onErrorContainer,
-                      height: 1.45,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  key: const ValueKey('tasks_error_close'),
-                  tooltip: _localized(context, 'Close', '关闭'),
-                  onPressed: onDismiss,
-                  icon: const Icon(Icons.close),
-                  color: colorScheme.onErrorContainer,
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }
