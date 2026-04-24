@@ -49,9 +49,9 @@ class HermesTaskAdapter:
             if field in patch:
                 supported[field] = patch[field]
         if "skills" in patch:
-            supported["skill_ids"] = patch["skills"]
+            supported["skills"] = patch["skills"]
         elif "skill_ids" in patch:
-            supported["skill_ids"] = patch["skill_ids"]
+            supported["skills"] = patch["skill_ids"]
 
         job = self._jobs().update_job(task_id, supported)
         if job is None:

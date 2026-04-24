@@ -175,6 +175,7 @@ def test_create_update_delete_call_cron_jobs(adapter, cron_jobs):
             "prompt": "Do it",
             "deliver": "notification",
             "skills": ["ops", "audit"],
+            "skill_ids": ["legacy"],
             "unsupported": "ignored",
         },
     )
@@ -189,9 +190,17 @@ def test_create_update_delete_call_cron_jobs(adapter, cron_jobs):
             "schedule": "0 * * * *",
             "prompt": "Do it",
             "deliver": "notification",
-            "skill_ids": ["ops", "audit"],
+            "skills": ["ops", "audit"],
         },
     )
+
+    cron_jobs.calls.clear()
+    adapter.update_task("acct_1", "job_new", {"skill_ids": ["legacy"]})
+    assert cron_jobs.calls == [(
+        "update_job",
+        "job_new",
+        {"skills": ["legacy"]},
+    )]
 
     assert adapter.delete_task("job_new") is True
     assert ("remove_job", "job_new") in cron_jobs.calls
