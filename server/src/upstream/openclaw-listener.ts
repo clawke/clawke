@@ -9,6 +9,20 @@ import { broadcastToClients } from '../downstream/client-server.js';
 // accountId → WebSocket 路由表
 const upstreamConnections = new Map<string, WebSocket>();
 const activeStreamingIds = new Set<string>();
+const TRANSIENT_GATEWAY_RESPONSE_TYPES = new Set([
+  'models_response',
+  'skills_response',
+  'task_list_response',
+  'task_get_response',
+  'task_mutation_response',
+  'task_run_response',
+  'task_runs_response',
+  'task_output_response',
+]);
+
+export function isTransientGatewayResponseType(type: unknown): boolean {
+  return typeof type === 'string' && TRANSIENT_GATEWAY_RESPONSE_TYPES.has(type);
+}
 
 export function startOpenClawListener(
   port: number,
@@ -60,8 +74,8 @@ export function startOpenClawListener(
         payload.account_id = payload.account_id || accountId;
       }
 
-      // models_response / skills_response 由 _queryGateway 的临时 listener 处理，不走主路由
-      if (payload.type === 'models_response' || payload.type === 'skills_response') {
+      // Transient gateway responses are handled by per-request listeners, not the main route.
+      if (isTransientGatewayResponseType(payload.type)) {
         return;
       }
 
@@ -222,4 +236,3 @@ function _queryGateway<T>(
     ws.send(JSON.stringify({ type: queryType }));
   });
 }
-

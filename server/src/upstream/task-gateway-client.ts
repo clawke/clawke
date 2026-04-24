@@ -92,6 +92,11 @@ export function sendTaskGatewayRequestForTest(
     };
 
     ws.on('message', onMessage);
-    ws.send(JSON.stringify(outbound));
+    try {
+      ws.send(JSON.stringify(outbound));
+    } catch (err) {
+      cleanup();
+      reject(err);
+    }
   });
 }

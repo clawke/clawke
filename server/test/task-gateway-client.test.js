@@ -14,6 +14,12 @@ class FakeWs extends EventEmitter {
   }
 }
 
+class ThrowingFakeWs extends FakeWs {
+  send() {
+    throw new Error('send failed');
+  }
+}
+
 test('task gateway request resolves only matching request_id', async () => {
   const mod = await import('../dist/upstream/task-gateway-client.js');
   const ws = new FakeWs();
@@ -114,4 +120,34 @@ test('task gateway request rejects when upstream connection is unavailable', asy
       return true;
     },
   );
+});
+
+test('task gateway request cleans up listener when send throws', async () => {
+  const mod = await import('../dist/upstream/task-gateway-client.js');
+  const ws = new ThrowingFakeWs();
+
+  await assert.rejects(
+    mod.sendTaskGatewayRequestForTest(ws, {
+      type: 'task_list',
+      account_id: 'hermes',
+    }, 1000),
+    /send failed/,
+  );
+
+  assert.equal(ws.listenerCount('message'), 0);
+});
+
+test('openclaw listener identifies task gateway responses as transient responses', async () => {
+  const { isTransientGatewayResponseType } = await import('../dist/upstream/openclaw-listener.js');
+
+  assert.equal(isTransientGatewayResponseType('models_response'), true);
+  assert.equal(isTransientGatewayResponseType('skills_response'), true);
+  assert.equal(isTransientGatewayResponseType('task_list_response'), true);
+  assert.equal(isTransientGatewayResponseType('task_get_response'), true);
+  assert.equal(isTransientGatewayResponseType('task_mutation_response'), true);
+  assert.equal(isTransientGatewayResponseType('task_run_response'), true);
+  assert.equal(isTransientGatewayResponseType('task_runs_response'), true);
+  assert.equal(isTransientGatewayResponseType('task_output_response'), true);
+  assert.equal(isTransientGatewayResponseType('agent_message'), false);
+  assert.equal(isTransientGatewayResponseType(undefined), false);
 });
