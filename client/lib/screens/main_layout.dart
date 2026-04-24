@@ -6,6 +6,7 @@ import 'package:client/screens/conversation_list_screen.dart';
 import 'package:client/screens/chat_screen.dart';
 import 'package:client/screens/profile_screen.dart';
 import 'package:client/screens/skills_management_screen.dart';
+import 'package:client/screens/tasks_management_screen.dart';
 import 'package:client/providers/conversation_provider.dart';
 import 'package:client/providers/ws_state_provider.dart';
 import 'package:client/providers/debug_log_provider.dart';
@@ -364,9 +365,11 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
                   _buildMobileConversationList(context),
                   // 1: 仪表盘
                   _buildMobileDashboard(context, sduiCache, colorScheme),
-                  // 2: 技能中心
+                  // 2: 任务管理
+                  const TasksManagementScreen(showAppBar: true),
+                  // 3: 技能中心
                   const SkillsManagementScreen(showAppBar: true),
-                  // 3: 我的
+                  // 4: 我的
                   const ProfileScreen(),
                 ],
               ),
@@ -402,6 +405,11 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
             icon: const Icon(Icons.dashboard_outlined),
             activeIcon: const Icon(Icons.dashboard),
             label: l10n.navDashboard,
+          ),
+          BottomNavigationBarItem(
+            icon: const Icon(Icons.task_alt_outlined),
+            activeIcon: const Icon(Icons.task_alt),
+            label: _localized(context, 'Tasks', '任务'),
           ),
           BottomNavigationBarItem(
             icon: const Icon(Icons.extension_outlined),
@@ -562,11 +570,13 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
                       ),
                       // 1: 仪表盘
                       _buildSduiPage(NavPage.dashboard, sduiCache, colorScheme),
-                      // 2: 定时任务
+                      // 2: 任务管理
+                      const TasksManagementScreen(),
+                      // 3: 定时任务（旧 SDUI 页，导航暂隐藏）
                       _buildSduiPage(NavPage.cron, sduiCache, colorScheme),
-                      // 3: 频道管理
+                      // 4: 频道管理
                       _buildSduiPage(NavPage.channels, sduiCache, colorScheme),
-                      // 4: 技能中心
+                      // 5: 技能中心
                       const SkillsManagementScreen(),
                     ],
                   ),
@@ -624,4 +634,8 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
       ),
     );
   }
+}
+
+String _localized(BuildContext context, String en, String zh) {
+  return Localizations.localeOf(context).languageCode == 'zh' ? zh : en;
 }

@@ -243,11 +243,28 @@ async function main() {
     // Mock 模式下也初始化会话和配置路由（客户端需要 REST API）
     const { initConversationRoutes } = await import('./routes/conversation-routes.js');
     const { initConfigRoutes } = await import('./routes/config-routes.js');
+    const { initTasksRoutes } = await import('./routes/tasks-routes.js');
     initConversationRoutes({ conversationStore });
     initConfigRoutes({
       configStore,
       queryModels: async () => (['mock-model']),
       querySkills: async () => ([]),
+    });
+    initTasksRoutes({
+      getConnectedAccountIds: () => ['mock'],
+      sendTaskRequest: async (payload) => {
+        const requestId = payload.request_id || 'mock';
+        if (payload.type === 'task_list') {
+          return { type: 'task_list_response', request_id: requestId, tasks: [] };
+        }
+        return {
+          type: 'task_mutation_response',
+          request_id: requestId,
+          ok: false,
+          error: 'tasks_unsupported',
+          message: 'Mock mode does not manage agent tasks.',
+        };
+      },
     });
 
   } else if (MODE === 'openclaw') {
@@ -255,6 +272,8 @@ async function main() {
       await import('./upstream/openclaw-listener.js');
     const { initConfigRoutes } = await import('./routes/config-routes.js');
     const { initConversationRoutes } = await import('./routes/conversation-routes.js');
+    const { initTasksRoutes } = await import('./routes/tasks-routes.js');
+    const { sendTaskGatewayRequest } = await import('./upstream/task-gateway-client.js');
 
     // 初始化配置路由（models/skills 查询路由到对应 Gateway）
     initConfigRoutes({
@@ -265,6 +284,12 @@ async function main() {
 
     // 初始化会话路由
     initConversationRoutes({ conversationStore });
+
+    // 初始化任务路由。任务真相和执行均归 Gateway/Agent 侧。
+    initTasksRoutes({
+      getConnectedAccountIds,
+      sendTaskRequest: sendTaskGatewayRequest,
+    });
 
     // MessageRouter — 上游消息 → 翻译 → 存储 → 统计 → 广播
     const messageRouter = new MessageRouter(

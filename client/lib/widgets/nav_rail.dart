@@ -102,6 +102,18 @@ class _NavRailState extends ConsumerState<NavRail> {
               ),
               const SizedBox(height: 2),
               _NavItem(
+                icon: Icons.task_alt,
+                label: _localized(context, 'Tasks', '任务管理'),
+                isActive: activePage == NavPage.tasks,
+                isExpanded: _isExpanded,
+                colorScheme: colorScheme,
+                onTap: () {
+                  ref.read(activeNavPageProvider.notifier).state =
+                      NavPage.tasks;
+                },
+              ),
+              const SizedBox(height: 2),
+              _NavItem(
                 icon: Icons.extension,
                 label: context.l10n.navSkills,
                 isActive: activePage == NavPage.skills,
@@ -218,6 +230,10 @@ class _NavRailState extends ConsumerState<NavRail> {
       ),
     );
   }
+}
+
+String _localized(BuildContext context, String en, String zh) {
+  return Localizations.localeOf(context).languageCode == 'zh' ? zh : en;
 }
 
 class _NavItem extends StatelessWidget {

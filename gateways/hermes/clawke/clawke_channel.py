@@ -73,6 +73,15 @@ class InboundMessageType:
     QuerySkills = "query_skills"
     ApprovalResponse = "approval_response"
     ClarifyResponse = "clarify_response"
+    TaskList = "task_list"
+    TaskGet = "task_get"
+    TaskCreate = "task_create"
+    TaskUpdate = "task_update"
+    TaskDelete = "task_delete"
+    TaskSetEnabled = "task_set_enabled"
+    TaskRun = "task_run"
+    TaskRuns = "task_runs"
+    TaskOutput = "task_output"
 
 
 class AgentStatusValue:
@@ -237,6 +246,7 @@ class ClawkeHermesGateway:
         # Approval/Clarify pending requests (session_id → {event, result})
         self._pending_approvals: dict[str, dict] = {}
         self._pending_clarifies: dict[str, dict] = {}
+        self._task_adapter: Any = None
 
     # ── Public API ───────────────────────────────────────────────────────
 
@@ -327,7 +337,10 @@ class ClawkeHermesGateway:
 
                 msg_type = msg.get("type")
 
-                if msg_type == InboundMessageType.Chat:
+                if isinstance(msg_type, str) and msg_type.startswith("task_"):
+                    await self._handle_task_command(msg)
+
+                elif msg_type == InboundMessageType.Chat:
                     # MUST NOT await — the WS loop must stay free to receive
                     # approval_response / abort while the agent is running.
                     task = asyncio.ensure_future(self._dispatch_chat(msg))
@@ -848,7 +861,7 @@ class ClawkeHermesGateway:
             await self._send({
                 "type": GatewayMessageType.AgentText,
                 "message_id": msg_id,
-                "text": err_detail or f"[{err_code}]",
+                "text": err_detail or f"⚠️ [{err_code}]",
                 "error_code": err_code,
                 "error_detail": err_detail,
                 "account_id": self.config.account_id,
@@ -922,6 +935,70 @@ class ClawkeHermesGateway:
             logger.info("📥 Clarify response: %s → %s", sender_id, response_text[:40])
         else:
             logger.warning("📥 Clarify response for unknown session: %s", sender_id)
+
+    # ── Task Command Handler ────────────────────────────────────────────
+
+    async def _handle_task_command(self, msg: dict) -> None:
+        """Route Clawke task commands to Hermes cron through the adapter."""
+        msg_type = str(msg.get("type") or "")
+        request_id = msg.get("request_id", "")
+        response: dict[str, Any] = {
+            "type": self._task_response_type(msg_type),
+            "request_id": request_id,
+        }
+
+        try:
+            adapter = self._get_task_adapter()
+            account_id = msg.get("account_id") or self.config.account_id
+            task_id = msg.get("task_id", "")
+
+            if msg_type == InboundMessageType.TaskList:
+                response.update({"ok": True, "tasks": adapter.list_tasks(account_id)})
+            elif msg_type == InboundMessageType.TaskGet:
+                response.update({"ok": True, "task": adapter.get_task(account_id, task_id)})
+            elif msg_type == InboundMessageType.TaskCreate:
+                response.update({"ok": True, "task": adapter.create_task(account_id, msg.get("task") or {})})
+            elif msg_type == InboundMessageType.TaskUpdate:
+                response.update({"ok": True, "task": adapter.update_task(account_id, task_id, msg.get("patch") or {})})
+            elif msg_type == InboundMessageType.TaskDelete:
+                response.update({"ok": True, "deleted": adapter.delete_task(task_id)})
+            elif msg_type == InboundMessageType.TaskSetEnabled:
+                response.update({"ok": True, "task": adapter.set_enabled(account_id, task_id, bool(msg.get("enabled")))})
+            elif msg_type == InboundMessageType.TaskRun:
+                response.update({"ok": True, "runs": [adapter.run_task(task_id)]})
+            elif msg_type == InboundMessageType.TaskRuns:
+                response.update({"ok": True, "runs": adapter.list_runs(task_id)})
+            elif msg_type == InboundMessageType.TaskOutput:
+                response.update({"ok": True, "output": adapter.get_output(task_id, msg.get("run_id", ""))})
+            else:
+                raise ValueError(f"Unsupported task command: {msg_type}")
+        except Exception as e:
+            logger.warning("Task command failed: type=%s error=%s", msg_type, e)
+            response.update({
+                "ok": False,
+                "error": "task_error",
+                "message": str(e),
+            })
+
+        await self._send(response)
+
+    @staticmethod
+    def _task_response_type(msg_type: str) -> str:
+        if msg_type in {
+            InboundMessageType.TaskCreate,
+            InboundMessageType.TaskUpdate,
+            InboundMessageType.TaskDelete,
+            InboundMessageType.TaskSetEnabled,
+        }:
+            return "task_mutation_response"
+        return f"{msg_type}_response"
+
+    def _get_task_adapter(self):
+        """Lazily instantiate the Hermes task adapter."""
+        if self._task_adapter is None:
+            from task_adapter import HermesTaskAdapter
+            self._task_adapter = HermesTaskAdapter()
+        return self._task_adapter
 
     # ── Query Handlers ───────────────────────────────────────────────────
 
