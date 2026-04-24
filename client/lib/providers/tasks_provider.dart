@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:client/models/managed_task.dart';
@@ -138,7 +139,10 @@ class TasksController extends StateNotifier<TasksState> {
       final tasks = await _api.listTasks(accountId: selected);
       state = state.copyWith(tasks: tasks, isLoading: false);
     } catch (e) {
-      state = state.copyWith(isLoading: false, errorMessage: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: _taskErrorMessage(e, accountId: selected),
+      );
     }
   }
 
@@ -160,7 +164,10 @@ class TasksController extends StateNotifier<TasksState> {
         tasks: [...state.tasks, task]..sort(_sortTasks),
       );
     } catch (e) {
-      state = state.copyWith(isSaving: false, errorMessage: e.toString());
+      state = state.copyWith(
+        isSaving: false,
+        errorMessage: _taskErrorMessage(e, accountId: draft.accountId),
+      );
       rethrow;
     }
   }
@@ -177,7 +184,7 @@ class TasksController extends StateNotifier<TasksState> {
     } catch (e) {
       state = state.copyWith(
         busyTaskIds: _withoutBusy(id),
-        errorMessage: e.toString(),
+        errorMessage: _taskErrorMessage(e, accountId: draft.accountId),
       );
       rethrow;
     }
@@ -207,7 +214,7 @@ class TasksController extends StateNotifier<TasksState> {
       state = state.copyWith(
         tasks: before,
         togglingTaskIds: _withoutToggling(task.id),
-        errorMessage: e.toString(),
+        errorMessage: _taskErrorMessage(e, accountId: task.accountId),
       );
       rethrow;
     }
@@ -227,7 +234,7 @@ class TasksController extends StateNotifier<TasksState> {
     } catch (e) {
       state = state.copyWith(
         busyTaskIds: _withoutBusy(task.id),
-        errorMessage: e.toString(),
+        errorMessage: _taskErrorMessage(e, accountId: task.accountId),
       );
       rethrow;
     }
@@ -247,7 +254,7 @@ class TasksController extends StateNotifier<TasksState> {
     } catch (e) {
       state = state.copyWith(
         busyTaskIds: _withoutBusy(task.id),
-        errorMessage: e.toString(),
+        errorMessage: _taskErrorMessage(e, accountId: task.accountId),
       );
       rethrow;
     }
@@ -264,7 +271,10 @@ class TasksController extends StateNotifier<TasksState> {
       final runs = await _api.listRuns(task.id, task.accountId);
       state = state.copyWith(runs: runs, isLoadingRuns: false);
     } catch (e) {
-      state = state.copyWith(isLoadingRuns: false, errorMessage: e.toString());
+      state = state.copyWith(
+        isLoadingRuns: false,
+        errorMessage: _taskErrorMessage(e, accountId: task.accountId),
+      );
     }
   }
 
@@ -276,7 +286,9 @@ class TasksController extends StateNotifier<TasksState> {
       final output = await _api.getRunOutput(task.id, run.id, task.accountId);
       state = state.copyWith(selectedRunOutput: output);
     } catch (e) {
-      state = state.copyWith(errorMessage: e.toString());
+      state = state.copyWith(
+        errorMessage: _taskErrorMessage(e, accountId: task.accountId),
+      );
     }
   }
 
@@ -326,4 +338,63 @@ class TasksController extends StateNotifier<TasksState> {
     if (nextCompare != 0) return nextCompare;
     return a.name.compareTo(b.name);
   }
+}
+
+String _taskErrorMessage(Object error, {String? accountId}) {
+  if (error is DioException) {
+    final response = error.response;
+    final statusCode = response?.statusCode;
+    final code = _responseErrorCode(response?.data);
+    final gatewayName = _gatewayDisplayName(accountId);
+
+    if (statusCode == 504 || code == 'gateway_timeout') {
+      return '$gatewayName 网关响应超时，请确认 $gatewayName Gateway 正在运行后重试。';
+    }
+    if (statusCode == 503 || code == 'gateway_unavailable') {
+      return '$gatewayName Gateway 未连接，请先启动或重连 gateway。';
+    }
+    if (statusCode == 501 || code == 'tasks_unsupported') {
+      return '$gatewayName 暂不支持任务管理。';
+    }
+    if (statusCode == 400 || code == 'account_required') {
+      return '请选择一个已连接的 gateway 后再刷新任务。';
+    }
+
+    final serverMessage = _responseMessage(response?.data);
+    if (serverMessage != null && serverMessage.isNotEmpty) {
+      return serverMessage;
+    }
+    if (statusCode != null) {
+      return '任务请求失败，服务端返回 $statusCode。';
+    }
+    return '无法连接 Clawke Server，请检查服务是否正在运行。';
+  }
+
+  if (error is FormatException) {
+    return '任务接口返回格式异常，请稍后重试。';
+  }
+
+  final message = error.toString();
+  if (message.isEmpty) return '任务请求失败，请稍后重试。';
+  return message;
+}
+
+String _gatewayDisplayName(String? accountId) {
+  final value = accountId?.trim();
+  if (value == null || value.isEmpty) return 'Gateway';
+  if (value.toLowerCase() == 'hermes') return 'Hermes';
+  if (value.toLowerCase() == 'openclaw') return 'OpenClaw';
+  return value;
+}
+
+String? _responseErrorCode(Object? data) {
+  if (data is Map<String, dynamic>) return data['error'] as String?;
+  if (data is Map) return data['error'] as String?;
+  return null;
+}
+
+String? _responseMessage(Object? data) {
+  if (data is Map<String, dynamic>) return data['message'] as String?;
+  if (data is Map) return data['message'] as String?;
+  return null;
 }

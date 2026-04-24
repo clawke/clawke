@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:client/models/managed_task.dart';
@@ -7,17 +8,20 @@ import 'package:client/services/tasks_api_service.dart';
 class _FakeTasksApiService extends TasksApiService {
   List<ManagedTask> items;
   final List<TaskRun> runItems;
+  Object? listError;
   String? listedAccountId;
   String? toggledTaskId;
   bool? toggledEnabled;
   String? triggeredTaskId;
   String? outputRunId;
 
-  _FakeTasksApiService(this.items, {this.runItems = const []});
+  _FakeTasksApiService(this.items, {this.runItems = const [], this.listError});
 
   @override
   Future<List<ManagedTask>> listTasks({String? accountId}) async {
     listedAccountId = accountId;
+    final error = listError;
+    if (error != null) throw error;
     return items.where((task) => task.accountId == accountId).toList();
   }
 
@@ -168,5 +172,32 @@ void main() {
     expect(fake.triggeredTaskId, 'task_1');
     expect(state.runs.first.id, 'run_done');
     expect(state.selectedRunOutput, 'done');
+  });
+
+  test('TasksController stores a friendly gateway timeout message', () async {
+    final fake = _FakeTasksApiService(
+      const [],
+      listError: DioException(
+        requestOptions: RequestOptions(path: '/api/tasks'),
+        response: Response(
+          requestOptions: RequestOptions(path: '/api/tasks'),
+          statusCode: 504,
+          data: const {'error': 'gateway_timeout'},
+        ),
+        type: DioExceptionType.badResponse,
+      ),
+    );
+    final container = ProviderContainer(
+      overrides: [tasksApiServiceProvider.overrideWithValue(fake)],
+    );
+    addTearDown(container.dispose);
+
+    await container.read(tasksControllerProvider.notifier).syncAccounts(const [
+      TaskAccount(accountId: 'hermes', agentName: 'Hermes'),
+    ]);
+
+    final state = container.read(tasksControllerProvider);
+    expect(state.errorMessage, 'Hermes 网关响应超时，请确认 Hermes Gateway 正在运行后重试。');
+    expect(state.errorMessage, isNot(contains('DioException')));
   });
 }
