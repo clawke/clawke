@@ -7,6 +7,7 @@ import { createChannelReplyPipeline } from "openclaw/plugin-sdk/channel-reply-pi
 import type { ResolvedClawkeAccount } from "./config.js";
 import { GatewayMessageType, InboundMessageType, AgentStatus } from "./protocol.js";
 import { getClawkeRuntime } from "./runtime.js";
+import { OpenClawTaskAdapter, type OpenClawTaskDraft, type OpenClawTaskPatch } from "./task-adapter.js";
 
 // 模块级状态（生命周期级，非请求级）
 // ws/gatewayCtx: 在 startClawkeGateway 建立连接时设置，在整个 gateway 生命周期内共享
@@ -19,6 +20,7 @@ let gatewayCtx: ChannelGatewayContext<ResolvedClawkeAccount> | null = null;
 let pendingUsage: Record<string, number> | null = null;
 let pendingModel = '';
 let pendingProvider = '';
+const taskAdapter = new OpenClawTaskAdapter();
 
 /** 由 index.ts llm_output hook 调用，累加 usage 数据（多轮工具调用时合计） */
 export function addPendingUsage(usage: Record<string, number> | null, model?: string, provider?: string): void {
@@ -291,7 +293,19 @@ export async function startClawkeGateway(
       ws.on("message", (raw) => {
         try {
           const msg = JSON.parse(raw.toString());
-          if (msg.type === InboundMessageType.Chat) {
+          if (isTaskCommand(msg.type)) {
+            handleTaskCommand(ctx, msg)
+              .then((response) => ws?.send(JSON.stringify(response)))
+              .catch((err: any) => {
+                ws?.send(JSON.stringify({
+                  type: responseTypeForTaskCommand(msg.type),
+                  request_id: msg.request_id,
+                  ok: false,
+                  error: "task_error",
+                  message: err?.message || String(err),
+                }));
+              });
+          } else if (msg.type === InboundMessageType.Chat) {
             const text = msg.text || "";
             ctx.log?.info(`📥 Inbound message: ${text.slice(0, 80)}`);
             // 串行队列：同 session 的消息按序执行，不并发
@@ -416,6 +430,93 @@ export async function startClawkeGateway(
 
     connect();
   });
+}
+
+type TaskCommandMessage = {
+  type: string;
+  request_id?: string;
+  account_id?: string;
+  task_id?: string;
+  run_id?: string;
+  task?: OpenClawTaskDraft;
+  draft?: OpenClawTaskDraft;
+  patch?: OpenClawTaskPatch;
+  enabled?: boolean;
+};
+
+function isTaskCommand(type: unknown): type is string {
+  return typeof type === "string" && type.startsWith("task_");
+}
+
+function responseTypeForTaskCommand(type: string): GatewayMessageType {
+  switch (type) {
+    case InboundMessageType.TaskList:
+      return GatewayMessageType.TaskListResponse;
+    case InboundMessageType.TaskGet:
+      return GatewayMessageType.TaskGetResponse;
+    case InboundMessageType.TaskRun:
+      return GatewayMessageType.TaskRunResponse;
+    case InboundMessageType.TaskRuns:
+      return GatewayMessageType.TaskRunsResponse;
+    case InboundMessageType.TaskOutput:
+      return GatewayMessageType.TaskOutputResponse;
+    default:
+      return GatewayMessageType.TaskMutationResponse;
+  }
+}
+
+async function handleTaskCommand(
+  ctx: ChannelGatewayContext<ResolvedClawkeAccount>,
+  msg: TaskCommandMessage,
+): Promise<Record<string, unknown>> {
+  const accountId = msg.account_id || ctx.accountId;
+  const base = {
+    type: responseTypeForTaskCommand(msg.type),
+    request_id: msg.request_id,
+    ok: true,
+  };
+
+  switch (msg.type) {
+    case InboundMessageType.TaskList:
+      return { ...base, tasks: await taskAdapter.listTasks(accountId) };
+    case InboundMessageType.TaskGet:
+      return { ...base, task: await taskAdapter.getTask(accountId, requireTaskId(msg)) };
+    case InboundMessageType.TaskCreate:
+      return { ...base, task: await taskAdapter.createTask(accountId, requireDraft(msg)) };
+    case InboundMessageType.TaskUpdate:
+      return { ...base, task: await taskAdapter.updateTask(accountId, requireTaskId(msg), msg.patch ?? {}) };
+    case InboundMessageType.TaskDelete:
+      return { ...base, task_id: requireTaskId(msg), deleted: await taskAdapter.deleteTask(accountId, requireTaskId(msg)) };
+    case InboundMessageType.TaskSetEnabled:
+      if (typeof msg.enabled !== "boolean") throw new Error("enabled must be boolean");
+      return { ...base, task: await taskAdapter.setEnabled(accountId, requireTaskId(msg), msg.enabled) };
+    case InboundMessageType.TaskRun: {
+      const run = await taskAdapter.runTask(accountId, requireTaskId(msg));
+      return { ...base, runs: [run] };
+    }
+    case InboundMessageType.TaskRuns:
+      return { ...base, runs: await taskAdapter.listRuns(requireTaskId(msg)) };
+    case InboundMessageType.TaskOutput:
+      return { ...base, output: await taskAdapter.getOutput(requireTaskId(msg), requireRunId(msg)) };
+    default:
+      throw new Error(`Unsupported task command: ${msg.type}`);
+  }
+}
+
+function requireTaskId(msg: TaskCommandMessage): string {
+  if (!msg.task_id) throw new Error("task_id is required");
+  return msg.task_id;
+}
+
+function requireRunId(msg: TaskCommandMessage): string {
+  if (!msg.run_id) throw new Error("run_id is required");
+  return msg.run_id;
+}
+
+function requireDraft(msg: TaskCommandMessage): OpenClawTaskDraft {
+  const draft = msg.task ?? msg.draft;
+  if (!draft) throw new Error("task draft is required");
+  return draft;
 }
 
 /**

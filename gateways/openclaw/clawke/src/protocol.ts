@@ -36,6 +36,15 @@ export const GatewayMessageType = {
   // 状态与统计
   AgentStatus:        "agent_status",
   AgentTurnStats:     "agent_turn_stats",
+
+  // 任务管理
+  TaskListResponse:     "task_list_response",
+  TaskGetResponse:      "task_get_response",
+  TaskMutationResponse: "task_mutation_response",
+  TaskRunResponse:      "task_run_response",
+  TaskRunsResponse:     "task_runs_response",
+  TaskOutputResponse:   "task_output_response",
+  TaskEvent:            "task_event",
 } as const;
 
 export type GatewayMessageType = (typeof GatewayMessageType)[keyof typeof GatewayMessageType];
@@ -53,6 +62,17 @@ export const InboundMessageType = {
   Abort:        "abort",
   QueryModels:  "query_models",
   QuerySkills:  "query_skills",
+
+  // 任务管理
+  TaskList:       "task_list",
+  TaskGet:        "task_get",
+  TaskCreate:     "task_create",
+  TaskUpdate:     "task_update",
+  TaskDelete:     "task_delete",
+  TaskSetEnabled: "task_set_enabled",
+  TaskRun:        "task_run",
+  TaskRuns:       "task_runs",
+  TaskOutput:     "task_output",
 } as const;
 
 export type InboundMessageType = (typeof InboundMessageType)[keyof typeof InboundMessageType];
