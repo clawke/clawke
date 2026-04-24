@@ -148,6 +148,11 @@ class TasksController extends StateNotifier<TasksState> {
 
   Future<void> refresh() => load(force: true);
 
+  void clearError() {
+    if (state.errorMessage == null) return;
+    state = state.copyWith(clearError: true);
+  }
+
   Future<void> selectAccount(String accountId) async {
     if (accountId == state.selectedAccountId) return;
     await load(accountId: accountId, force: true);

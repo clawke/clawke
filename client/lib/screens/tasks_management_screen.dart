@@ -36,15 +36,6 @@ class _TasksManagementScreenState extends ConsumerState<TasksManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
-    ref.listen<TasksState>(tasksControllerProvider, (previous, next) {
-      final message = next.errorMessage;
-      if (message != null && message != previous?.errorMessage && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
-        );
-      }
-    });
-
     ref.listen<List<ConnectedAccount>>(connectedAccountsProvider, (_, __) {
       _syncConnectedAccounts();
     });
@@ -54,35 +45,50 @@ class _TasksManagementScreenState extends ConsumerState<TasksManagementScreen> {
 
     final content = Container(
       color: colorScheme.surface,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final wide = constraints.maxWidth >= 980;
-          final list = RefreshIndicator(
-            onRefresh: () =>
-                ref.read(tasksControllerProvider.notifier).refresh(),
-            child: _buildTaskList(state, compact: !wide),
-          );
+      child: Stack(
+        children: [
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final wide = constraints.maxWidth >= 980;
+              final list = RefreshIndicator(
+                onRefresh: () =>
+                    ref.read(tasksControllerProvider.notifier).refresh(),
+                child: _buildTaskList(state, compact: !wide),
+              );
 
-          if (!wide) return list;
+              if (!wide) return list;
 
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _GatewaySidebar(
-                accounts: state.accounts,
-                selectedAccountId: state.selectedAccountId,
-                isLoading: state.isLoading,
-                onSelected: _selectAccount,
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _GatewaySidebar(
+                    accounts: state.accounts,
+                    selectedAccountId: state.selectedAccountId,
+                    isLoading: state.isLoading,
+                    onSelected: _selectAccount,
+                  ),
+                  Expanded(child: list),
+                  _RunsPane(
+                    state: state,
+                    onLoadOutput: (run) => ref
+                        .read(tasksControllerProvider.notifier)
+                        .loadOutput(run),
+                  ),
+                ],
+              );
+            },
+          ),
+          if (state.errorMessage != null)
+            Positioned.fill(
+              child: Center(
+                child: _TaskErrorPanel(
+                  message: state.errorMessage!,
+                  onDismiss: () =>
+                      ref.read(tasksControllerProvider.notifier).clearError(),
+                ),
               ),
-              Expanded(child: list),
-              _RunsPane(
-                state: state,
-                onLoadOutput: (run) =>
-                    ref.read(tasksControllerProvider.notifier).loadOutput(run),
-              ),
-            ],
-          );
-        },
+            ),
+        ],
       ),
     );
 
@@ -268,7 +274,7 @@ class _TasksManagementScreenState extends ConsumerState<TasksManagementScreen> {
         );
       }
     } catch (_) {
-      // Provider listener displays the API error.
+      // The persistent error panel displays the API error.
     }
   }
 
@@ -280,7 +286,7 @@ class _TasksManagementScreenState extends ConsumerState<TasksManagementScreen> {
           .read(tasksControllerProvider.notifier)
           .setEnabled(task, enabled);
     } catch (_) {
-      // Provider listener displays the API error.
+      // The persistent error panel displays the API error.
     }
   }
 
@@ -325,7 +331,7 @@ class _TasksManagementScreenState extends ConsumerState<TasksManagementScreen> {
         );
       }
     } catch (_) {
-      // Provider listener displays the API error.
+      // The persistent error panel displays the API error.
     }
   }
 
@@ -341,7 +347,7 @@ class _TasksManagementScreenState extends ConsumerState<TasksManagementScreen> {
         );
       }
     } catch (_) {
-      // Provider listener displays the API error.
+      // The persistent error panel displays the API error.
     }
   }
 
@@ -1240,6 +1246,64 @@ class _DisconnectedPanel extends StatelessWidget {
         context,
         'Task management becomes available after Hermes or OpenClaw connects.',
         'Hermes 或 OpenClaw 连接后即可管理任务。',
+      ),
+    );
+  }
+}
+
+class _TaskErrorPanel extends StatelessWidget {
+  final String message;
+  final VoidCallback onDismiss;
+
+  const _TaskErrorPanel({required this.message, required this.onDismiss});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 620),
+        child: Material(
+          key: const ValueKey('tasks_error_panel'),
+          color: colorScheme.errorContainer,
+          elevation: 8,
+          shadowColor: colorScheme.shadow.withValues(alpha: 0.18),
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(20, 18, 10, 18),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: colorScheme.error.withValues(alpha: 0.35),
+              ),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.error_outline, color: colorScheme.onErrorContainer),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    message,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: colorScheme.onErrorContainer,
+                      height: 1.45,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  key: const ValueKey('tasks_error_close'),
+                  tooltip: _localized(context, 'Close', '关闭'),
+                  onPressed: onDismiss,
+                  icon: const Icon(Icons.close),
+                  color: colorScheme.onErrorContainer,
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
