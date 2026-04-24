@@ -12,6 +12,17 @@ import multer from 'multer';
 import { mediaUpload, serveMedia, serveThumbnail } from './routes/media-routes.js';
 import { getModels, getSkills, getConvConfig, putConvConfig } from './routes/config-routes.js';
 import { listConversations, createConversation, updateConversation, deleteConversation } from './routes/conversation-routes.js';
+import {
+  createTask,
+  deleteTask,
+  getTask,
+  getTaskRunOutput,
+  listTaskRuns,
+  listTasks,
+  runTask,
+  setTaskEnabled,
+  updateTask,
+} from './routes/tasks-routes.js';
 import { loadConfig } from './config.js';
 import type { Server } from 'http';
 
@@ -95,6 +106,21 @@ export function startUnifiedServer(port: number = 8780): { server: Server; wss: 
     res.json({ status: 'ok', service: 'clawke-cs', timestamp: Date.now() });
   });
 
+  app.get('/', (_req, res) => {
+    res.json({
+      service: 'clawke-cs',
+      endpoints: [
+        '/health',
+        '/api/media/upload',
+        '/api/media/:filename',
+        '/api/config/models',
+        '/api/config/skills',
+        '/api/conversations',
+        '/api/tasks',
+      ],
+    });
+  });
+
   // 会话配置 API
   app.get('/api/config/models', getModels as any);
   app.get('/api/config/skills', getSkills as any);
@@ -106,6 +132,17 @@ export function startUnifiedServer(port: number = 8780): { server: Server; wss: 
   app.post('/api/conversations', createConversation as any);
   app.put('/api/conversations/:id', updateConversation as any);
   app.delete('/api/conversations/:id', deleteConversation as any);
+
+  // 任务管理 API
+  app.get('/api/tasks', listTasks as any);
+  app.get('/api/tasks/:taskId', getTask as any);
+  app.post('/api/tasks', createTask as any);
+  app.put('/api/tasks/:taskId/enabled', setTaskEnabled as any);
+  app.post('/api/tasks/:taskId/run', runTask as any);
+  app.get('/api/tasks/:taskId/runs', listTaskRuns as any);
+  app.get('/api/tasks/:taskId/runs/:runId/output', getTaskRunOutput as any);
+  app.put('/api/tasks/:taskId', updateTask as any);
+  app.delete('/api/tasks/:taskId', deleteTask as any);
 
   // Error handler
   app.use((err: any, _req: any, res: any, _next: any) => {
@@ -121,7 +158,7 @@ export function startUnifiedServer(port: number = 8780): { server: Server; wss: 
 
   server.listen(port, () => {
     console.log(`[Server] 📂 Unified Server on http://127.0.0.1:${port}`);
-    console.log(`[Server]    HTTP: /api/media/upload, /api/media/:filename, /health`);
+    console.log(`[Server]    HTTP: /api/media/upload, /api/media/:filename, /api/tasks, /health`);
     console.log(`[Server]    WS:   ws://127.0.0.1:${port}/ws`);
   });
 
