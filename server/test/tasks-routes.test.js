@@ -65,6 +65,50 @@ test('create validates missing schedule or prompt', async () => {
   assert.match(missingPrompt.body.message, /prompt/);
 });
 
+test('create validates schedule and prompt types', async () => {
+  const routes = await import('../dist/routes/tasks-routes.js');
+  routes.initTasksRoutes({
+    getConnectedAccountIds: () => ['hermes'],
+    sendTaskRequest: async () => {
+      throw new Error('sendTaskRequest should not be called');
+    },
+  });
+
+  const nonStringSchedule = fakeRes();
+  await routes.createTask(fakeReq({ body: { account_id: 'hermes', schedule: 123, prompt: 'hello' } }), nonStringSchedule);
+  assert.equal(nonStringSchedule.statusCode, 400);
+  assert.equal(nonStringSchedule.body.error, 'validation_error');
+  assert.match(nonStringSchedule.body.message, /schedule/);
+
+  const nonStringPrompt = fakeRes();
+  await routes.createTask(fakeReq({ body: { account_id: 'hermes', schedule: '0 9 * * *', prompt: false } }), nonStringPrompt);
+  assert.equal(nonStringPrompt.statusCode, 400);
+  assert.equal(nonStringPrompt.body.error, 'validation_error');
+  assert.match(nonStringPrompt.body.message, /prompt/);
+});
+
+test('set enabled validates enabled is present and boolean', async () => {
+  const routes = await import('../dist/routes/tasks-routes.js');
+  routes.initTasksRoutes({
+    getConnectedAccountIds: () => ['hermes'],
+    sendTaskRequest: async () => {
+      throw new Error('sendTaskRequest should not be called');
+    },
+  });
+
+  const missingEnabled = fakeRes();
+  await routes.setTaskEnabled(fakeReq({ params: { taskId: 'task_1' }, body: { account_id: 'hermes' } }), missingEnabled);
+  assert.equal(missingEnabled.statusCode, 400);
+  assert.equal(missingEnabled.body.error, 'validation_error');
+  assert.match(missingEnabled.body.message, /enabled/);
+
+  const stringEnabled = fakeRes();
+  await routes.setTaskEnabled(fakeReq({ params: { taskId: 'task_1' }, body: { account_id: 'hermes', enabled: 'false' } }), stringEnabled);
+  assert.equal(stringEnabled.statusCode, 400);
+  assert.equal(stringEnabled.body.error, 'validation_error');
+  assert.match(stringEnabled.body.message, /enabled/);
+});
+
 test('delete setEnabled run runs and output map to expected command payloads', async () => {
   const calls = [];
   const routes = await import('../dist/routes/tasks-routes.js');

@@ -66,11 +66,16 @@ export async function deleteTask(req: Request, res: Response): Promise<void> {
 export async function setTaskEnabled(req: Request, res: Response): Promise<void> {
   const accountId = resolveAccountId(req, res);
   if (!accountId) return;
+  const validation = validateEnabled(req.body?.enabled);
+  if (validation) {
+    sendHttpError(res, 400, 'validation_error', validation);
+    return;
+  }
   await respond(res, {
     type: 'task_set_enabled',
     account_id: accountId,
     task_id: firstString(req.params.taskId),
-    enabled: !!req.body?.enabled,
+    enabled: req.body.enabled,
   }, (response) => ({
     ok: true,
     task: response.task,
@@ -120,8 +125,13 @@ function resolveAccountId(req: Request, res: Response): string | null {
 
 function validateDraft(draft: TaskDraft | undefined): string | null {
   if (!draft?.account_id) return 'account_id is required.';
-  if (!draft.schedule?.trim()) return 'schedule is required.';
-  if (!draft.prompt?.trim()) return 'prompt is required.';
+  if (typeof draft.schedule !== 'string' || !draft.schedule.trim()) return 'schedule is required.';
+  if (typeof draft.prompt !== 'string' || !draft.prompt.trim()) return 'prompt is required.';
+  return null;
+}
+
+function validateEnabled(enabled: unknown): string | null {
+  if (typeof enabled !== 'boolean') return 'enabled must be a boolean.';
   return null;
 }
 
