@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { join, resolve } from "node:path";
@@ -170,8 +170,9 @@ export class OpenClawTaskAdapter {
       .sort((a, b) => b.started_at.localeCompare(a.started_at));
   }
 
-  async getOutput(taskId: string, runId: string): Promise<OpenClawTaskOutput | null> {
-    return this.readOutputFile(this.outputFile(taskId, runId));
+  async getOutput(taskId: string, runId: string): Promise<string | null> {
+    const output = await this.readOutputFile(this.outputFile(taskId, runId));
+    return output?.text ?? null;
   }
 
   private async requireTask(accountId: string, taskId: string): Promise<OpenClawManagedTask> {
@@ -204,12 +205,19 @@ export class OpenClawTaskAdapter {
 
   private async readJson<T>(file: string): Promise<T | null> {
     if (!existsSync(file)) return null;
-    return JSON.parse(await readFile(file, "utf-8")) as T;
+    try {
+      return JSON.parse(await readFile(file, "utf-8")) as T;
+    } catch {
+      return null;
+    }
   }
 
   private async writeJson(file: string, value: unknown): Promise<void> {
-    await mkdir(resolve(file, ".."), { recursive: true });
-    await writeFile(file, `${JSON.stringify(value, null, 2)}\n`, "utf-8");
+    const dir = resolve(file, "..");
+    await mkdir(dir, { recursive: true });
+    const tempFile = join(dir, `.${this.newId("tmp")}.json`);
+    await writeFile(tempFile, `${JSON.stringify(value, null, 2)}\n`, "utf-8");
+    await rename(tempFile, file);
   }
 
   private accountDir(accountId: string): string {

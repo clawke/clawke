@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { OpenClawTaskAdapter } from "./task-adapter.js";
@@ -59,10 +59,9 @@ test("OpenClawTaskAdapter manages tasks and run output in gateway storage", asyn
     assert.equal(runs[0].id, run.id);
 
     const output = await adapter.getOutput(created.id, run.id);
-    assert.equal(output.task_id, created.id);
-    assert.equal(output.run_id, run.id);
-    assert.match(output.text, /Task was triggered from Clawke/);
-    assert.doesNotMatch(output.text, /executed the prompt/i);
+    assert.equal(typeof output, "string");
+    assert.match(output ?? "", /Task was triggered from Clawke/);
+    assert.doesNotMatch(output ?? "", /executed the prompt/i);
 
     await assert.rejects(
       () => adapter.getTask("acct_1", "../escape"),
@@ -76,6 +75,27 @@ test("OpenClawTaskAdapter manages tasks and run output in gateway storage", asyn
     assert.equal(await adapter.deleteTask("acct_1", created.id), true);
     assert.equal(await adapter.getTask("acct_1", created.id), null);
     assert.deepEqual(await adapter.listTasks("acct_1"), []);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("OpenClawTaskAdapter ignores malformed task files while listing", async () => {
+  const root = await mkdtemp(join(tmpdir(), "openclaw-task-adapter-"));
+  try {
+    const adapter = new OpenClawTaskAdapter(root);
+    const created = await adapter.createTask("acct_1", {
+      name: "Valid task",
+      schedule: "0 9 * * *",
+      prompt: "hello",
+    });
+
+    const corruptDir = join(root, "accounts", "acct_1", "corrupt_task");
+    await mkdir(corruptDir, { recursive: true });
+    await writeFile(join(corruptDir, "task.json"), "{not valid json", "utf-8");
+
+    const listed = await adapter.listTasks("acct_1");
+    assert.deepEqual(listed.map((task) => task.id), [created.id]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
