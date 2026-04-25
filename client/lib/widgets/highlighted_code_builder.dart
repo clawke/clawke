@@ -660,6 +660,7 @@ class _InlineClarifyCardState extends State<_InlineClarifyCard> {
     final textTheme = Theme.of(context).textTheme;
 
     return Container(
+      key: const ValueKey('ui_e2e_inline_clarify_card'),
       margin: const EdgeInsets.symmetric(vertical: 6),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -699,6 +700,7 @@ class _InlineClarifyCardState extends State<_InlineClarifyCard> {
             Wrap(
               spacing: 8, runSpacing: 6,
               children: widget.choices.map((choice) => Material(
+                key: ValueKey('ui_e2e_inline_clarify_choice_$choice'),
                 color: colorScheme.secondary.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
                 child: InkWell(
@@ -777,6 +779,7 @@ class _InlineApprovalCardState extends State<_InlineApprovalCard> {
     final textTheme = Theme.of(context).textTheme;
 
     return Container(
+      key: const ValueKey('ui_e2e_inline_approval_card'),
       margin: const EdgeInsets.symmetric(vertical: 6),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -832,16 +835,26 @@ class _InlineApprovalCardState extends State<_InlineApprovalCard> {
             )
           else
             Wrap(spacing: 8, runSpacing: 6, children: [
-              _buildAction(context, context.l10n.cardApprove, Icons.check_rounded, colorScheme.primary, () => _respond('once')),
-              _buildAction(context, context.l10n.cardDeny, Icons.close_rounded, colorScheme.error, () => _respond('deny')),
+              _buildAction(context, context.l10n.cardApprove, Icons.check_rounded, colorScheme.primary, () => _respond('once'),
+                key: const ValueKey('ui_e2e_inline_approval_once_button')),
+              _buildAction(context, context.l10n.cardDeny, Icons.close_rounded, colorScheme.error, () => _respond('deny'),
+                key: const ValueKey('ui_e2e_inline_approval_deny_button')),
             ]),
         ],
       ),
     );
   }
 
-  Widget _buildAction(BuildContext context, String label, IconData icon, Color color, VoidCallback onTap) {
+  Widget _buildAction(
+    BuildContext context,
+    String label,
+    IconData icon,
+    Color color,
+    VoidCallback onTap, {
+    Key? key,
+  }) {
     return Material(
+      key: key,
       color: color.withOpacity(0.1),
       borderRadius: BorderRadius.circular(8),
       child: InkWell(

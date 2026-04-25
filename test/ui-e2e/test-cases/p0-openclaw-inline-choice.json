@@ -1,0 +1,59 @@
+{
+  "id": "p0-openclaw-inline-choice",
+  "title": "OpenClaw inline clarify card sends plain chat choice",
+  "tags": ["p0", "openclaw", "choice", "ui"],
+  "setup": {
+    "serverMode": "openclaw",
+    "accountId": "e2e_mock",
+    "agentName": "E2E Mock OpenClaw",
+    "httpPort": 18780,
+    "upstreamPort": 18766,
+    "mediaPort": 18781
+  },
+  "steps": [
+    { "action": "launch_app" },
+    { "action": "create_conversation", "name": "E2E OpenClaw Choice" },
+    { "action": "send_message", "text": "测试 OpenClaw 内联选择" },
+    { "action": "wait_for_text", "text": "你希望使用哪种编程语言？" },
+    { "action": "wait_for_key", "key": "ui_e2e_inline_clarify_card" },
+    { "action": "tap_key", "key": "ui_e2e_inline_clarify_choice_TypeScript" },
+    { "action": "wait_for_text", "text": "OpenClaw 已收到选择：TypeScript" }
+  ],
+  "mockGateway": {
+    "interactions": [
+      {
+        "on": { "type": "chat", "contains": "测试 OpenClaw 内联选择" },
+        "replies": [
+          {
+            "type": "agent_text_delta",
+            "message_id": "agent_msg_openclaw_choice_1",
+            "delta": "在开始之前，我需要确认一些信息：\n\n```clarify\nquestion: 你希望使用哪种编程语言？\nchoices:\n- Python\n- TypeScript\n- Rust\n- Go\n```\n\n请选择一个选项。"
+          },
+          {
+            "type": "agent_text_done",
+            "message_id": "agent_msg_openclaw_choice_1",
+            "fullText": "在开始之前，我需要确认一些信息：\n\n```clarify\nquestion: 你希望使用哪种编程语言？\nchoices:\n- Python\n- TypeScript\n- Rust\n- Go\n```\n\n请选择一个选项。"
+          }
+        ]
+      },
+      {
+        "on": { "type": "chat", "equals": "TypeScript" },
+        "replies": [
+          {
+            "type": "agent_text_delta",
+            "message_id": "agent_msg_openclaw_choice_2",
+            "delta": "OpenClaw 已收到选择：TypeScript"
+          },
+          {
+            "type": "agent_text_done",
+            "message_id": "agent_msg_openclaw_choice_2",
+            "fullText": "OpenClaw 已收到选择：TypeScript"
+          }
+        ]
+      }
+    ]
+  },
+  "assert": [
+    { "uiTextVisible": "OpenClaw 已收到选择：TypeScript" }
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "id": "p0-openclaw-inline-approval",
+  "title": "OpenClaw inline approval card sends plain chat response",
+  "tags": ["p0", "openclaw", "approval", "ui"],
+  "setup": {
+    "serverMode": "openclaw",
+    "accountId": "e2e_mock",
+    "agentName": "E2E Mock OpenClaw",
+    "httpPort": 18780,
+    "upstreamPort": 18766,
+    "mediaPort": 18781
+  },
+  "steps": [
+    { "action": "launch_app" },
+    { "action": "create_conversation", "name": "E2E OpenClaw Approval" },
+    { "action": "send_message", "text": "测试 OpenClaw 内联审批" },
+    { "action": "wait_for_text", "text": "force kill processes" },
+    { "action": "wait_for_key", "key": "ui_e2e_inline_approval_card" },
+    { "action": "tap_key", "key": "ui_e2e_inline_approval_once_button" },
+    { "action": "wait_for_text", "text": "OpenClaw 已收到审批确认" }
+  ],
+  "mockGateway": {
+    "interactions": [
+      {
+        "on": { "type": "chat", "contains": "测试 OpenClaw 内联审批" },
+        "replies": [
+          {
+            "type": "agent_text_delta",
+            "message_id": "agent_msg_openclaw_approval_1",
+            "delta": "我分析了你的请求，需要执行以下操作。请确认：\n\n```approval\ncommand: pkill -9 -f \"Code Helper\"\ndescription: force kill processes\nrisk: high\n```\n\n确认后我会继续执行。"
+          },
+          {
+            "type": "agent_text_done",
+            "message_id": "agent_msg_openclaw_approval_1",
+            "fullText": "我分析了你的请求，需要执行以下操作。请确认：\n\n```approval\ncommand: pkill -9 -f \"Code Helper\"\ndescription: force kill processes\nrisk: high\n```\n\n确认后我会继续执行。"
+          }
+        ]
+      },
+      {
+        "on": { "type": "chat", "equals": "y" },
+        "replies": [
+          {
+            "type": "agent_text_delta",
+            "message_id": "agent_msg_openclaw_approval_2",
+            "delta": "OpenClaw 已收到审批确认"
+          },
+          {
+            "type": "agent_text_done",
+            "message_id": "agent_msg_openclaw_approval_2",
+            "fullText": "OpenClaw 已收到审批确认"
+          }
+        ]
+      }
+    ]
+  },
+  "assert": [
+    { "uiTextVisible": "OpenClaw 已收到审批确认" }
+  ]
+}

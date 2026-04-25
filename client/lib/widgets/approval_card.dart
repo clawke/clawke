@@ -34,6 +34,7 @@ class _ApprovalCardState extends State<ApprovalCard> {
     final textTheme = Theme.of(context).textTheme;
 
     return Container(
+      key: const ValueKey('ui_e2e_approval_card'),
       margin: const EdgeInsets.symmetric(vertical: 6),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -130,24 +131,28 @@ class _ApprovalCardState extends State<ApprovalCard> {
               runSpacing: 6,
               children: [
                 _ActionButton(
+                  key: const ValueKey('ui_e2e_approval_once_button'),
                   label: '允许',
                   icon: Icons.check_rounded,
                   color: colorScheme.primary,
                   onTap: () => _respond('once'),
                 ),
                 _ActionButton(
+                  key: const ValueKey('ui_e2e_approval_session_button'),
                   label: '本次会话',
                   icon: Icons.check_circle_outline,
                   color: colorScheme.primary.withOpacity(0.8),
                   onTap: () => _respond('session'),
                 ),
                 _ActionButton(
+                  key: const ValueKey('ui_e2e_approval_always_button'),
                   label: '始终允许',
                   icon: Icons.verified_outlined,
                   color: colorScheme.tertiary,
                   onTap: () => _respond('always'),
                 ),
                 _ActionButton(
+                  key: const ValueKey('ui_e2e_approval_deny_button'),
                   label: '拒绝',
                   icon: Icons.close_rounded,
                   color: colorScheme.error,
@@ -209,6 +214,7 @@ class _ClarifyCardState extends State<ClarifyCard> {
     final textTheme = Theme.of(context).textTheme;
 
     return Container(
+      key: const ValueKey('ui_e2e_clarify_card'),
       margin: const EdgeInsets.symmetric(vertical: 6),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -285,6 +291,7 @@ class _ClarifyCardState extends State<ClarifyCard> {
                 runSpacing: 6,
                 children: widget.request.choices.map((choice) {
                   return _ActionButton(
+                    key: ValueKey('ui_e2e_clarify_choice_$choice'),
                     label: choice,
                     icon: Icons.arrow_forward_ios_rounded,
                     color: colorScheme.secondary,
@@ -368,6 +375,7 @@ class _ActionButton extends StatelessWidget {
   final VoidCallback onTap;
 
   const _ActionButton({
+    super.key,
     required this.label,
     required this.icon,
     required this.color,

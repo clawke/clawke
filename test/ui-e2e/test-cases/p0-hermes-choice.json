@@ -1,0 +1,55 @@
+{
+  "id": "p0-hermes-choice",
+  "title": "Hermes structured clarify request sends clarify_response",
+  "tags": ["p0", "hermes", "choice", "ui"],
+  "setup": {
+    "serverMode": "openclaw",
+    "accountId": "e2e_mock",
+    "agentName": "E2E Mock Hermes",
+    "httpPort": 18780,
+    "upstreamPort": 18766,
+    "mediaPort": 18781
+  },
+  "steps": [
+    { "action": "launch_app" },
+    { "action": "create_conversation", "name": "E2E Hermes Choice" },
+    { "action": "send_message", "text": "测试 Hermes 结构化选择" },
+    { "action": "wait_for_text", "text": "Hermes 请选择语言" },
+    { "action": "wait_for_key", "key": "ui_e2e_clarify_card" },
+    { "action": "tap_key", "key": "ui_e2e_clarify_choice_TypeScript" },
+    { "action": "wait_for_text", "text": "Hermes 已收到选择：TypeScript" }
+  ],
+  "mockGateway": {
+    "interactions": [
+      {
+        "on": { "type": "chat", "contains": "测试 Hermes 结构化选择" },
+        "replies": [
+          {
+            "type": "clarify_request",
+            "message_id": "hermes_clarify_req_1",
+            "question": "Hermes 请选择语言",
+            "choices": ["Python", "TypeScript", "Rust", "Go"]
+          }
+        ]
+      },
+      {
+        "on": { "type": "clarify_response", "response": "TypeScript" },
+        "replies": [
+          {
+            "type": "agent_text_delta",
+            "message_id": "agent_msg_hermes_choice_1",
+            "delta": "Hermes 已收到选择：TypeScript"
+          },
+          {
+            "type": "agent_text_done",
+            "message_id": "agent_msg_hermes_choice_1",
+            "fullText": "Hermes 已收到选择：TypeScript"
+          }
+        ]
+      }
+    ]
+  },
+  "assert": [
+    { "uiTextVisible": "Hermes 已收到选择：TypeScript" }
+  ]
+}

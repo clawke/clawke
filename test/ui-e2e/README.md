@@ -63,4 +63,8 @@ Bug report: test/ui-e2e/bug-reports/<run-id>-p0-send-message.md
 
 ## 当前用例
 
-- `p0-send-message`: 启动 App，新建会话，发送消息，Mock Gateway 返回流式回复，UI 断言回复可见。
+- `p0-send-message`: 新建会话，发送消息，验证流式中间态和最终回复。
+- `p0-openclaw-inline-approval`: OpenClaw markdown approval 代码块，点击原生审批按钮后以普通 chat 回复 `y`。
+- `p0-openclaw-inline-choice`: OpenClaw markdown clarify 代码块，点击原生选项后以普通 chat 回复选项文本。
+- `p0-hermes-approval`: Hermes 结构化 `approval_request`，点击原生审批按钮后透传 `approval_response`。
+- `p0-hermes-choice`: Hermes 结构化 `clarify_request`，点击原生选项后透传 `clarify_response`。

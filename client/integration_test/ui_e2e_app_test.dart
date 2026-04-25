@@ -93,6 +93,9 @@ Future<void> _runStep(WidgetTester tester, Map<String, dynamic> step) async {
     case 'wait_for_key':
       await _waitForKey(tester, step['key'] as String);
       return;
+    case 'tap_key':
+      await _tapKey(tester, step['key'] as String);
+      return;
     case 'wait_for_absent_key':
       await _waitForAbsentKey(
         tester,
@@ -184,6 +187,13 @@ Future<void> _waitForKey(
   Duration timeout = const Duration(seconds: 20),
 }) async {
   await _waitForFinder(tester, find.byKey(ValueKey(key)), timeout: timeout);
+}
+
+Future<void> _tapKey(WidgetTester tester, String key) async {
+  final finder = find.byKey(ValueKey(key));
+  await _waitForFinder(tester, finder);
+  await tester.tap(finder.first);
+  await tester.pump(const Duration(milliseconds: 300));
 }
 
 Future<void> _waitForAbsentKey(

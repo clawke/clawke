@@ -1,0 +1,56 @@
+{
+  "id": "p0-hermes-approval",
+  "title": "Hermes structured approval request sends approval_response",
+  "tags": ["p0", "hermes", "approval", "ui"],
+  "setup": {
+    "serverMode": "openclaw",
+    "accountId": "e2e_mock",
+    "agentName": "E2E Mock Hermes",
+    "httpPort": 18780,
+    "upstreamPort": 18766,
+    "mediaPort": 18781
+  },
+  "steps": [
+    { "action": "launch_app" },
+    { "action": "create_conversation", "name": "E2E Hermes Approval" },
+    { "action": "send_message", "text": "测试 Hermes 结构化审批" },
+    { "action": "wait_for_text", "text": "Hermes 请求执行命令" },
+    { "action": "wait_for_key", "key": "ui_e2e_approval_card" },
+    { "action": "tap_key", "key": "ui_e2e_approval_once_button" },
+    { "action": "wait_for_text", "text": "Hermes 已收到审批：once" }
+  ],
+  "mockGateway": {
+    "interactions": [
+      {
+        "on": { "type": "chat", "contains": "测试 Hermes 结构化审批" },
+        "replies": [
+          {
+            "type": "approval_request",
+            "message_id": "hermes_approval_req_1",
+            "command": "rm -rf /tmp/hermes-e2e",
+            "description": "Hermes 请求执行命令",
+            "pattern_keys": ["dangerous_delete"]
+          }
+        ]
+      },
+      {
+        "on": { "type": "approval_response", "choice": "once" },
+        "replies": [
+          {
+            "type": "agent_text_delta",
+            "message_id": "agent_msg_hermes_approval_1",
+            "delta": "Hermes 已收到审批：once"
+          },
+          {
+            "type": "agent_text_done",
+            "message_id": "agent_msg_hermes_approval_1",
+            "fullText": "Hermes 已收到审批：once"
+          }
+        ]
+      }
+    ]
+  },
+  "assert": [
+    { "uiTextVisible": "Hermes 已收到审批：once" }
+  ]
+}
