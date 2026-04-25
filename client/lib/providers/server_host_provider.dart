@@ -43,12 +43,20 @@ class ServerConfig {
 /// 服务器配置 Provider（持久化到 SharedPreferences）
 final serverConfigProvider =
     StateNotifierProvider<ServerConfigNotifier, ServerConfig>((ref) {
-  return ServerConfigNotifier();
-});
+      return ServerConfigNotifier();
+    });
 
 class ServerConfigNotifier extends StateNotifier<ServerConfig> {
-  ServerConfigNotifier() : super(const ServerConfig()) {
-    _load();
+  ServerConfigNotifier({
+    ServerConfig initialConfig = const ServerConfig(),
+    bool loadFromPrefs = true,
+  }) : super(initialConfig) {
+    if (loadFromPrefs) {
+      _load();
+    } else {
+      // 测试注入配置不写入本地偏好 — Test-injected config does not touch local preferences
+      _loadCompleter.complete(state);
+    }
   }
 
   final Completer<ServerConfig> _loadCompleter = Completer<ServerConfig>();
@@ -85,8 +93,12 @@ class ServerConfigNotifier extends StateNotifier<ServerConfig> {
     }
 
     state = ServerConfig(
-      httpUrl: (httpUrl != null && httpUrl.isNotEmpty) ? httpUrl : kDefaultHttpUrl,
-      wsUrl: (migratedWsUrl != null && migratedWsUrl.isNotEmpty) ? migratedWsUrl : kDefaultWsUrl,
+      httpUrl: (httpUrl != null && httpUrl.isNotEmpty)
+          ? httpUrl
+          : kDefaultHttpUrl,
+      wsUrl: (migratedWsUrl != null && migratedWsUrl.isNotEmpty)
+          ? migratedWsUrl
+          : kDefaultWsUrl,
       token: token,
     );
     _loadCompleter.complete(state);

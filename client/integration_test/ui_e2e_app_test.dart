@@ -7,9 +7,10 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:client/main.dart';
+import 'package:client/l10n/app_localizations.dart';
+import 'package:client/providers/server_host_provider.dart';
+import 'package:client/screens/main_layout.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -27,12 +28,27 @@ void main() {
         caseFile: caseFile,
         caseJsonBase64: caseJsonBase64,
       );
-      await _seedServerPrefs(httpUrl: httpUrl, wsUrl: wsUrl);
+      final serverConfig = _loadServerConfig(httpUrl: httpUrl, wsUrl: wsUrl);
 
       await tester.pumpWidget(
         RepaintBoundary(
           key: appBoundaryKey,
-          child: const ProviderScope(child: ClawkeApp()),
+          child: ProviderScope(
+            overrides: [
+              serverConfigProvider.overrideWith(
+                (ref) => ServerConfigNotifier(
+                  initialConfig: serverConfig,
+                  loadFromPrefs: false,
+                ),
+              ),
+            ],
+            child: const MaterialApp(
+              debugShowCheckedModeBanner: false,
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: MainLayout(),
+            ),
+          ),
         ),
       );
       await tester.pump(const Duration(seconds: 2));
@@ -69,19 +85,14 @@ Map<String, dynamic> _loadCase({
   return jsonDecode(File(caseFile).readAsStringSync()) as Map<String, dynamic>;
 }
 
-Future<void> _seedServerPrefs({
+ServerConfig _loadServerConfig({
   required String httpUrl,
   required String wsUrl,
-}) async {
+}) {
   if (httpUrl.isEmpty || wsUrl.isEmpty) {
     throw StateError('CLAWKE_E2E_HTTP_URL and CLAWKE_E2E_WS_URL are required');
   }
-  final prefs = await SharedPreferences.getInstance();
-  await prefs.clear();
-  await prefs.setString('clawke_http_url', httpUrl);
-  await prefs.setString('clawke_ws_url', wsUrl);
-  await prefs.setString('clawke_token', '');
-  await prefs.setBool('clawke_logged_out', false);
+  return ServerConfig(httpUrl: httpUrl, wsUrl: wsUrl);
 }
 
 Future<void> _runStep(WidgetTester tester, Map<String, dynamic> step) async {
