@@ -1,0 +1,46 @@
+{
+  "id": "p0-send-message",
+  "title": "Send message and render streamed mock gateway reply",
+  "tags": ["p0", "chat", "streaming", "ui"],
+  "setup": {
+    "serverMode": "openclaw",
+    "accountId": "e2e_mock",
+    "agentName": "E2E Mock Gateway",
+    "httpPort": 18780,
+    "upstreamPort": 18766,
+    "mediaPort": 18781
+  },
+  "steps": [
+    { "action": "launch_app" },
+    { "action": "wait_for_text", "text": "Clawke" },
+    { "action": "create_conversation", "name": "E2E P0 Send Message" },
+    { "action": "send_message", "text": "你好 Clawke" },
+    { "action": "wait_for_text", "text": "这是 Mock Gateway 的稳定回复" }
+  ],
+  "mockGateway": {
+    "onUserMessage": {
+      "contains": "你好 Clawke",
+      "replies": [
+        {
+          "type": "agent_text_delta",
+          "message_id": "agent_msg_p0_send_1",
+          "delta": "这是 Mock Gateway 的"
+        },
+        {
+          "type": "agent_text_delta",
+          "message_id": "agent_msg_p0_send_1",
+          "delta": "稳定回复"
+        },
+        {
+          "type": "agent_text_done",
+          "message_id": "agent_msg_p0_send_1",
+          "fullText": "这是 Mock Gateway 的稳定回复"
+        }
+      ]
+    }
+  },
+  "assert": [
+    { "uiTextVisible": "你好 Clawke" },
+    { "uiTextVisible": "这是 Mock Gateway 的稳定回复" }
+  ]
+}
