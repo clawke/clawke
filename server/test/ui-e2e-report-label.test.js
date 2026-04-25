@@ -12,8 +12,11 @@ const runner = readFileSync(
 test('UI E2E human report displays result status instead of demo fail flag', () => {
   assert.doesNotMatch(runner, /Demo Fail/);
   assert.doesNotMatch(runner, /demo_fail:/);
+  assert.doesNotMatch(runner, /测试结果/);
   assert.match(runner, /function reportStatus\(ok\)/);
-  assert.match(runner, /测试结果/);
-  assert.match(runner, /- 测试结果: status: \$\{statusValue\}/);
-  assert.match(runner, /status: \$\{escapeHtml\(statusValue\)\}/);
+  assert.match(runner, /- status: \$\{statusValue\}/);
+  assert.match(
+    runner,
+    /<tr><th>status<\/th><td>\$\{escapeHtml\(statusValue\)\}<\/td><\/tr>/,
+  );
 });

@@ -243,7 +243,7 @@ function writeHumanReport({ ok, error, bugReportPath, screenshots }) {
 
 ## Summary
 
-- 测试结果: status: ${statusValue}
+- status: ${statusValue}
 - case: ${testCase.id}
 - title: ${testCase.title}
 - run_id: ${runId}
@@ -327,7 +327,7 @@ ${markdownList([
     <tr><th>Run ID</th><td>${escapeHtml(runId)}</td></tr>
     <tr><th>Branch</th><td>${escapeHtml(branch)}</td></tr>
     <tr><th>Commit</th><td>${escapeHtml(commit)}</td></tr>
-    <tr><th>测试结果</th><td>status: ${escapeHtml(statusValue)}</td></tr>
+    <tr><th>status</th><td>${escapeHtml(statusValue)}</td></tr>
   </table>
   <h2>Conclusion</h2>
   <p>${escapeHtml(ok ? '该 UI E2E 用例通过。' : `该 UI E2E 用例失败：${error?.message || String(error)}`)}</p>
