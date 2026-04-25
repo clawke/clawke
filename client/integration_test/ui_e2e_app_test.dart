@@ -13,8 +13,7 @@ void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   const caseFile = String.fromEnvironment('CLAWKE_E2E_CASE_FILE');
-  const caseJsonBase64 =
-      String.fromEnvironment('CLAWKE_E2E_CASE_JSON_BASE64');
+  const caseJsonBase64 = String.fromEnvironment('CLAWKE_E2E_CASE_JSON_BASE64');
   const httpUrl = String.fromEnvironment('CLAWKE_E2E_HTTP_URL');
   const wsUrl = String.fromEnvironment('CLAWKE_E2E_WS_URL');
   const runDir = String.fromEnvironment('CLAWKE_E2E_RUN_DIR');
@@ -84,6 +83,23 @@ Future<void> _runStep(WidgetTester tester, Map<String, dynamic> step) async {
     case 'wait_for_text':
       await _waitForText(tester, step['text'] as String);
       return;
+    case 'wait_for_absent_text':
+      await _waitForAbsentText(
+        tester,
+        step['text'] as String,
+        duration: _stepDuration(step),
+      );
+      return;
+    case 'wait_for_key':
+      await _waitForKey(tester, step['key'] as String);
+      return;
+    case 'wait_for_absent_key':
+      await _waitForAbsentKey(
+        tester,
+        step['key'] as String,
+        duration: _stepDuration(step),
+      );
+      return;
     case 'create_conversation':
       await _createConversation(tester, step['name'] as String);
       return;
@@ -109,18 +125,23 @@ Future<void> _runAssert(
 }
 
 Future<void> _createConversation(WidgetTester tester, String name) async {
-  final addButton = find.byKey(const ValueKey('ui_e2e_new_conversation_button'));
+  final addButton = find.byKey(
+    const ValueKey('ui_e2e_new_conversation_button'),
+  );
   await _waitForFinder(tester, addButton);
   await tester.tap(addButton.first);
   await tester.pump(const Duration(seconds: 1));
 
-  final nameField = find.byKey(const ValueKey('ui_e2e_conversation_name_field'));
+  final nameField = find.byKey(
+    const ValueKey('ui_e2e_conversation_name_field'),
+  );
   await _waitForFinder(tester, nameField);
   await tester.enterText(nameField, name);
   await tester.pump(const Duration(milliseconds: 300));
 
-  final createButton =
-      find.byKey(const ValueKey('ui_e2e_create_conversation_button'));
+  final createButton = find.byKey(
+    const ValueKey('ui_e2e_create_conversation_button'),
+  );
   await tester.tap(createButton);
   await tester.pump(const Duration(seconds: 2));
   await _waitForText(tester, name);
@@ -145,6 +166,38 @@ Future<void> _waitForText(
   await _waitForFinder(tester, find.textContaining(text), timeout: timeout);
 }
 
+Future<void> _waitForAbsentText(
+  WidgetTester tester,
+  String text, {
+  Duration duration = const Duration(milliseconds: 300),
+}) async {
+  await _expectFinderAbsentFor(
+    tester,
+    find.textContaining(text),
+    duration: duration,
+  );
+}
+
+Future<void> _waitForKey(
+  WidgetTester tester,
+  String key, {
+  Duration timeout = const Duration(seconds: 20),
+}) async {
+  await _waitForFinder(tester, find.byKey(ValueKey(key)), timeout: timeout);
+}
+
+Future<void> _waitForAbsentKey(
+  WidgetTester tester,
+  String key, {
+  Duration duration = const Duration(milliseconds: 300),
+}) async {
+  await _expectFinderAbsentFor(
+    tester,
+    find.byKey(ValueKey(key)),
+    duration: duration,
+  );
+}
+
 Future<void> _waitForFinder(
   WidgetTester tester,
   Finder finder, {
@@ -156,6 +209,26 @@ Future<void> _waitForFinder(
     if (finder.evaluate().isNotEmpty) return;
   }
   throw TestFailure('Timed out waiting for $finder');
+}
+
+Future<void> _expectFinderAbsentFor(
+  WidgetTester tester,
+  Finder finder, {
+  required Duration duration,
+}) async {
+  final deadline = DateTime.now().add(duration);
+  while (DateTime.now().isBefore(deadline)) {
+    await tester.pump(const Duration(milliseconds: 100));
+    if (finder.evaluate().isNotEmpty) {
+      throw TestFailure('Expected $finder to stay absent for $duration');
+    }
+  }
+}
+
+Duration _stepDuration(Map<String, dynamic> step) {
+  final durationMs = step['durationMs'] as int?;
+  if (durationMs == null) return const Duration(milliseconds: 300);
+  return Duration(milliseconds: durationMs);
 }
 
 Future<void> _captureFailure(

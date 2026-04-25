@@ -14,7 +14,12 @@
     { "action": "launch_app" },
     { "action": "create_conversation", "name": "E2E P0 Send Message" },
     { "action": "send_message", "text": "你好 Clawke" },
-    { "action": "wait_for_text", "text": "这是 Mock Gateway 的稳定回复" }
+    { "action": "wait_for_text", "text": "这是 Mock Gateway 的" },
+    { "action": "wait_for_key", "key": "ui_e2e_abort_button" },
+    { "action": "wait_for_absent_text", "text": "这是 Mock Gateway 的稳定回复", "durationMs": 600 },
+    { "action": "wait_for_text", "text": "这是 Mock Gateway 的稳定回复" },
+    { "action": "wait_for_key", "key": "ui_e2e_send_button" },
+    { "action": "wait_for_absent_key", "key": "ui_e2e_abort_button", "durationMs": 600 }
   ],
   "mockGateway": {
     "onUserMessage": {
@@ -23,17 +28,20 @@
         {
           "type": "agent_text_delta",
           "message_id": "agent_msg_p0_send_1",
-          "delta": "这是 Mock Gateway 的"
+          "delta": "这是 Mock Gateway 的",
+          "delayMs": 80
         },
         {
           "type": "agent_text_delta",
           "message_id": "agent_msg_p0_send_1",
-          "delta": "稳定回复"
+          "delta": "稳定回复",
+          "delayMs": 2500
         },
         {
           "type": "agent_text_done",
           "message_id": "agent_msg_p0_send_1",
-          "fullText": "这是 Mock Gateway 的稳定回复"
+          "fullText": "这是 Mock Gateway 的稳定回复",
+          "delayMs": 80
         }
       ]
     }
