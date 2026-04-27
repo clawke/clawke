@@ -689,11 +689,13 @@ void main() {
     expect(searchField.style?.fontSize, 16);
     expect(searchField.decoration?.hintStyle?.fontSize, 16);
 
-    final filterChips = tester.widgetList<FilterChip>(find.byType(FilterChip));
-    final statusAllChip = filterChips.firstWhere(
-      (chip) => (chip.label as Text).data == 'All 2',
+    final dynamic statusFilter = tester.widget(
+      find.byKey(const ValueKey('skills_status_filter')),
     );
-    expect(statusAllChip.labelStyle?.fontSize, 14);
+    expect(
+      statusFilter.style?.textStyle?.resolve(<WidgetState>{})?.fontSize,
+      14,
+    );
 
     final skillName = tester.widget<Text>(find.text('web-search'));
     expect(skillName.style?.fontSize, 16);
@@ -724,19 +726,13 @@ void main() {
     await tester.pumpWidget(buildSubject(locale: const Locale('en')));
     await tester.pumpAndSettle();
 
-    final allFilter = tester.widget<FilterChip>(
-      find.byKey(const ValueKey('skills_filter_all')),
-    );
-    final enabledFilter = tester.widget<FilterChip>(
-      find.byKey(const ValueKey('skills_filter_enabled')),
-    );
-    final disabledFilter = tester.widget<FilterChip>(
-      find.byKey(const ValueKey('skills_filter_disabled')),
+    final dynamic statusFilter = tester.widget(
+      find.byKey(const ValueKey('skills_status_filter')),
     );
 
-    expect((allFilter.label as Text).data, 'All 2');
-    expect((enabledFilter.label as Text).data, 'Enabled 1');
-    expect((disabledFilter.label as Text).data, 'Disabled 1');
+    expect((statusFilter.segments[0].label as Text).data, 'All 2');
+    expect((statusFilter.segments[1].label as Text).data, 'Enabled 1');
+    expect((statusFilter.segments[2].label as Text).data, 'Disabled 1');
     expect(find.byKey(const ValueKey('skills_metric_all')), findsNothing);
     expect(find.byKey(const ValueKey('skills_metric_enabled')), findsNothing);
   });
@@ -1033,6 +1029,13 @@ void main() {
     expect(api.detailScopeId, 'gateway:hermes-work');
     expect(find.byType(Dialog), findsNothing);
     expect(find.text('技能详情'), findsOneWidget);
+    final detailEditAction = find.byKey(const ValueKey('skill_app_bar_action'));
+    expect(detailEditAction, findsOneWidget);
+    final detailEditButton = tester.widget<TextButton>(detailEditAction);
+    expect(
+      detailEditButton.style?.textStyle?.resolve(<WidgetState>{})?.fontWeight,
+      FontWeight.w800,
+    );
     expect(find.text('返回技能列表'), findsNothing);
     expect(find.text('基本信息'), findsOneWidget);
     expect(find.text('技能定义'), findsOneWidget);
@@ -1052,6 +1055,46 @@ void main() {
     expect(find.text('基础信息'), findsOneWidget);
     expect(find.text('SKILL.md 正文'), findsOneWidget);
     expect(find.widgetWithText(TextButton, '保存'), findsOneWidget);
+  });
+
+  testWidgets('mobile skill detail keeps icon and text edit action', (
+    tester,
+  ) async {
+    final api = _FakeSkillsApiService();
+    tester.view.physicalSize = const Size(390, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(buildSubject(locale: const Locale('zh'), api: api));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('web-search').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('技能详情'), findsOneWidget);
+    final detailEditAction = find.byKey(const ValueKey('skill_app_bar_action'));
+    expect(detailEditAction, findsOneWidget);
+    final detailEditButton = tester.widget<TextButton>(detailEditAction);
+    expect(
+      detailEditButton.style?.textStyle?.resolve(<WidgetState>{})?.fontWeight,
+      FontWeight.w800,
+    );
+    expect(find.widgetWithText(TextButton, '编辑'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: detailEditAction,
+        matching: find.byIcon(Icons.edit_outlined),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(detailEditAction);
+    await tester.pumpAndSettle();
+
+    expect(find.text('编辑技能'), findsOneWidget);
   });
 
   testWidgets('readonly skill detail hides unavailable edit action', (
@@ -1381,7 +1424,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byIcon(Icons.arrow_back), findsOneWidget);
+    expect(find.byIcon(Icons.arrow_back), findsNothing);
     expect(find.byIcon(Icons.refresh), findsOneWidget);
     expect(find.byIcon(Icons.add), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, 'hermes-work'), findsOneWidget);
@@ -1396,6 +1439,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.add));
     await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.arrow_back_ios_new), findsOneWidget);
     expect(find.text('Name'), findsOneWidget);
   });
 

@@ -1487,7 +1487,7 @@ abstract class AppLocalizations {
   /// No description provided for @skillModeExclusive.
   ///
   /// In zh, this message translates to:
-  /// **'必须使用这些 Skills'**
+  /// **'强提示使用 Skills'**
   String get skillModeExclusive;
 
   /// No description provided for @today.

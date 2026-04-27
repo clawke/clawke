@@ -17,6 +17,9 @@ const agentName = setup.agentName || 'E2E Mock Gateway';
 const gatewayType = setup.gatewayType || 'mock';
 const capabilities = setup.capabilities || ['chat', 'tasks', 'skills', 'models'];
 const consumedInteractions = new Set();
+const models = Array.isArray(testCase.mockGateway?.models)
+  ? testCase.mockGateway.models.map(String)
+  : ['e2e-mock-model'];
 const skills = new Map(
   (testCase.mockGateway?.skills || []).map((skill) => [skill.id, normalizeSkill(skill)]),
 );
@@ -91,6 +94,25 @@ function matches(on, incoming) {
   if (on.contains && !incomingText(incoming).includes(on.contains)) return false;
   if (on.choice && incoming.choice !== on.choice) return false;
   if (on.response && incoming.response !== on.response) return false;
+  if (on.model_override && incoming.model_override !== on.model_override) return false;
+  if (on.modelOverride && incoming.model_override !== on.modelOverride) return false;
+  if (on.skill_mode && incoming.skill_mode !== on.skill_mode) return false;
+  if (on.skillMode && incoming.skill_mode !== on.skillMode) return false;
+  const exactSkills = on.skills_hint || on.skillsHint;
+  if (Array.isArray(exactSkills)) {
+    const incomingSkills = Array.isArray(incoming.skills_hint) ? incoming.skills_hint : [];
+    if (exactSkills.length !== incomingSkills.length) return false;
+    for (const skill of exactSkills.map(String)) {
+      if (!incomingSkills.includes(skill)) return false;
+    }
+  }
+  const requiredSkills = on.skills_hint_includes || on.skillsHintIncludes;
+  if (Array.isArray(requiredSkills)) {
+    const incomingSkills = Array.isArray(incoming.skills_hint) ? incoming.skills_hint : [];
+    for (const skill of requiredSkills.map(String)) {
+      if (!incomingSkills.includes(skill)) return false;
+    }
+  }
   return true;
 }
 
@@ -517,7 +539,9 @@ function handleTaskRequest(ws, incoming) {
 
 function sendTransientResponse(ws, incoming) {
   if (incoming.type === 'query_models') {
-    ws.send(JSON.stringify({ type: 'models_response', models: ['e2e-mock-model'] }));
+    const payload = { type: 'models_response', models };
+    log(`send ${JSON.stringify(payload)}`);
+    ws.send(JSON.stringify(payload));
     return true;
   }
   if (incoming.type === 'query_skills') {

@@ -90,6 +90,21 @@ describe('TS: MessageStore', () => {
     db.close();
   });
 
+  it('getAfterSeq caps initial sync history at 100 messages', () => {
+    const db = new Database(':memory:');
+    const store = new MessageStore(db);
+
+    for (let i = 0; i < 105; i++) {
+      store.append('acc1', 'conv1', `cmsg_${i}`, 'user', 'text', `message ${i}`);
+    }
+
+    const msgs = store.getAfterSeq(0);
+    assert.equal(msgs.length, 100);
+    assert.equal(msgs[0].content, 'message 0');
+    assert.equal(msgs[99].content, 'message 99');
+    db.close();
+  });
+
   it('duplicate client_msg_id returns existing (idempotent)', () => {
     const db = new Database(':memory:');
     const store = new MessageStore(db);
@@ -161,7 +176,7 @@ describe('TS: CupV2Handler', () => {
     const seq0 = handler.handleSync({
       event_type: 'sync', data: { last_seq: 0 },
     });
-    // last_seq=0 → 拉取全量历史（最多 500 条）— Pull full history (up to LIMIT 500)
+    // last_seq=0 → 拉取全量历史（最多 100 条）— Pull full history (up to LIMIT 100)
     assert.equal(seq0.messages.length, 1, 'new device gets all stored messages');
     assert.ok(seq0.current_seq > 0);
     db.close();

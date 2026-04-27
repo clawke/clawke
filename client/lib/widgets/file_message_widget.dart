@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:client/services/media_cache_service.dart';
 import 'package:client/services/media_resolver.dart';
+import 'package:client/widgets/app_snack_bar.dart';
 
 /// 文件消息组件
 ///
@@ -100,18 +101,14 @@ class _FileMessageWidgetState extends State<FileMessageWidget> {
         } else if (mounted) {
           setState(() => _isDownloading = false);
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('下载失败')),
-            );
+            showAppSnackBar(context, '下载失败');
           }
         }
       } catch (e) {
         debugPrint('[FileMessage] Download failed: $e');
         if (mounted) {
           setState(() => _isDownloading = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('下载失败: $e')),
-          );
+          showAppSnackBar(context, '下载失败: $e');
         }
       }
     }

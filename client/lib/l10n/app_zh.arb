@@ -257,7 +257,7 @@
   "noModelsAvailable": "暂无可用模型，请检查 Gateway 连接",
   "noSkillsAvailable": "暂无已安装的 Skills",
   "skillModePriority": "优先使用这些 Skills",
-  "skillModeExclusive": "必须使用这些 Skills",
+  "skillModeExclusive": "强提示使用 Skills",
   "today": "今天",
   "yesterday": "昨天",
   "monthDay": "{month}月{day}日",

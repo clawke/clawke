@@ -7,6 +7,7 @@ import 'package:flutter_highlight/themes/github.dart';
 import 'package:client/widgets/mermaid/widgets/mermaid_diagram.dart';
 import 'package:client/widgets/mermaid/models/style.dart';
 import 'package:client/widgets/mermaid/parser/mermaid_parser.dart';
+import 'package:client/widgets/app_snack_bar.dart';
 
 /// 为 GptMarkdown 提供的代码块渲染器（带语法高亮 + Mermaid 图表 + Clarify/Approval 卡片）
 ///
@@ -187,12 +188,7 @@ Widget _buildMermaidBlock(
                 borderRadius: BorderRadius.circular(4),
                 onTap: () {
                   Clipboard.setData(ClipboardData(text: code));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('已复制'),
-                      duration: Duration(seconds: 1),
-                    ),
-                  );
+                  showAppSnackBar(context, '已复制', duration: const Duration(seconds: 1));
                 },
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
@@ -348,12 +344,7 @@ Widget _buildCodeBlock(
                 borderRadius: BorderRadius.circular(4),
                 onTap: () {
                   Clipboard.setData(ClipboardData(text: code));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('已复制'),
-                      duration: Duration(seconds: 1),
-                    ),
-                  );
+                  showAppSnackBar(context, '已复制', duration: const Duration(seconds: 1));
                 },
                 child: Padding(
                   padding: const EdgeInsets.symmetric(

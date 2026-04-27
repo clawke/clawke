@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import 'package:client/services/config_api_service.dart';
 import 'package:client/providers/database_providers.dart';
 import 'package:client/l10n/l10n.dart';
+import 'package:client/models/gateway_model.dart';
+import 'package:client/models/managed_skill.dart';
 
 /// 会话设置页面 — iOS 风格抽屉式导航
 ///
@@ -61,9 +65,9 @@ class ConversationSettingsSheet extends ConsumerStatefulWidget {
 
 class _ConversationSettingsSheetState
     extends ConsumerState<ConversationSettingsSheet> {
-  final _api = ConfigApiService();
   bool _loading = true;
   bool _saving = false;
+  bool _didLoad = false;
 
   bool get _isCreateMode => widget.conversationId == null;
 
@@ -82,6 +86,13 @@ class _ConversationSettingsSheetState
   @override
   void initState() {
     super.initState();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didLoad) return;
+    _didLoad = true;
     _loadData();
   }
 
@@ -96,38 +107,46 @@ class _ConversationSettingsSheetState
   Future<void> _loadData({bool refresh = false}) async {
     if (refresh) setState(() => _loading = true);
 
-    if (_isCreateMode && !refresh) {
+    final modelRepository = ref.read(modelCacheRepositoryProvider);
+    final skillRepository = ref.read(skillCacheRepositoryProvider);
+    final locale = Localizations.localeOf(context).languageCode;
+
+    if (_isCreateMode) {
       final results = await Future.wait([
-        _api.getModels(accountId: widget.accountId, refresh: refresh),
-        _api.getSkills(accountId: widget.accountId, refresh: refresh),
+        modelRepository.getModels(widget.accountId),
+        skillRepository.getSkills(widget.accountId, locale),
       ]);
       if (!mounted) return;
       setState(() {
-        _availableModels = results[0] as List<String>;
-        _availableSkills = results[1] as List<SkillInfo>;
-        _nameController.text = 'New Chat';
+        _availableModels = _mergeSelectedModel(
+          _modelIds(results[0] as List<CachedGatewayModel>),
+        );
+        _availableSkills = _mergeSelectedSkills(
+          _toSkillInfoList(results[1] as List<ManagedSkill>),
+        );
+        if (!refresh) _nameController.text = 'New Chat';
         _loading = false;
       });
+      unawaited(_refreshModelsFromRemote());
+      unawaited(_refreshSkillsFromRemote());
       return;
     }
 
     final results = await Future.wait([
-      _api.getModels(accountId: widget.accountId, refresh: refresh),
-      _api.getSkills(accountId: widget.accountId, refresh: refresh),
-      _api.getConvConfig(widget.conversationId!),
+      modelRepository.getModels(widget.accountId),
+      skillRepository.getSkills(widget.accountId, locale),
+      ref.read(configApiServiceProvider).getConvConfig(widget.conversationId!),
       ref.read(conversationRepositoryProvider)
           .getConversationName(widget.conversationId!),
     ]);
 
-    final models = results[0] as List<String>;
-    final skills = results[1] as List<SkillInfo>;
+    final models = _modelIds(results[0] as List<CachedGatewayModel>);
+    final skills = _toSkillInfoList(results[1] as List<ManagedSkill>);
     final config = results[2] as ConvConfig;
     final convName = results[3] as String?;
 
     if (!mounted) return;
     setState(() {
-      _availableModels = models;
-      _availableSkills = skills;
       if (!refresh) {
         _nameController.text = convName ?? '';
         _selectedModel = config.modelId;
@@ -136,8 +155,84 @@ class _ConversationSettingsSheetState
         _systemPromptController.text = config.systemPrompt ?? '';
         _workDirController.text = config.workDir ?? '';
       }
+      _availableModels = _mergeSelectedModel(models);
+      _availableSkills = _mergeSelectedSkills(skills);
       _loading = false;
     });
+    unawaited(_refreshModelsFromRemote());
+    unawaited(_refreshSkillsFromRemote());
+  }
+
+  List<String> _modelIds(List<CachedGatewayModel> models) {
+    return models.map((model) => model.modelId).toList();
+  }
+
+  List<String> _mergeSelectedModel(List<String> models) {
+    final selected = _selectedModel;
+    if (selected == null || selected.isEmpty || models.contains(selected)) {
+      return models;
+    }
+    return [selected, ...models];
+  }
+
+  List<SkillInfo> _toSkillInfoList(List<ManagedSkill> skills) {
+    return skills
+        .where((skill) => skill.enabled)
+        .map((skill) => SkillInfo(
+              name: skill.name,
+              description: skill.displayDescription,
+            ))
+        .toList();
+  }
+
+  List<SkillInfo> _mergeSelectedSkills(List<SkillInfo> skills) {
+    final byName = {for (final skill in skills) skill.name: skill};
+    for (final selected in _selectedSkills) {
+      byName.putIfAbsent(
+        selected,
+        () => SkillInfo(name: selected, description: '已失效'),
+      );
+    }
+    return byName.values.toList();
+  }
+
+  Future<List<String>> _refreshModelsFromRemote() async {
+    try {
+      final modelRepository = ref.read(modelCacheRepositoryProvider);
+      final models = _mergeSelectedModel(
+        _modelIds(await modelRepository.syncGateway(widget.accountId)),
+      );
+      if (!mounted) return _availableModels;
+      setState(() => _availableModels = models);
+      return models;
+    } catch (e) {
+      debugPrint('[ConversationSettings] model sync failed: $e');
+      return _availableModels;
+    }
+  }
+
+  Future<List<SkillInfo>> _refreshSkillsFromRemote() async {
+    try {
+      final skillRepository = ref.read(skillCacheRepositoryProvider);
+      final locale = Localizations.localeOf(context).languageCode;
+      final scope = SkillScope(
+        id: 'gateway:${widget.accountId}',
+        type: 'gateway',
+        label: widget.accountId,
+        description: 'Gateway',
+        readonly: false,
+        gatewayId: widget.accountId,
+      );
+      final skills = _mergeSelectedSkills(
+        _toSkillInfoList(await skillRepository.syncGateway(scope, locale)),
+      );
+      if (!mounted) return _availableSkills;
+      setState(() => _availableSkills = skills);
+      return skills;
+    } catch (e) {
+      debugPrint('[ConversationSettings] skill sync failed: $e');
+      return _availableSkills;
+    }
   }
 
   Future<void> _save() async {
@@ -174,7 +269,7 @@ class _ConversationSettingsSheetState
           ? null
           : _workDirController.text.trim(),
     );
-    await _api.saveConvConfig(convId, config);
+    await ref.read(configApiServiceProvider).saveConvConfig(convId, config);
 
     // 编辑模式：保存会话名称
     if (!_isCreateMode && newName.isNotEmpty) {
@@ -661,10 +756,7 @@ class _ConversationSettingsSheetState
           models: _availableModels,
           selected: _selectedModel,
           onRefresh: () async {
-            final models = await _api.getModels(
-                accountId: widget.accountId, refresh: true);
-            setState(() => _availableModels = models);
-            return models;
+            return _refreshModelsFromRemote();
           },
         ),
       ),
@@ -685,10 +777,7 @@ class _ConversationSettingsSheetState
           selectedSkills: Set.from(_selectedSkills),
           skillMode: _skillMode,
           onRefresh: () async {
-            final skills = await _api.getSkills(
-                accountId: widget.accountId, refresh: true);
-            setState(() => _availableSkills = skills);
-            return skills;
+            return _refreshSkillsFromRemote();
           },
         ),
       ),

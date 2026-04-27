@@ -6,6 +6,7 @@ import 'package:client/data/database/app_database.dart';
 import 'package:client/providers/database_providers.dart';
 import 'package:client/providers/reply_provider.dart';
 import 'package:client/l10n/l10n.dart';
+import 'package:client/widgets/app_snack_bar.dart';
 
 class MessageContextMenu extends ConsumerWidget {
   final Message message;
@@ -117,12 +118,7 @@ class MessageContextMenu extends ConsumerWidget {
         case 'copy':
           Clipboard.setData(ClipboardData(text: message.content ?? ''));
           if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(t.copied),
-                duration: const Duration(seconds: 1),
-              ),
-            );
+            showAppSnackBar(context, t.copied, duration: const Duration(seconds: 1));
           }
         case 'edit':
           ref.read(editingMessageProvider.notifier).state = message;

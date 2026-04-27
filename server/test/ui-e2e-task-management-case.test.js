@@ -31,15 +31,18 @@ test('task management lifecycle case documents module, objective, and coverage',
 
 test('task management lifecycle case covers core UI task operations', () => {
   const testCase = JSON.parse(readFileSync(casePath, 'utf8'));
-  const actions = testCase.steps.map((step) => `${step.action}:${step.text || step.buttonText || step.tooltip || ''}`);
+  const actions = testCase.steps.map((step) => `${step.action}:${step.text || step.buttonText || step.tooltip || step.icon || ''}`);
 
   assert.ok(actions.includes('tap_text:任务管理'));
   assert.ok(actions.includes('tap_text:新建任务'));
-  assert.ok(actions.includes('tap_text:编辑任务'));
+  assert.ok(actions.includes('tap_text:编辑'));
   assert.ok(actions.includes('tap_dialog_button:立即执行'));
-  assert.ok(actions.includes('tap_filter_chip:已暂停'));
+  assert.ok(actions.includes('wait_for_text:确认立即执行任务'));
+  assert.ok(actions.includes('tap_dialog_button:确认执行'));
+  assert.ok(actions.includes('tap_icon:arrow_back'));
+  assert.ok(actions.includes('wait_for_text:已暂停'));
   assert.ok(actions.includes('tap_filter_chip:已启用'));
-  assert.ok(actions.includes('tap_card_tooltip:删除'));
+  assert.ok(actions.includes('tap_text:删除任务'));
   assert.ok(actions.includes('tap_dialog_button:删除'));
 });
 

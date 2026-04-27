@@ -46,7 +46,7 @@ export class MessageStore {
       "INSERT OR REPLACE INTO metadata (key, value) VALUES ('globalSeq', ?)"
     );
     this.getAfterStmt = db.prepare(
-      'SELECT * FROM messages WHERE seq > ? ORDER BY seq ASC LIMIT 500'
+      'SELECT * FROM messages WHERE seq > ? ORDER BY seq ASC LIMIT 100'
     );
     this.deleteUpToStmt = db.prepare('DELETE FROM messages WHERE seq <= ?');
 

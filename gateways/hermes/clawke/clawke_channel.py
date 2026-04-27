@@ -177,6 +177,7 @@ def _get_session_db():
 _API_SAFE_MSG_KEYS = frozenset({
     'role', 'content', 'name', 'tool_calls', 'tool_call_id',
     'function_call', 'refusal',
+    'reasoning', 'reasoning_details', 'codex_reasoning_items',
 })
 
 

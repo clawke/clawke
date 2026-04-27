@@ -9,6 +9,7 @@ import { GatewayMessageType, InboundMessageType, AgentStatus } from "./protocol.
 import { getClawkeRuntime } from "./runtime.js";
 import { OpenClawTaskAdapter, type OpenClawTaskDraft, type OpenClawTaskPatch } from "./task-adapter.js";
 import { OpenClawSkillAdapter, type OpenClawSkillDraft } from "./skill-adapter.js";
+import { OpenClawModelAdapter } from "./model-adapter.js";
 import { GatewayBoundaryFinalizer } from "./gateway-stream-finalizer.js";
 
 // 模块级状态（生命周期级，非请求级）
@@ -24,6 +25,7 @@ let pendingModel = '';
 let pendingProvider = '';
 const taskAdapter = new OpenClawTaskAdapter();
 const skillAdapter = new OpenClawSkillAdapter();
+const modelAdapter = new OpenClawModelAdapter();
 
 /** 由 index.ts llm_output hook 调用，累加 usage 数据（多轮工具调用时合计） */
 export function addPendingUsage(usage: Record<string, number> | null, model?: string, provider?: string): void {
@@ -73,33 +75,6 @@ const abortedPartials = new Map<string, string>();
 
 // 标记某个 senderId 正在执行合成 stop dispatch（回复应被静默丢弃）
 const silentDispatches = new Set<string>();
-
-/** 从 OpenClaw 配置中提取可用模型列表 */
-function getAvailableModels(ctx: ChannelGatewayContext<ResolvedClawkeAccount>): string[] {
-  try {
-    const configPath = join(homedir(), ".openclaw", "openclaw.json");
-    if (!existsSync(configPath)) return [];
-
-    const config = JSON.parse(readFileSync(configPath, "utf-8"));
-    const providers = config?.models?.providers;
-    if (!providers || typeof providers !== "object") return [];
-
-    const models = new Set<string>();
-    for (const providerKey of Object.keys(providers)) {
-      const providerModels = providers[providerKey]?.models;
-      if (Array.isArray(providerModels)) {
-        for (const m of providerModels) {
-          if (m.id) models.add(m.id);
-          else if (m.name) models.add(m.name);
-        }
-      }
-    }
-    return [...models];
-  } catch (e: any) {
-    ctx.log?.error(`getAvailableModels failed: ${e.message}`);
-  }
-  return [];
-}
 
 /**
  * 扫描 OpenClaw 所有 skill 目录获取可用 Skills（对齐 OpenClaw workspace.ts loadSkillEntries）
@@ -416,10 +391,15 @@ export async function startClawkeGateway(
               });
             }
           } else if (msg.type === InboundMessageType.QueryModels) {
-            // 查询可用模型列表
-            const models = getAvailableModels(ctx);
-            ws!.send(JSON.stringify({ type: GatewayMessageType.ModelsResponse, models }));
-            ctx.log?.info(`📤 Models response: ${models.length} models`);
+            modelAdapter.listModels(ctx)
+              .then((models) => {
+                ws!.send(JSON.stringify({ type: GatewayMessageType.ModelsResponse, models }));
+                ctx.log?.info(`📤 Models response: ${models.length} models`);
+              })
+              .catch((err: any) => {
+                ctx.log?.error(`Failed to query models: ${err?.message || err}`);
+                ws!.send(JSON.stringify({ type: GatewayMessageType.ModelsResponse, models: [] }));
+              });
           } else if (msg.type === InboundMessageType.QuerySkills) {
             // 查询可用 Skills 列表
             skillAdapter.listRuntimeSkills()

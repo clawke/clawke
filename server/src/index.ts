@@ -42,6 +42,7 @@ import { initLogger } from './logger.js';
 import { initSkillsRoutes } from './routes/skills-routes.js';
 import { initGatewayRoutes } from './routes/gateway-routes.js';
 import { GatewayStore } from './store/gateway-store.js';
+import { GatewayModelCacheStore } from './store/gateway-model-cache-store.js';
 import { SkillTranslationStore } from './store/skill-translation-store.js';
 import { SkillTranslationService, startSkillTranslationWorker } from './services/skill-translation-service.js';
 import { createConfiguredSkillTranslator } from './services/skill-translator.js';
@@ -160,6 +161,7 @@ async function main() {
   const configStore = new ConversationConfigStore(db);  // 必须先于 ConversationStore（后者引用 conversation_configs 表）
   const conversationStore = new ConversationStore(db);
   const gatewayStore = new GatewayStore(db);
+  const gatewayModelCacheStore = new GatewayModelCacheStore(db);
   const skillTranslationStore = new SkillTranslationStore(db);
   const skillTranslationService = new SkillTranslationService({
     store: skillTranslationStore,
@@ -272,6 +274,7 @@ async function main() {
     initConversationRoutes({ conversationStore });
     initConfigRoutes({
       configStore,
+      modelCacheStore: gatewayModelCacheStore,
       queryModels: async () => (['mock-model']),
       querySkills: async () => ([]),
     });
@@ -321,6 +324,7 @@ async function main() {
     // 初始化配置路由（models/skills 查询路由到对应 Gateway）
     initConfigRoutes({
       configStore,
+      modelCacheStore: gatewayModelCacheStore,
       queryModels: queryGatewayModels,
       querySkills: queryGatewaySkills,
     });

@@ -10,7 +10,7 @@ import express from 'express';
 import { WebSocketServer } from 'ws';
 import multer from 'multer';
 import { mediaUpload, serveMedia, serveThumbnail } from './routes/media-routes.js';
-import { getModels, getSkills, getConvConfig, putConvConfig } from './routes/config-routes.js';
+import { listModels, getModels, getSkills, getConvConfig, putConvConfig } from './routes/config-routes.js';
 import { createSkill, deleteSkill, getSkill, listSkillScopes, listSkills, setSkillEnabled, updateSkill } from './routes/skills-routes.js';
 import { listGateways, renameGateway } from './routes/gateway-routes.js';
 import { listConversations, createConversation, updateConversation, deleteConversation } from './routes/conversation-routes.js';
@@ -106,6 +106,7 @@ export function startUnifiedServer(port: number = 8780): { server: Server; wss: 
       endpoints: [
         '/health',
         '/api/gateways',
+        '/api/models',
         '/api/skills',
         '/api/config/skills',
         '/api/config/models',
@@ -163,6 +164,7 @@ export function startUnifiedServer(port: number = 8780): { server: Server; wss: 
         '/api/media/upload',
         '/api/media/:filename',
         '/api/gateways',
+        '/api/models',
         '/api/config/models',
         '/api/config/skills',
         '/api/conversations',
@@ -172,6 +174,7 @@ export function startUnifiedServer(port: number = 8780): { server: Server; wss: 
   });
 
   // 会话配置 API
+  app.get('/api/models', listModels as any);
   app.get('/api/config/models', getModels as any);
   app.get('/api/config/skills', getSkills as any);
   app.get('/api/conv/:id/config', getConvConfig as any);

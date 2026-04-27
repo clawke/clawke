@@ -758,7 +758,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get skillModePriority => 'Prefer these skills';
 
   @override
-  String get skillModeExclusive => 'Must use these skills';
+  String get skillModeExclusive => 'Strongly suggest skills';
 
   @override
   String get today => 'Today';

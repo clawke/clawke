@@ -1,0 +1,88 @@
+{
+  "id": "p0-conversation-settings-model-skill-chat",
+  "title": "会话设置可保存模型和 Skill 并影响聊天链路",
+  "module": "会话设置",
+  "objective": "验证从会话设置新建会话、选择模型和 Skill、发送消息后，Server 会把配置注入到 Gateway；最后删除该测试会话。",
+  "coverage": [
+    "新建会话并选择模型",
+    "选择 skill 并保存配置",
+    "发送消息并验证 Gateway 收到模型和 skill 配置",
+    "删除测试会话"
+  ],
+  "tags": ["p0", "conversation", "settings", "models", "skills", "ui"],
+  "setup": {
+    "serverMode": "openclaw",
+    "accountId": "e2e_mock",
+    "agentName": "E2E Mock Gateway",
+    "httpPort": 18780,
+    "upstreamPort": 18766,
+    "mediaPort": 18781,
+    "capabilities": ["chat", "skills", "models"]
+  },
+  "steps": [
+    { "action": "launch_app" },
+    {
+      "action": "create_conversation",
+      "name": "E2E 模型技能会话",
+      "model": "e2e-config-model",
+      "skills": ["e2e-chat-skill"]
+    },
+    { "action": "send_message", "text": "请用配置回答" },
+    { "action": "wait_for_text", "text": "配置已生效：model=e2e-config-model skill=e2e-chat-skill" },
+    { "action": "delete_conversation", "name": "E2E 模型技能会话" },
+    { "action": "wait_for_absent_text", "text": "E2E 模型技能会话", "durationMs": 1200 }
+  ],
+  "mockGateway": {
+    "models": ["e2e-config-model"],
+    "skills": [
+      {
+        "id": "general/e2e-chat-skill",
+        "name": "e2e-chat-skill",
+        "category": "general",
+        "description": "E2E conversation settings skill",
+        "enabled": true,
+        "source": "managed",
+        "sourceLabel": "E2E skills",
+        "writable": true,
+        "deletable": true,
+        "path": "general/e2e-chat-skill/SKILL.md",
+        "root": "/tmp/clawke-e2e-skills",
+        "body": "## Purpose\n\nUsed by conversation settings UI E2E."
+      }
+    ],
+    "interactions": [
+      {
+        "on": {
+          "type": "chat",
+          "contains": "请用配置回答",
+          "model_override": "e2e-config-model",
+          "skillsHintIncludes": ["e2e-chat-skill"],
+          "skill_mode": "priority"
+        },
+        "replies": [
+          {
+            "type": "agent_text_delta",
+            "message_id": "agent_msg_conv_settings_1",
+            "delta": "配置已生效：",
+            "delayMs": 80
+          },
+          {
+            "type": "agent_text_delta",
+            "message_id": "agent_msg_conv_settings_1",
+            "delta": "model=e2e-config-model skill=e2e-chat-skill",
+            "delayMs": 120
+          },
+          {
+            "type": "agent_text_done",
+            "message_id": "agent_msg_conv_settings_1",
+            "fullText": "配置已生效：model=e2e-config-model skill=e2e-chat-skill",
+            "delayMs": 80
+          }
+        ]
+      }
+    ]
+  },
+  "assert": [
+    { "uiTextAbsent": "E2E 模型技能会话" }
+  ]
+}

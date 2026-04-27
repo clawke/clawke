@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:client/core/http_util.dart';
 import 'package:client/services/auth_service.dart';
 import 'package:client/l10n/l10n.dart';
+import 'package:client/widgets/app_snack_bar.dart';
 
 /// 忘记密码页面 —— 三步式流程。
 ///
@@ -556,12 +557,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
       if (mounted) {
         // 弹出成功提示并返回登录页
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(context.l10n.passwordResetSuccess),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        showAppSnackBar(context, context.l10n.passwordResetSuccess);
         Navigator.of(context).pop();
       }
     } on ApiException catch (e) {

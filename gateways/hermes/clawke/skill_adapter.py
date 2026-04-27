@@ -10,6 +10,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 
 SAFE_SEGMENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
@@ -188,18 +190,41 @@ class HermesSkillAdapter:
         """Best-effort config update so Hermes can load Clawke-managed skills."""
         hermes_home = Path(os.environ.get("HERMES_HOME", "~/.hermes")).expanduser()
         config_path = hermes_home / "config.yaml"
-        line = f"  - {self.managed_root}"
         try:
             config_path.parent.mkdir(parents=True, exist_ok=True)
             text = config_path.read_text(encoding="utf-8") if config_path.exists() else ""
-            if str(self.managed_root) in text:
-                return True
-            if "external_dirs:" in text:
-                text = text.rstrip() + f"\n{line}\n"
-            else:
-                prefix = text.rstrip() + "\n\n" if text.strip() else ""
-                text = f"{prefix}skills:\n  external_dirs:\n{line}\n"
-            config_path.write_text(text, encoding="utf-8")
+            loaded = yaml.safe_load(text) if text.strip() else {}
+            if loaded is None:
+                loaded = {}
+            if not isinstance(loaded, dict):
+                return False
+
+            changed = not text.strip()
+            skills = loaded.get("skills")
+            if not isinstance(skills, dict):
+                skills = {}
+                loaded["skills"] = skills
+                changed = True
+
+            external_dirs = skills.get("external_dirs")
+            if external_dirs is None:
+                external_dirs = []
+                changed = True
+            elif not isinstance(external_dirs, list):
+                external_dirs = [external_dirs]
+                changed = True
+
+            managed_root = str(self.managed_root)
+            if managed_root not in {str(root) for root in external_dirs}:
+                external_dirs.append(managed_root)
+                changed = True
+            skills["external_dirs"] = external_dirs
+
+            if changed:
+                config_path.write_text(
+                    yaml.safe_dump(loaded, sort_keys=False, allow_unicode=True),
+                    encoding="utf-8",
+                )
             return True
         except Exception:
             return False

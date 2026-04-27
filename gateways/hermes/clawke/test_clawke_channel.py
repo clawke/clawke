@@ -28,6 +28,7 @@ from clawke_channel import (
     InboundMessageType,
     AgentStatusValue,
     _backoff_delay,
+    _sanitize_messages,
 )
 
 
@@ -122,6 +123,36 @@ class TestBackoff:
         """Multiple calls produce different values (non-deterministic)."""
         delays = {_backoff_delay(3) for _ in range(20)}
         assert len(delays) > 1, "Jitter should produce varying delays"
+
+
+class TestMessageSanitization:
+    """Test conversation history cleanup before Hermes agent replay."""
+
+    def test_preserves_reasoning_fields_for_deepseek_v4_replay(self):
+        history = [
+            {"role": "user", "content": "hello", "ui_only": True},
+            {
+                "role": "assistant",
+                "content": "answer",
+                "reasoning": "thinking trace",
+                "reasoning_details": [{"type": "reasoning", "text": "thinking trace"}],
+                "codex_reasoning_items": [{"id": "r1"}],
+                "ui_message_id": "msg_1",
+            },
+        ]
+
+        sanitized = _sanitize_messages(history)
+
+        assert sanitized == [
+            {"role": "user", "content": "hello"},
+            {
+                "role": "assistant",
+                "content": "answer",
+                "reasoning": "thinking trace",
+                "reasoning_details": [{"type": "reasoning", "text": "thinking trace"}],
+                "codex_reasoning_items": [{"id": "r1"}],
+            },
+        ]
 
 
 # ── Gateway Init Tests ──────────────────────────────────────────────────────

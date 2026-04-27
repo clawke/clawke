@@ -203,10 +203,13 @@ Future<void> _runStep(WidgetTester tester, Map<String, dynamic> step) async {
       await _tapIcon(tester, step['icon'] as String);
       return;
     case 'create_conversation':
-      await _createConversation(tester, step['name'] as String);
+      await _createConversation(tester, step);
       return;
     case 'send_message':
       await _sendMessage(tester, step['text'] as String);
+      return;
+    case 'delete_conversation':
+      await _deleteConversation(tester, step['name'] as String);
       return;
     default:
       throw UnsupportedError('Unknown UI E2E action: ${step['action']}');
@@ -232,7 +235,11 @@ Future<void> _runAssert(
   throw UnsupportedError('Unknown UI E2E assertion: $assertion');
 }
 
-Future<void> _createConversation(WidgetTester tester, String name) async {
+Future<void> _createConversation(
+  WidgetTester tester,
+  Map<String, dynamic> step,
+) async {
+  final name = step['name'] as String;
   await _tapFinder(tester, find.byTooltip('新建会话'));
   await _waitForText(tester, '新建会话');
 
@@ -243,9 +250,51 @@ Future<void> _createConversation(WidgetTester tester, String name) async {
   await tester.enterText(nameField.first, name);
   await tester.pump(const Duration(milliseconds: 300));
 
+  final model = step['model'] as String?;
+  if (model != null && model.isNotEmpty) {
+    await _selectConversationModel(tester, model);
+  }
+
+  final skills = _stringList(step['skills']);
+  if (skills.isNotEmpty) {
+    await _selectConversationSkills(tester, skills);
+  }
+
   await _tapButtonText(tester, '创建');
   await tester.pump(const Duration(seconds: 2));
   await _waitForText(tester, name);
+}
+
+Future<void> _selectConversationModel(WidgetTester tester, String model) async {
+  await _tapFirstAvailable(tester, [
+    find.byIcon(Icons.layers_rounded),
+    find.textContaining('默认模型'),
+  ]);
+  await _waitForText(tester, '选择模型');
+  await _waitForText(tester, model, timeout: const Duration(seconds: 30));
+  await _tapFinder(tester, find.text(model));
+  await _waitForText(tester, '新建会话');
+  await _waitForText(tester, model);
+}
+
+Future<void> _selectConversationSkills(
+  WidgetTester tester,
+  List<String> skills,
+) async {
+  await _tapFirstAvailable(tester, [
+    find.byIcon(Icons.build_rounded),
+    find.textContaining('Skills'),
+  ]);
+  await _waitForText(tester, '选择 Skills');
+  for (final skill in skills) {
+    await _waitForText(tester, skill, timeout: const Duration(seconds: 30));
+    await _tapFinder(tester, find.text(skill).first);
+  }
+  await _tapFinder(tester, find.byIcon(Icons.arrow_back_ios_new_rounded));
+  await _waitForText(tester, '新建会话');
+  for (final skill in skills) {
+    await _waitForText(tester, skill);
+  }
 }
 
 Future<void> _sendMessage(WidgetTester tester, String text) async {
@@ -255,6 +304,37 @@ Future<void> _sendMessage(WidgetTester tester, String text) async {
   await tester.pump(const Duration(milliseconds: 300));
 
   await _tapIcon(tester, 'send');
+}
+
+Future<void> _deleteConversation(WidgetTester tester, String name) async {
+  await _waitForText(tester, name);
+
+  var opened = false;
+  final candidateCount = find.textContaining(name).evaluate().length;
+  for (var i = 0; i < candidateCount; i += 1) {
+    final target = find.textContaining(name).at(i);
+    await tester.ensureVisible(target);
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.longPress(target, warnIfMissed: false);
+    await tester.pump(const Duration(milliseconds: 500));
+    if (find.text('删除会话').evaluate().isNotEmpty) {
+      opened = true;
+      break;
+    }
+  }
+  if (!opened) {
+    throw TestFailure('Timed out opening conversation menu for $name');
+  }
+
+  await _tapButtonText(tester, '删除会话', preferLast: true);
+  await _waitForText(tester, '确定要删除此会话吗？');
+  await _tapButtonText(tester, '删除', preferLast: true);
+  await tester.pump(const Duration(seconds: 1));
+}
+
+List<String> _stringList(Object? value) {
+  if (value is! List) return const [];
+  return value.map((item) => item.toString()).toList();
 }
 
 Future<void> _waitForText(
@@ -314,6 +394,8 @@ Finder _findIcon(String icon) {
   return find.byIcon(switch (icon) {
     'send' => Icons.send,
     'stop' => Icons.stop,
+    'arrow_back' => Icons.arrow_back,
+    'arrow_back_ios_new' => Icons.arrow_back_ios_new,
     _ => throw UnsupportedError('Unknown UI E2E icon: $icon'),
   });
 }
@@ -328,12 +410,14 @@ Future<void> _tapText(
 
 Future<void> _tapFilterChip(WidgetTester tester, String text) async {
   await _tapFirstAvailable(tester, [
-    find.widgetWithText(FilterChip, text),
+    find.descendant(
+      of: find.byType(FilterChip),
+      matching: find.textContaining(text),
+    ),
     find.descendant(
       of: find.byWidgetPredicate((widget) => widget is SegmentedButton),
-      matching: find.text(text),
+      matching: find.textContaining(text),
     ),
-    find.text(text),
   ]);
 }
 
@@ -519,8 +603,12 @@ Future<void> _captureScreenshot(
     if (boundary == null) {
       throw StateError('Root repaint boundary not found');
     }
-    final image = await boundary.toImage(pixelRatio: 1);
-    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    final image = await boundary
+        .toImage(pixelRatio: 1)
+        .timeout(const Duration(seconds: 3));
+    final byteData = await image
+        .toByteData(format: ui.ImageByteFormat.png)
+        .timeout(const Duration(seconds: 3));
     if (byteData == null) {
       throw StateError('Screenshot byte data is null');
     }

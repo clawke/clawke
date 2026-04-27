@@ -4,17 +4,20 @@ import 'package:client/data/database/app_database.dart';
 import 'package:client/data/database/dao/conversation_dao.dart';
 import 'package:client/data/database/dao/gateway_dao.dart';
 import 'package:client/data/database/dao/message_dao.dart';
+import 'package:client/data/database/dao/model_cache_dao.dart';
 import 'package:client/data/database/dao/skill_cache_dao.dart';
 import 'package:client/data/database/dao/task_cache_dao.dart';
 import 'package:client/data/repositories/gateway_repository.dart';
 import 'package:client/data/repositories/message_repository.dart';
 import 'package:client/data/repositories/conversation_repository.dart';
+import 'package:client/data/repositories/model_cache_repository.dart';
 import 'package:client/data/repositories/skill_cache_repository.dart';
 import 'package:client/data/repositories/task_cache_repository.dart';
 import 'package:client/providers/auth_provider.dart';
 import 'package:client/providers/ws_state_provider.dart';
 import 'package:client/services/config_api_service.dart';
 import 'package:client/services/gateways_api_service.dart';
+import 'package:client/services/models_api_service.dart';
 import 'package:client/services/skills_api_service.dart';
 import 'package:client/services/tasks_api_service.dart';
 
@@ -45,6 +48,10 @@ final tasksApiServiceProvider = Provider<TasksApiService>((ref) {
   return TasksApiService();
 });
 
+final modelsApiServiceProvider = Provider<ModelsApiService>((ref) {
+  return ModelsApiService();
+});
+
 final skillsApiServiceProvider = Provider<SkillsApiService>((ref) {
   return SkillsApiService();
 });
@@ -64,6 +71,10 @@ final gatewayDaoProvider = Provider<GatewayDao>((ref) {
 
 final taskCacheDaoProvider = Provider<TaskCacheDao>((ref) {
   return TaskCacheDao(ref.watch(databaseProvider));
+});
+
+final modelCacheDaoProvider = Provider<ModelCacheDao>((ref) {
+  return ModelCacheDao(ref.watch(databaseProvider));
 });
 
 final skillCacheDaoProvider = Provider<SkillCacheDao>((ref) {
@@ -97,6 +108,14 @@ final taskCacheRepositoryProvider = Provider<TaskCacheRepository>((ref) {
   return TaskCacheRepository(
     dao: ref.watch(taskCacheDaoProvider),
     api: ref.watch(tasksApiServiceProvider),
+    userId: ref.watch(currentUserUidProvider),
+  );
+});
+
+final modelCacheRepositoryProvider = Provider<ModelCacheRepository>((ref) {
+  return ModelCacheRepository(
+    dao: ref.watch(modelCacheDaoProvider),
+    api: ref.watch(modelsApiServiceProvider),
     userId: ref.watch(currentUserUidProvider),
   );
 });

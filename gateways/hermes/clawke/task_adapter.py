@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import importlib
+import logging
 import threading
 import time
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 class HermesTaskAdapter:
@@ -117,7 +120,7 @@ class HermesTaskAdapter:
         if not job:
             raise ValueError(f"Task not found: {task_id}")
         thread = threading.Thread(
-            target=self._scheduler().run_job,
+            target=self._run_job_and_record,
             args=(job,),
             daemon=True,
         )
@@ -129,6 +132,42 @@ class HermesTaskAdapter:
             "started_at": now,
             "status": "running",
         }
+
+    def _run_job_and_record(self, job: dict[str, Any]) -> None:
+        raw_job = self._as_dict(job)
+        task_id = str(raw_job.get("id") or raw_job.get("job_id") or "")
+        success = False
+        output = ""
+        final_response: Any = None
+        error: Any = None
+
+        try:
+            result = self._scheduler().run_job(job)
+            if isinstance(result, tuple):
+                success = bool(result[0]) if len(result) > 0 else True
+                output = str(result[1] or "") if len(result) > 1 else ""
+                final_response = result[2] if len(result) > 2 else None
+                error = result[3] if len(result) > 3 else None
+            else:
+                success = True
+
+            if success and final_response == "":
+                success = False
+                error = "Agent completed but produced empty response (model error, timeout, or misconfiguration)"
+
+            jobs = self._jobs()
+            if output and hasattr(jobs, "save_job_output"):
+                jobs.save_job_output(task_id, output)
+            if hasattr(jobs, "mark_job_run"):
+                jobs.mark_job_run(task_id, success, error)
+        except Exception as exc:
+            logger.warning("Hermes task run failed: task_id=%s error=%s", task_id, exc)
+            jobs = self._jobs()
+            if task_id and hasattr(jobs, "mark_job_run"):
+                try:
+                    jobs.mark_job_run(task_id, False, str(exc))
+                except Exception:
+                    logger.exception("Failed to mark Hermes task run failure: task_id=%s", task_id)
 
     def _normalize_task(self, account_id: str, job: Any) -> dict[str, Any]:
         raw = self._as_dict(job)

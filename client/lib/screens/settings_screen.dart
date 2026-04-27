@@ -18,6 +18,7 @@ import 'package:client/providers/font_scale_provider.dart';
 import 'package:client/models/user_model.dart';
 import 'package:client/services/media_resolver.dart';
 import 'package:client/l10n/l10n.dart';
+import 'package:client/widgets/app_snack_bar.dart';
 
 /// 设置主页 — 用户卡片 + 分组菜单布局。
 class SettingsScreen extends ConsumerWidget {
@@ -254,12 +255,7 @@ class SettingsScreen extends ConsumerWidget {
           isLast: true,
           onTap: () {
             ref.read(wsMessageHandlerProvider).sendCheckUpdate();
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(t.checkingUpdate),
-                duration: const Duration(seconds: 2),
-              ),
-            );
+            showAppSnackBar(context, t.checkingUpdate, duration: const Duration(seconds: 2));
           },
         ),
       ],
@@ -356,9 +352,7 @@ class SettingsScreen extends ConsumerWidget {
         }
       } catch (e) {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(t.deleteAccountFailed(e.toString()))),
-          );
+          showAppSnackBar(context, t.deleteAccountFailed(e.toString()));
         }
       }
     }

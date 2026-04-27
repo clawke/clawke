@@ -225,6 +225,7 @@ class _LifecycleTasksApiService extends TasksApiService {
       id: 'run_latest',
       taskId: 'task_daily',
       startedAt: '2026-04-24T09:00:00Z',
+      finishedAt: '2026-04-24T09:03:00Z',
       status: 'success',
       outputPreview: '执行摘要',
     ),
@@ -681,7 +682,7 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(find.byIcon(Icons.arrow_back), findsOneWidget);
+    expect(find.byIcon(Icons.arrow_back), findsNothing);
     expect(find.byIcon(Icons.refresh), findsOneWidget);
     expect(find.byIcon(Icons.add), findsOneWidget);
     expect(find.text('每日总结'), findsOneWidget);
@@ -701,7 +702,80 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.add));
     await tester.pumpAndSettle();
+    expect(find.text('任务管理'), findsNothing);
+    expect(find.text('新建任务'), findsOneWidget);
     expect(find.text('计划'), findsOneWidget);
+  });
+
+  testWidgets('mobile task subpages do not keep the list app bar', (
+    tester,
+  ) async {
+    final api = _LifecycleTasksApiService();
+    api.items = [api.items.first];
+
+    await pumpApp(
+      tester,
+      const TasksManagementScreen(showAppBar: true),
+      overrides: _taskOverrides(api: api),
+      screenSize: const Size(430, 780),
+    );
+
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('任务管理'), findsOneWidget);
+
+    await tester.tap(find.text('每日总结').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('任务详情'), findsOneWidget);
+    expect(find.text('任务管理'), findsNothing);
+    expect(find.byIcon(Icons.refresh), findsNothing);
+    expect(find.byIcon(Icons.add), findsNothing);
+
+    final overviewPanel = find.byKey(const ValueKey('task_detail_overview'));
+    expect(tester.getSize(overviewPanel).width, greaterThan(390));
+    expect(tester.getTopLeft(overviewPanel).dx, lessThan(24));
+
+    await tester.tap(find.text('执行记录').first);
+    await tester.pumpAndSettle();
+    final runsOverview = find.byKey(const ValueKey('task_runs_overview'));
+    final runsListPanel = find.byKey(const ValueKey('task_runs_list_panel'));
+    expect(tester.getSize(runsOverview).width, greaterThan(390));
+    expect(tester.getSize(runsListPanel).width, greaterThan(390));
+    expect(find.byIcon(Icons.check), findsNothing);
+
+    final runPreview = find.text('执行摘要');
+    final runAction = find.widgetWithText(OutlinedButton, '查看结果');
+    expect(
+      tester.getTopLeft(runAction).dy,
+      greaterThan(tester.getBottomLeft(runPreview).dy),
+    );
+
+    await tester.tap(find.text('成功').first);
+    await tester.pumpAndSettle();
+    expect(
+      tester.getSize(find.byKey(const ValueKey('task_output_info'))).width,
+      greaterThan(390),
+    );
+    expect(
+      tester.getSize(find.byKey(const ValueKey('task_output_content'))).width,
+      greaterThan(390),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('task_app_bar_back')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('task_app_bar_back')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('编辑'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.getSize(find.byKey(const ValueKey('task_edit_basic_info'))).width,
+      greaterThan(390),
+    );
+    expect(
+      tester.getSize(find.byKey(const ValueKey('task_edit_prompt'))).width,
+      greaterThan(390),
+    );
   });
 
   testWidgets('task editor validates schedule and prompt before create', (
@@ -720,6 +794,9 @@ void main() {
     await tester.tap(find.text('新建任务'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('task_page_app_bar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('task_edit_basic_info')), findsOneWidget);
+    expect(find.byKey(const ValueKey('task_edit_prompt')), findsOneWidget);
+    expect(find.textContaining('创建目标'), findsOneWidget);
     await tester.tap(find.text('创建'));
     await tester.pumpAndSettle();
 
@@ -756,6 +833,104 @@ void main() {
     expect(find.text('天气提醒'), findsWidgets);
   });
 
+  testWidgets('new task stays in create mode after returning from detail', (
+    tester,
+  ) async {
+    final api = _LifecycleTasksApiService();
+    api.items = [api.items.first];
+
+    await pumpApp(
+      tester,
+      const TasksManagementScreen(),
+      overrides: _taskOverrides(api: api),
+      screenSize: const Size(1280, 800),
+    );
+
+    await tester.pump();
+    await tester.pump();
+    await tester.tap(find.text('每日总结').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('task_app_bar_back')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('新建任务'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('新建任务'), findsOneWidget);
+    expect(find.text('编辑任务'), findsNothing);
+    expect(find.textContaining('创建目标'), findsOneWidget);
+    expect(find.text('每日总结'), findsNothing);
+  });
+
+  testWidgets('task list run button requires confirmation before API trigger', (
+    tester,
+  ) async {
+    final api = _LifecycleTasksApiService();
+    api.items = [api.items.first];
+
+    await pumpApp(
+      tester,
+      const TasksManagementScreen(),
+      overrides: _taskOverrides(api: api),
+      screenSize: const Size(1280, 800),
+    );
+
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.widgetWithText(FilledButton, '立即执行').first);
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.text('确认立即执行任务'), findsOneWidget);
+    expect(api.triggeredTaskId, isNull);
+
+    await tester.tap(find.widgetWithText(TextButton, '取消'));
+    await tester.pumpAndSettle();
+    expect(api.triggeredTaskId, isNull);
+
+    await tester.tap(find.widgetWithText(FilledButton, '立即执行').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '确认执行'));
+    await tester.pumpAndSettle();
+
+    expect(api.triggeredTaskId, 'task_daily');
+    final snackBar = find.byType(SnackBar);
+    expect(snackBar, findsOneWidget);
+    expect(tester.widget<SnackBar>(snackBar).width, 480);
+  });
+
+  testWidgets('task list run history back returns to task management', (
+    tester,
+  ) async {
+    final api = _LifecycleTasksApiService();
+    api.items = [api.items.first];
+
+    await pumpApp(
+      tester,
+      const TasksManagementScreen(),
+      overrides: _taskOverrides(api: api),
+      screenSize: const Size(1280, 800),
+    );
+
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('任务管理'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(OutlinedButton, '执行记录').first);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('task_runs_list_panel')), findsOneWidget);
+    expect(find.text('任务详情'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('task_app_bar_back')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('任务管理'), findsOneWidget);
+    expect(find.text('每日总结'), findsOneWidget);
+    expect(find.byKey(const ValueKey('task_runs_list_panel')), findsNothing);
+    expect(find.text('任务详情'), findsNothing);
+  });
+
   testWidgets('task screen opens detail edit and run pages from the list', (
     tester,
   ) async {
@@ -778,33 +953,38 @@ void main() {
     expect(find.byKey(const ValueKey('task_page_app_bar')), findsOneWidget);
     expect(find.text('任务详情'), findsOneWidget);
     expect(find.text('返回任务列表'), findsNothing);
+    expect(find.byKey(const ValueKey('task_detail_overview')), findsOneWidget);
+    expect(find.byKey(const ValueKey('task_detail_prompt')), findsOneWidget);
+    expect(find.byKey(const ValueKey('task_detail_definition')), findsNothing);
+    expect(find.byKey(const ValueKey('task_detail_recent')), findsNothing);
+    expect(find.byKey(const ValueKey('task_detail_execution')), findsNothing);
+    expect(find.text('基本信息'), findsOneWidget);
     expect(find.text('任务定义'), findsOneWidget);
     expect(find.text('最近状态'), findsOneWidget);
-    expect(find.text('执行任务'), findsOneWidget);
+    expect(find.text('任务提示词'), findsOneWidget);
+    expect(find.text('编辑'), findsOneWidget);
+    expect(find.text('编辑任务'), findsNothing);
 
-    final definitionPanel = find.byKey(
-      const ValueKey('task_detail_definition'),
-    );
-    final recentPanel = find.byKey(const ValueKey('task_detail_recent'));
-    final executionPanel = find.byKey(const ValueKey('task_detail_execution'));
-    expect(definitionPanel, findsOneWidget);
-    expect(recentPanel, findsOneWidget);
-    expect(executionPanel, findsOneWidget);
+    final overviewPanel = find.byKey(const ValueKey('task_detail_overview'));
+    final promptPanel = find.byKey(const ValueKey('task_detail_prompt'));
     expect(
-      tester.getSize(definitionPanel).width,
-      moreOrLessEquals(tester.getSize(recentPanel).width, epsilon: 1),
+      tester.getSize(overviewPanel).width,
+      tester.getSize(promptPanel).width,
     );
-    expect(
-      tester.getSize(executionPanel).width,
-      greaterThan(tester.getSize(definitionPanel).width * 1.8),
-    );
-    expect(tester.getSize(executionPanel).height, greaterThan(260));
 
     await tester.tap(find.text('执行记录').first);
     await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('task_runs_overview')), findsOneWidget);
+    expect(find.byKey(const ValueKey('task_runs_list_panel')), findsOneWidget);
+    expect(find.text('基本信息'), findsOneWidget);
+    expect(find.text('运行概览'), findsOneWidget);
+    expect(find.text('任务摘要'), findsNothing);
     expect(find.byKey(const ValueKey('task_page_app_bar')), findsOneWidget);
     expect(find.text('返回详情'), findsNothing);
+    expect(find.textContaining('2026-04-24T09:00:00Z'), findsNothing);
+    expect(find.textContaining('2026-04-24T09:03:00Z'), findsNothing);
     expect(find.textContaining('执行摘要'), findsOneWidget);
+    expect(find.text('查看结果'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, '立即执行'), findsNothing);
     expect(find.widgetWithText(FilledButton, '编辑任务'), findsNothing);
 
@@ -813,15 +993,30 @@ void main() {
     expect(api.outputRunId, 'run_latest');
     expect(find.text('执行结果'), findsOneWidget);
     expect(find.text('返回执行记录'), findsNothing);
+    expect(find.byKey(const ValueKey('task_output_info')), findsOneWidget);
+    expect(find.byKey(const ValueKey('task_output_content')), findsOneWidget);
+    expect(find.text('输出内容'), findsOneWidget);
+    final copyButton = find.widgetWithText(TextButton, '复制');
+    expect(copyButton, findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, '复制'), findsNothing);
+    expect(
+      (tester.getCenter(copyButton).dy - tester.getCenter(find.text('输出内容')).dy)
+          .abs(),
+      lessThan(12),
+    );
+    expect(find.text('导出'), findsNothing);
     expect(find.text('完整执行结果'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('task_app_bar_back')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('task_app_bar_back')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('编辑任务'));
+    await tester.tap(find.text('编辑'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('task_page_app_bar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('task_edit_basic_info')), findsOneWidget);
+    expect(find.byKey(const ValueKey('task_edit_prompt')), findsOneWidget);
+    expect(find.text('保存时提交到当前 Gateway。提示词是 Agent 执行任务的主体内容。'), findsOneWidget);
     expect(find.text('立即执行一次'), findsNothing);
     expect(find.text('删除任务'), findsWidgets);
     expect(find.text('取消'), findsNothing);
@@ -842,7 +1037,20 @@ void main() {
     expect(api.toggledTaskId, 'task_daily');
     expect(api.toggledEnabled, false);
 
-    await tester.tap(find.text('立即执行').first);
+    await tester.tap(find.widgetWithText(FilledButton, '立即执行').first);
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.text('确认立即执行任务'), findsOneWidget);
+    expect(api.triggeredTaskId, isNull);
+
+    await tester.tap(find.widgetWithText(TextButton, '取消'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(api.triggeredTaskId, isNull);
+
+    await tester.tap(find.widgetWithText(FilledButton, '立即执行').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '确认执行'));
     await tester.pumpAndSettle();
     expect(api.triggeredTaskId, 'task_daily');
 
@@ -867,7 +1075,7 @@ void main() {
 
     await tester.tap(find.text('每日总结').first);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('编辑任务'));
+    await tester.tap(find.text('编辑'));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('task_page_app_bar')), findsOneWidget);

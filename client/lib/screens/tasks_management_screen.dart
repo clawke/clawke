@@ -2,11 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:client/models/gateway_info.dart';
 import 'package:client/models/managed_task.dart';
 import 'package:client/providers/database_providers.dart';
 import 'package:client/providers/gateway_provider.dart';
 import 'package:client/providers/tasks_provider.dart';
+import 'package:client/widgets/app_snack_bar.dart';
 import 'package:client/widgets/empty_state_panel.dart';
 import 'package:client/widgets/gateway_selector_pane.dart';
 import 'package:client/widgets/gateway_unavailable_panel.dart';
@@ -14,6 +16,8 @@ import 'package:client/widgets/gateway_unavailable_panel.dart';
 enum _TaskStatusFilter { all, enabled, running, error }
 
 enum _TaskPage { list, detail, edit, runs, runOutput }
+
+enum _TaskRunsBackTarget { list, detail }
 
 class TasksManagementScreen extends ConsumerStatefulWidget {
   final bool showAppBar;
@@ -29,6 +33,7 @@ class _TasksManagementScreenState extends ConsumerState<TasksManagementScreen> {
   final _searchController = TextEditingController();
   _TaskStatusFilter _statusFilter = _TaskStatusFilter.all;
   _TaskPage _page = _TaskPage.list;
+  _TaskRunsBackTarget _runsBackTarget = _TaskRunsBackTarget.detail;
   String? _activeTaskId;
   String? _activeRunId;
 
@@ -99,7 +104,7 @@ class _TasksManagementScreenState extends ConsumerState<TasksManagementScreen> {
       ),
     );
 
-    if (!widget.showAppBar) return content;
+    if (!widget.showAppBar || _page != _TaskPage.list) return content;
 
     return Scaffold(appBar: _buildAppBar(state, gateways), body: content);
   }
@@ -112,13 +117,17 @@ class _TasksManagementScreenState extends ConsumerState<TasksManagementScreen> {
     final unavailableGateway = _selectedUnavailableGateway(gateways, state);
     final hasGatewayIssue =
         unavailableGateway != null || state.errorAccountId != null;
+    final canPop = Navigator.of(context).canPop();
 
     return AppBar(
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back),
-        tooltip: _localized(context, 'Back', '返回'),
-        onPressed: () => Navigator.of(context).maybePop(),
-      ),
+      automaticallyImplyLeading: false,
+      leading: canPop
+          ? IconButton(
+              icon: const Icon(Icons.arrow_back),
+              tooltip: _localized(context, 'Back', '返回'),
+              onPressed: () => Navigator.of(context).maybePop(),
+            )
+          : null,
       centerTitle: true,
       title: Text(_localized(context, 'Tasks', '任务管理')),
       backgroundColor: colorScheme.surface,
@@ -237,6 +246,7 @@ class _TasksManagementScreenState extends ConsumerState<TasksManagementScreen> {
   void _showList() {
     setState(() {
       _page = _TaskPage.list;
+      _runsBackTarget = _TaskRunsBackTarget.detail;
       _activeTaskId = null;
       _activeRunId = null;
     });
@@ -268,7 +278,9 @@ class _TasksManagementScreenState extends ConsumerState<TasksManagementScreen> {
       );
     }
 
-    final task = _activeTask(state);
+    final task = _page == _TaskPage.edit && _activeTaskId == null
+        ? null
+        : _activeTask(state);
     if (_page == _TaskPage.edit) {
       final accountId =
           task?.accountId ??
@@ -307,7 +319,7 @@ class _TasksManagementScreenState extends ConsumerState<TasksManagementScreen> {
       return _TaskRunsPage(
         task: task,
         state: state,
-        onBack: () => _showDetail(task),
+        onBack: () => _backFromRuns(task),
         onOpenOutput: _showRunOutput,
       );
     }
@@ -318,7 +330,7 @@ class _TasksManagementScreenState extends ConsumerState<TasksManagementScreen> {
         return _TaskRunsPage(
           task: task,
           state: state,
-          onBack: () => _showDetail(task),
+          onBack: () => _backFromRuns(task),
           onOpenOutput: _showRunOutput,
         );
       }
@@ -326,7 +338,7 @@ class _TasksManagementScreenState extends ConsumerState<TasksManagementScreen> {
         task: task,
         run: run,
         output: state.selectedRunOutput,
-        onBack: () => _showRuns(task),
+        onBack: () => _showRuns(task, backTarget: _runsBackTarget),
       );
     }
 
@@ -455,7 +467,7 @@ class _TasksManagementScreenState extends ConsumerState<TasksManagementScreen> {
                 onOpen: _showDetail,
                 onToggle: _toggleTask,
                 onRun: _runTask,
-                onRuns: _showRuns,
+                onRuns: _showRunsFromList,
               ),
             ),
           ),
@@ -614,15 +626,11 @@ class _TasksManagementScreenState extends ConsumerState<TasksManagementScreen> {
         });
       }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              initial == null
-                  ? _localized(context, 'Task created', '任务已创建')
-                  : _localized(context, 'Task saved', '任务已保存'),
-            ),
-            behavior: SnackBarBehavior.floating,
-          ),
+        showAppSnackBar(
+          context,
+          initial == null
+              ? _localized(context, 'Task created', '任务已创建')
+              : _localized(context, 'Task saved', '任务已保存'),
         );
       }
     } catch (_) {
@@ -674,26 +682,44 @@ class _TasksManagementScreenState extends ConsumerState<TasksManagementScreen> {
       await ref.read(tasksControllerProvider.notifier).delete(task);
       if (!mounted) return;
       _showList();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_localized(context, 'Task deleted', '任务已删除')),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      showAppSnackBar(context, _localized(context, 'Task deleted', '任务已删除'));
     } catch (_) {
       // The persistent error panel displays the API error.
     }
   }
 
   Future<void> _runTask(ManagedTask task) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(_localized(context, 'Run task now?', '确认立即执行任务')),
+        content: Text(
+          _localized(
+            context,
+            'Task ${task.name} will be submitted to the current Gateway immediately.\nContinue?',
+            '任务 ${task.name} 会立即提交到当前 Gateway 执行。\n是否继续？',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(_localized(context, 'Cancel', '取消')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(_localized(context, 'Confirm run', '确认执行')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
     try {
       await ref.read(tasksControllerProvider.notifier).runNow(task);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(_localized(context, 'Task triggered', '已触发任务')),
-            behavior: SnackBarBehavior.floating,
-          ),
+        showAppSnackBar(
+          context,
+          _localized(context, 'Task triggered', '已触发任务'),
         );
       }
     } catch (_) {
@@ -701,13 +727,29 @@ class _TasksManagementScreenState extends ConsumerState<TasksManagementScreen> {
     }
   }
 
-  Future<void> _showRuns(ManagedTask task) async {
+  Future<void> _showRunsFromList(ManagedTask task) {
+    return _showRuns(task, backTarget: _TaskRunsBackTarget.list);
+  }
+
+  Future<void> _showRuns(
+    ManagedTask task, {
+    _TaskRunsBackTarget backTarget = _TaskRunsBackTarget.detail,
+  }) async {
     setState(() {
       _page = _TaskPage.runs;
+      _runsBackTarget = backTarget;
       _activeTaskId = task.id;
       _activeRunId = null;
     });
     await ref.read(tasksControllerProvider.notifier).loadRuns(task);
+  }
+
+  void _backFromRuns(ManagedTask task) {
+    if (_runsBackTarget == _TaskRunsBackTarget.list) {
+      _showList();
+      return;
+    }
+    _showDetail(task);
   }
 
   Future<void> _showRunOutput(TaskRun run) async {
@@ -1116,7 +1158,6 @@ class _TaskCard extends StatelessWidget {
                     final controls = _TaskControls(
                       key: ValueKey('task_card_controls_${task.id}'),
                       task: task,
-                      color: statusColor,
                       vertical: rightRail,
                       isBusy: isBusy,
                       isToggleBusy: isToggleBusy,
@@ -1201,7 +1242,7 @@ class _TaskCardMain extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final schedule = task.scheduleText ?? task.schedule;
+    final statusColor = _statusColor(colorScheme, task);
     return Column(
       key: ValueKey('task_card_main_${task.id}'),
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1219,16 +1260,7 @@ class _TaskCardMain extends StatelessWidget {
                 context,
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
             ),
-            if (schedule.isNotEmpty)
-              _TaskTag(
-                text: schedule,
-                color: colorScheme.primary,
-                filled: true,
-              ),
-            _TaskTag(
-              text: _localized(context, 'Scheduled task', '定时任务'),
-              color: colorScheme.onSurfaceVariant,
-            ),
+            _StatusPill(label: _statusLabel(context, task), color: statusColor),
           ],
         ),
         const SizedBox(height: 9),
@@ -1250,44 +1282,6 @@ class _TaskCardMain extends StatelessWidget {
   }
 }
 
-class _TaskTag extends StatelessWidget {
-  final String text;
-  final Color color;
-  final bool filled;
-
-  const _TaskTag({
-    required this.text,
-    required this.color,
-    this.filled = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 25,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: filled
-            ? color.withValues(alpha: 0.18)
-            : Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(13),
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        text,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: filled
-              ? color
-              : Theme.of(context).colorScheme.onSurfaceVariant,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    );
-  }
-}
-
 class _TaskMetaLine extends StatelessWidget {
   final ManagedTask task;
 
@@ -1303,7 +1297,7 @@ class _TaskMetaLine extends StatelessWidget {
       else
         _localized(context, 'No schedule', '无定时计划'),
       if (task.lastRun != null)
-        '${_localized(context, 'Last', '上次')}${_runStatusLabel(context, task.lastRun!.status)} ${task.lastRun!.startedAt}',
+        '${_localized(context, 'Last', '上次')}${_runStatusLabel(context, task.lastRun!.status)} ${_formatTaskRunTime(task.lastRun!.startedAt)}',
       if (task.skills.isNotEmpty)
         '${_localized(context, 'Skills', '技能')}：${task.skills.take(3).join(', ')}'
       else if (task.deliver != null && task.deliver!.isNotEmpty)
@@ -1330,7 +1324,6 @@ class _TaskMetaLine extends StatelessWidget {
 
 class _TaskControls extends StatelessWidget {
   final ManagedTask task;
-  final Color color;
   final bool vertical;
   final bool isBusy;
   final bool isToggleBusy;
@@ -1341,7 +1334,6 @@ class _TaskControls extends StatelessWidget {
   const _TaskControls({
     super.key,
     required this.task,
-    required this.color,
     required this.vertical,
     required this.isBusy,
     required this.isToggleBusy,
@@ -1352,19 +1344,13 @@ class _TaskControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final top = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _StatusPill(label: _statusLabel(context, task), color: color),
-        const SizedBox(width: 10),
-        if (isBusy || isToggleBusy)
-          const SizedBox(
+    final top = isBusy || isToggleBusy
+        ? const SizedBox(
             width: 24,
             height: 24,
             child: CircularProgressIndicator(strokeWidth: 2),
           )
-        else
-          SizedBox(
+        : SizedBox(
             width: 50,
             height: 30,
             child: Transform.scale(
@@ -1374,9 +1360,7 @@ class _TaskControls extends StatelessWidget {
                 onChanged: (value) => onToggle(task, value),
               ),
             ),
-          ),
-      ],
-    );
+          );
 
     final actions = [
       _TaskActionButton(
@@ -1466,12 +1450,20 @@ class _TaskPageShell extends StatelessWidget {
       children: [
         _TaskSubPageAppBar(title: title, onBack: onBack, action: action),
         Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(28),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: children,
-            ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 640;
+              final padding = compact
+                  ? const EdgeInsets.fromLTRB(12, 14, 12, 24)
+                  : const EdgeInsets.all(28);
+              return SingleChildScrollView(
+                padding: padding,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: children,
+                ),
+              );
+            },
           ),
         ),
       ],
@@ -1606,138 +1598,121 @@ class _TaskDetailPage extends StatelessWidget {
       onBack: onBack,
       action: _TaskAppBarAction(
         icon: Icons.edit_outlined,
-        label: _localized(context, 'Edit Task', '编辑任务'),
+        label: _localized(context, 'Edit', '编辑'),
         onPressed: onEdit,
       ),
       children: [
-        Wrap(
-          alignment: WrapAlignment.end,
-          spacing: 10,
-          runSpacing: 10,
-          children: [
-            FilledButton.tonalIcon(
-              onPressed: onRun,
-              icon: const Icon(Icons.play_arrow),
-              label: Text(_localized(context, 'Run now', '立即执行')),
-            ),
-            OutlinedButton.icon(
-              onPressed: onRuns,
-              icon: const Icon(Icons.receipt_long_outlined),
-              label: Text(_localized(context, 'Run History', '执行记录')),
-            ),
-          ],
-        ),
-        const SizedBox(height: 20),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final wide = constraints.maxWidth >= 760;
-            final definition = _DetailPanel(
-              key: const ValueKey('task_detail_definition'),
-              title: _localized(context, 'Task Definition', '任务定义'),
-              child: _KeyValueList(
-                rows: [
-                  (
-                    _localized(context, 'Name', '名称'),
-                    task.name.isEmpty ? task.id : task.name,
-                  ),
-                  (
-                    _localized(context, 'Gateway', 'Gateway'),
-                    '${task.agent} / ${task.accountId}',
-                  ),
-                  (
-                    _localized(context, 'Status', '状态'),
-                    _statusLabel(context, task),
-                  ),
-                  (
-                    _localized(context, 'Schedule', '计划'),
-                    task.scheduleText ?? task.schedule,
-                  ),
-                  (
-                    _localized(context, 'Next Run', '下次运行'),
-                    task.nextRunAt ??
-                        _localized(context, 'Not scheduled', '未计划'),
-                  ),
-                  (
-                    _localized(context, 'Enabled', '启用'),
-                    task.enabled
-                        ? _localized(context, 'Yes', '是')
-                        : _localized(context, 'No', '否'),
-                  ),
-                ],
-              ),
-            );
-            final recent = _DetailPanel(
-              key: const ValueKey('task_detail_recent'),
-              title: _localized(context, 'Latest State', '最近状态'),
-              child: _KeyValueList(
-                rows: [
-                  (
-                    _localized(context, 'Latest Run', '最近执行'),
-                    task.lastRun?.startedAt ??
-                        _localized(context, 'No runs yet', '暂无执行'),
-                  ),
-                  (
-                    _localized(context, 'Result', '结果'),
-                    task.lastRun == null
-                        ? _localized(context, 'Unknown', '未知')
-                        : _runStatusLabel(context, task.lastRun!.status),
-                  ),
-                  (
-                    _localized(context, 'Output', '输出'),
-                    task.lastRun?.outputPreview ??
-                        _localized(context, 'No output preview', '暂无输出摘要'),
-                  ),
-                  (
-                    _localized(context, 'Updated', '更新时间'),
-                    task.updatedAt ?? _localized(context, 'Unknown', '未知'),
-                  ),
-                ],
-              ),
-            );
-
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (wide)
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: definition),
-                      const SizedBox(width: 16),
-                      Expanded(child: recent),
-                    ],
-                  )
-                else ...[
-                  definition,
-                  const SizedBox(height: 16),
-                  recent,
-                ],
-                const SizedBox(height: 16),
-                _DetailPanel(
-                  key: const ValueKey('task_detail_execution'),
-                  title: _localized(context, 'Execution Task', '执行任务'),
-                  child: Container(
-                    constraints: const BoxConstraints(minHeight: 220),
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surface,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: Theme.of(context).colorScheme.outlineVariant,
+        _DetailPanel(
+          key: const ValueKey('task_detail_overview'),
+          title: _localized(context, 'Basic Info', '基本信息'),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final wide = constraints.maxWidth >= 720;
+                  final definition = _RunsInfoSection(
+                    title: _localized(context, 'Task Definition', '任务定义'),
+                    rows: [
+                      (
+                        _localized(context, 'Name', '名称'),
+                        task.name.isEmpty ? task.id : task.name,
                       ),
-                    ),
-                    child: SelectableText(
-                      task.prompt,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodyMedium?.copyWith(fontFamily: 'monospace'),
-                    ),
+                      (
+                        _localized(context, 'Gateway', 'Gateway'),
+                        '${task.agent} / ${task.accountId}',
+                      ),
+                      (
+                        _localized(context, 'Schedule', '计划'),
+                        task.scheduleText ?? task.schedule,
+                      ),
+                      (
+                        _localized(context, 'Skills', '技能'),
+                        task.skills.isEmpty
+                            ? _localized(context, 'Agent default', 'Agent 默认')
+                            : task.skills.join(', '),
+                      ),
+                      (
+                        _localized(context, 'Delivery', '交付'),
+                        task.deliver ??
+                            _localized(context, 'Not configured', '未配置'),
+                      ),
+                    ],
+                  );
+                  final recent = _RunsInfoSection(
+                    title: _localized(context, 'Latest State', '最近状态'),
+                    rows: [
+                      (
+                        _localized(context, 'Status', '状态'),
+                        _statusLabel(context, task),
+                      ),
+                      (
+                        _localized(context, 'Next Run', '下次运行'),
+                        task.nextRunAt ??
+                            _localized(context, 'Not scheduled', '未计划'),
+                      ),
+                      (
+                        _localized(context, 'Latest Run', '最近执行'),
+                        task.lastRun == null
+                            ? _localized(context, 'No runs yet', '暂无执行')
+                            : _formatTaskRunTime(task.lastRun!.startedAt),
+                      ),
+                      (
+                        _localized(context, 'Result', '结果'),
+                        task.lastRun == null
+                            ? _localized(context, 'Unknown', '未知')
+                            : _runStatusLabel(context, task.lastRun!.status),
+                      ),
+                      (
+                        _localized(context, 'Output', '输出'),
+                        task.lastRun?.outputPreview ??
+                            _localized(context, 'No output preview', '暂无输出摘要'),
+                      ),
+                    ],
+                  );
+
+                  if (wide) {
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: definition),
+                        const SizedBox(width: 18),
+                        Expanded(child: recent),
+                      ],
+                    );
+                  }
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [definition, const SizedBox(height: 16), recent],
+                  );
+                },
+              ),
+              const SizedBox(height: 18),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  FilledButton.tonalIcon(
+                    onPressed: onRun,
+                    icon: const Icon(Icons.play_arrow),
+                    label: Text(_localized(context, 'Run now', '立即执行')),
                   ),
-                ),
-              ],
-            );
-          },
+                  OutlinedButton.icon(
+                    onPressed: onRuns,
+                    icon: const Icon(Icons.receipt_long_outlined),
+                    label: Text(_localized(context, 'Run History', '执行记录')),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        _DetailPanel(
+          key: const ValueKey('task_detail_prompt'),
+          title: _localized(context, 'Task Prompt', '任务提示词'),
+          child: _PromptBox(text: task.prompt),
         ),
       ],
     );
@@ -1764,50 +1739,145 @@ class _TaskRunsPage extends StatelessWidget {
       onBack: onBack,
       children: [
         _DetailPanel(
-          title: _localized(context, 'Task Summary', '任务摘要'),
-          child: _KeyValueList(
-            rows: [
-              (_localized(context, 'Name', '名称'), task.name),
-              (
-                _localized(context, 'Gateway', 'Gateway'),
-                '${task.agent} / ${task.accountId}',
-              ),
-              (
-                _localized(context, 'Schedule', '计划'),
-                task.scheduleText ?? task.schedule,
-              ),
-            ],
+          key: const ValueKey('task_runs_overview'),
+          title: _localized(context, 'Basic Info', '基本信息'),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final wide = constraints.maxWidth >= 720;
+              final taskInfo = _RunsInfoSection(
+                title: _localized(context, 'Task', '任务'),
+                rows: [
+                  (
+                    _localized(context, 'Name', '名称'),
+                    task.name.isEmpty ? task.id : task.name,
+                  ),
+                  (
+                    _localized(context, 'Gateway', 'Gateway'),
+                    '${task.agent} / ${task.accountId}',
+                  ),
+                  (
+                    _localized(context, 'Schedule', '计划'),
+                    task.scheduleText ?? task.schedule,
+                  ),
+                ],
+              );
+              final runInfo = _RunsInfoSection(
+                title: _localized(context, 'Run Overview', '运行概览'),
+                rows: [
+                  (
+                    _localized(context, 'Total Runs', '总次数'),
+                    state.runs.length.toString(),
+                  ),
+                  (
+                    _localized(context, 'Latest Success', '最近成功'),
+                    _latestRunAt(
+                      context,
+                      state.runs,
+                      (run) => _isRunSuccess(run.status),
+                    ),
+                  ),
+                  (
+                    _localized(context, 'Latest Failure', '最近失败'),
+                    _latestRunAt(
+                      context,
+                      state.runs,
+                      (run) => _isRunFailure(run.status),
+                    ),
+                  ),
+                ],
+              );
+
+              if (wide) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: taskInfo),
+                    const SizedBox(width: 18),
+                    Expanded(child: runInfo),
+                  ],
+                );
+              }
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [taskInfo, const SizedBox(height: 16), runInfo],
+              );
+            },
           ),
         ),
         const SizedBox(height: 16),
-        if (state.isLoadingRuns)
-          const Center(
-            child: Padding(
-              padding: EdgeInsets.all(48),
-              child: CircularProgressIndicator(),
-            ),
-          )
-        else if (state.runs.isEmpty)
-          _StatePanel(
-            icon: Icons.receipt_long_outlined,
-            title: _localized(context, 'No runs yet', '暂无执行记录'),
-            message: _localized(
-              context,
-              'Run this task to inspect execution output.',
-              '执行任务后即可查看执行结果。',
-            ),
-          )
-        else
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: state.runs.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
-            itemBuilder: (context, index) {
-              final run = state.runs[index];
-              return _RunTile(run: run, onTap: () => onOpenOutput(run));
-            },
+        _DetailPanel(
+          key: const ValueKey('task_runs_list_panel'),
+          title: _localized(context, 'Run History', '执行记录'),
+          child: _RunsList(state: state, onOpenOutput: onOpenOutput),
+        ),
+      ],
+    );
+  }
+}
+
+class _RunsInfoSection extends StatelessWidget {
+  final String title;
+  final List<(String, String)> rows;
+
+  const _RunsInfoSection({required this.title, required this.rows});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          title,
+          style: Theme.of(
+            context,
+          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 10),
+        _KeyValueList(rows: rows),
+      ],
+    );
+  }
+}
+
+class _RunsList extends StatelessWidget {
+  final TasksState state;
+  final ValueChanged<TaskRun> onOpenOutput;
+
+  const _RunsList({required this.state, required this.onOpenOutput});
+
+  @override
+  Widget build(BuildContext context) {
+    if (state.isLoadingRuns) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(48),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (state.runs.isEmpty) {
+      return _StatePanel(
+        icon: Icons.receipt_long_outlined,
+        title: _localized(context, 'No runs yet', '暂无执行记录'),
+        message: _localized(
+          context,
+          'Run this task to inspect execution output.',
+          '执行任务后即可查看执行结果。',
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        for (var index = 0; index < state.runs.length; index++) ...[
+          _RunCard(
+            run: state.runs[index],
+            onTap: () => onOpenOutput(state.runs[index]),
           ),
+          if (index != state.runs.length - 1) const SizedBox(height: 10),
+        ],
       ],
     );
   }
@@ -1837,34 +1907,106 @@ class _TaskRunOutputPage extends StatelessWidget {
       onBack: onBack,
       children: [
         _DetailPanel(
+          key: const ValueKey('task_output_info'),
           title: _localized(context, 'Run Metadata', '执行信息'),
-          child: _KeyValueList(
-            rows: [
-              (_localized(context, 'Task', '任务'), task.name),
-              (
-                _localized(context, 'Status', '状态'),
-                _runStatusLabel(context, run.status),
-              ),
-              (_localized(context, 'Started', '开始时间'), run.startedAt),
-              if (run.finishedAt != null && run.finishedAt!.isNotEmpty)
-                (_localized(context, 'Finished', '结束时间'), run.finishedAt!),
-            ],
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final wide = constraints.maxWidth >= 720;
+              final taskInfo = _RunsInfoSection(
+                title: _localized(context, 'Task', '任务'),
+                rows: [
+                  (
+                    _localized(context, 'Name', '名称'),
+                    task.name.isEmpty ? task.id : task.name,
+                  ),
+                  (_localized(context, 'Run ID', 'Run ID'), run.id),
+                  (
+                    _localized(context, 'Gateway', 'Gateway'),
+                    '${task.agent} / ${task.accountId}',
+                  ),
+                ],
+              );
+              final statusInfo = _RunsInfoSection(
+                title: _localized(context, 'Status', '状态'),
+                rows: [
+                  (
+                    _localized(context, 'Result', '结果'),
+                    _runStatusLabel(context, run.status),
+                  ),
+                  (
+                    _localized(context, 'Started', '开始时间'),
+                    _formatTaskRunTime(run.startedAt),
+                  ),
+                  if (run.finishedAt != null && run.finishedAt!.isNotEmpty)
+                    (
+                      _localized(context, 'Finished', '结束时间'),
+                      _formatTaskRunTime(run.finishedAt!),
+                    ),
+                ],
+              );
+
+              if (wide) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: taskInfo),
+                    const SizedBox(width: 18),
+                    Expanded(child: statusInfo),
+                  ],
+                );
+              }
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [taskInfo, const SizedBox(height: 16), statusInfo],
+              );
+            },
           ),
         ),
         const SizedBox(height: 16),
-        Container(
-          constraints: const BoxConstraints(minHeight: 360),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerLowest,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: colorScheme.outlineVariant),
+        _DetailPanel(
+          key: const ValueKey('task_output_content'),
+          title: _localized(context, 'Output Content', '输出内容'),
+          trailing: TextButton.icon(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: body));
+              showAppSnackBar(
+                context,
+                _localized(context, 'Output copied', '输出已复制'),
+                duration: const Duration(seconds: 1),
+              );
+            },
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.primary,
+              backgroundColor: Colors.transparent,
+              shadowColor: Colors.transparent,
+              side: BorderSide.none,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              minimumSize: const Size(0, 40),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            icon: const Icon(Icons.copy, size: 18),
+            label: Text(_localized(context, 'Copy', '复制')),
           ),
-          child: SelectableText(
-            body,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(fontFamily: 'monospace'),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                constraints: const BoxConstraints(minHeight: 360),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: colorScheme.surface,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: colorScheme.outlineVariant),
+                ),
+                child: SelectableText(
+                  body,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(fontFamily: 'monospace'),
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -1874,9 +2016,15 @@ class _TaskRunOutputPage extends StatelessWidget {
 
 class _DetailPanel extends StatelessWidget {
   final String title;
+  final Widget? trailing;
   final Widget child;
 
-  const _DetailPanel({super.key, required this.title, required this.child});
+  const _DetailPanel({
+    super.key,
+    required this.title,
+    required this.child,
+    this.trailing,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1891,11 +2039,20 @@ class _DetailPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              if (trailing != null) ...[const SizedBox(width: 12), trailing!],
+            ],
           ),
           const SizedBox(height: 14),
           child,
@@ -1945,11 +2102,38 @@ class _KeyValueList extends StatelessWidget {
   }
 }
 
-class _RunTile extends StatelessWidget {
+class _PromptBox extends StatelessWidget {
+  final String text;
+
+  const _PromptBox({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      constraints: const BoxConstraints(minHeight: 220),
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: SelectableText(
+        text,
+        style: Theme.of(
+          context,
+        ).textTheme.bodyMedium?.copyWith(fontFamily: 'monospace'),
+      ),
+    );
+  }
+}
+
+class _RunCard extends StatelessWidget {
   final TaskRun run;
   final VoidCallback onTap;
 
-  const _RunTile({required this.run, required this.onTap});
+  const _RunCard({required this.run, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -1957,23 +2141,107 @@ class _RunTile extends StatelessWidget {
     final color = _runColor(colorScheme, run.status);
     return Material(
       color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
-      borderRadius: BorderRadius.circular(8),
-      child: ListTile(
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
         onTap: onTap,
-        leading: Icon(Icons.circle, color: color, size: 12),
-        title: Text(_runStatusLabel(context, run.status)),
-        subtitle: Text(
-          [
-            run.startedAt,
-            if (run.outputPreview != null && run.outputPreview!.isNotEmpty)
-              run.outputPreview!,
-            if (run.error != null && run.error!.isNotEmpty) run.error!,
-          ].join('\n'),
-          maxLines: 3,
-          overflow: TextOverflow.ellipsis,
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 520;
+              final details = _RunCardDetails(run: run, color: color);
+              final action = OutlinedButton(
+                onPressed: onTap,
+                child: Text(_runOpenLabel(context, run.status)),
+              );
+
+              if (compact) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [details, const SizedBox(height: 12), action],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(child: details),
+                  const SizedBox(width: 14),
+                  action,
+                ],
+              );
+            },
+          ),
         ),
-        trailing: const Icon(Icons.chevron_right),
       ),
+    );
+  }
+}
+
+class _RunCardDetails extends StatelessWidget {
+  final TaskRun run;
+  final Color color;
+
+  const _RunCardDetails({required this.run, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 10,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(
+              _formatTaskRunTime(run.startedAt),
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            _StatusPill(
+              label: _runStatusLabel(context, run.status),
+              color: color,
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 12,
+          runSpacing: 6,
+          children: [
+            Text(
+              run.id,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            if (run.finishedAt != null && run.finishedAt!.isNotEmpty)
+              Text(
+                '${_localized(context, 'Finished', '结束')} ${_formatTaskRunTime(run.finishedAt!)}',
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          _runPreview(context, run),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: colorScheme.onSurface.withValues(alpha: 0.82),
+            fontWeight: FontWeight.w600,
+            height: 1.38,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1999,6 +2267,64 @@ class _StatusPill extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _FieldHelper extends StatelessWidget {
+  final String text;
+
+  const _FieldHelper({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 7),
+      child: Text(
+        text,
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+class _CreateTarget extends StatelessWidget {
+  final String accountId;
+
+  const _CreateTarget({required this.accountId});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Text.rich(
+        TextSpan(
+          text: _localized(context, 'Create target: ', '创建目标：'),
+          children: [
+            TextSpan(
+              text:
+                  '${_localized(context, 'Current Gateway', '当前 Gateway')} · $accountId',
+              style: TextStyle(
+                color: colorScheme.onSurface,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: colorScheme.onSurfaceVariant,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     );
   }
 }
@@ -2081,23 +2407,30 @@ class _TaskEditPageState extends State<_TaskEditPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _DetailPanel(
+                key: const ValueKey('task_edit_basic_info'),
                 title: _localized(context, 'Basic Info', '基础信息'),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(
-                      widget.accountId,
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
                     TextFormField(
                       controller: _nameController,
                       decoration: InputDecoration(
                         labelText: _localized(context, 'Name', '名称'),
                         border: const OutlineInputBorder(),
                       ),
+                    ),
+                    _FieldHelper(
+                      text: widget.initial == null
+                          ? _localized(
+                              context,
+                              'Required. Used in task lists and run history.',
+                              '必填。用于任务列表和执行记录展示。',
+                            )
+                          : _localized(
+                              context,
+                              'Used in task lists and detail titles.',
+                              '用于任务列表和详情页标题。',
+                            ),
                     ),
                     const SizedBox(height: 12),
                     Row(
@@ -2134,6 +2467,19 @@ class _TaskEditPageState extends State<_TaskEditPage> {
                         ),
                       ],
                     ),
+                    _FieldHelper(
+                      text: widget.initial == null
+                          ? _localized(
+                              context,
+                              'Required cron expression. Delivery is optional.',
+                              '计划必填。Cron 表达式；交付方式可选。',
+                            )
+                          : _localized(
+                              context,
+                              'Cron expression interpreted by the current gateway host.',
+                              'Cron 表达式，按当前 Gateway 主机解释。',
+                            ),
+                    ),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _skillsController,
@@ -2147,24 +2493,64 @@ class _TaskEditPageState extends State<_TaskEditPage> {
                         border: const OutlineInputBorder(),
                       ),
                     ),
+                    _FieldHelper(
+                      text: _localized(
+                        context,
+                        'Optional. Comma separated; empty means the agent decides.',
+                        '可选。逗号分隔；留空表示由 Agent 自行选择。',
+                      ),
+                    ),
+                    if (widget.initial == null) ...[
+                      const SizedBox(height: 12),
+                      _CreateTarget(accountId: widget.accountId),
+                    ],
                   ],
                 ),
               ),
               const SizedBox(height: 16),
               _DetailPanel(
+                key: const ValueKey('task_edit_prompt'),
                 title: _localized(context, 'Task Prompt', '任务提示词'),
-                child: TextFormField(
-                  controller: _promptController,
-                  minLines: 10,
-                  maxLines: 16,
-                  decoration: InputDecoration(
-                    labelText: _localized(context, 'Prompt Content', '提示词内容'),
-                    alignLabelWithHint: true,
-                    border: const OutlineInputBorder(),
-                  ),
-                  validator: (value) => value == null || value.trim().isEmpty
-                      ? _localized(context, 'Required', '必填')
-                      : null,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      widget.initial == null
+                          ? _localized(
+                              context,
+                              'Write the goal, inputs, output format, and constraints. You can review it after creation.',
+                              '写清楚任务目标、输入来源、输出格式和约束。创建后可在详情页立即查看。',
+                            )
+                          : _localized(
+                              context,
+                              'Saving submits to the current gateway. The prompt is the task body for the agent.',
+                              '保存时提交到当前 Gateway。提示词是 Agent 执行任务的主体内容。',
+                            ),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _promptController,
+                      minLines: 10,
+                      maxLines: 16,
+                      decoration: InputDecoration(
+                        labelText: _localized(
+                          context,
+                          'Prompt Content',
+                          '提示词内容',
+                        ),
+                        alignLabelWithHint: true,
+                        border: const OutlineInputBorder(),
+                      ),
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                          ? _localized(context, 'Required', '必填')
+                          : null,
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -2339,10 +2725,75 @@ bool _isTaskError(ManagedTask task) {
 Color _runColor(ColorScheme colorScheme, String status) {
   return switch (status) {
     'failed' => colorScheme.error,
+    'error' => colorScheme.error,
     'cancelled' => colorScheme.outline,
     'running' => colorScheme.tertiary,
     _ => colorScheme.primary,
   };
+}
+
+bool _isRunSuccess(String status) {
+  return status == 'success' || status == 'succeeded' || status == 'completed';
+}
+
+bool _isRunFailure(String status) {
+  return status == 'failed' || status == 'error';
+}
+
+String _latestRunAt(
+  BuildContext context,
+  List<TaskRun> runs,
+  bool Function(TaskRun run) test,
+) {
+  for (final run in runs) {
+    if (test(run)) return _formatTaskRunTime(run.startedAt);
+  }
+  return _localized(context, 'None', '暂无');
+}
+
+String _formatTaskRunTime(String value) {
+  final raw = value.trim();
+  if (raw.isEmpty) return value;
+
+  final parsed = DateTime.tryParse(raw);
+  if (parsed != null) return _formatDateTime(parsed.toLocal());
+
+  final runIdMatch = RegExp(
+    r'^(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})$',
+  ).firstMatch(raw);
+  if (runIdMatch != null) {
+    return '${runIdMatch.group(1)}-${runIdMatch.group(2)}-${runIdMatch.group(3)} '
+        '${runIdMatch.group(4)}:${runIdMatch.group(5)}:${runIdMatch.group(6)}';
+  }
+
+  return value;
+}
+
+String _formatDateTime(DateTime time) {
+  String two(int value) => value.toString().padLeft(2, '0');
+  return '${time.year.toString().padLeft(4, '0')}-${two(time.month)}-${two(time.day)} '
+      '${two(time.hour)}:${two(time.minute)}:${two(time.second)}';
+}
+
+String _runPreview(BuildContext context, TaskRun run) {
+  if (run.outputPreview != null && run.outputPreview!.isNotEmpty) {
+    return run.outputPreview!;
+  }
+  if (run.error != null && run.error!.isNotEmpty) return run.error!;
+  if (run.status == 'running') {
+    return _localized(
+      context,
+      'The task is still running. Output will refresh after the gateway returns.',
+      '任务仍在执行，结果输出会在 Gateway 返回后自动刷新。',
+    );
+  }
+  return _localized(context, 'No output preview', '暂无输出摘要');
+}
+
+String _runOpenLabel(BuildContext context, String status) {
+  if (status == 'running') return _localized(context, 'View Status', '查看状态');
+  if (_isRunFailure(status)) return _localized(context, 'View Error', '查看错误');
+  return _localized(context, 'View Result', '查看结果');
 }
 
 String _statusLabel(BuildContext context, ManagedTask task) {

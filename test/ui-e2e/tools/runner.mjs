@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import http from 'node:http';
+import net from 'node:net';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 
@@ -128,6 +129,77 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function canBindPort(port, host) {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.once('error', (error) => {
+      resolve(error?.code !== 'EADDRINUSE');
+    });
+    server.once('listening', () => {
+      server.close(() => resolve(true));
+    });
+    server.listen(port, host);
+  });
+}
+
+async function ensurePortAvailable(port, label) {
+  const hosts = ['127.0.0.1', '::'];
+  for (const host of hosts) {
+    if (!(await canBindPort(port, host))) {
+      throw new Error(`Port ${port} (${label}) is already in use before starting UI E2E server`);
+    }
+  }
+}
+
+async function ensurePortsAvailable() {
+  await ensurePortAvailable(httpPort, 'http');
+  await ensurePortAvailable(upstreamPort, 'upstream');
+  await ensurePortAvailable(mediaPort, 'media');
+}
+
+function waitForChildExit(child, timeoutMs) {
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return Promise.resolve(true);
+  }
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      child.off('exit', onExit);
+      resolve(false);
+    }, timeoutMs);
+    const onExit = () => {
+      clearTimeout(timer);
+      resolve(true);
+    };
+    child.once('exit', onExit);
+  });
+}
+
+function pidExists(pid) {
+  if (!pid) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function terminateChild(child) {
+  const pid = child.pid;
+  if (!pidExists(pid)) return;
+  child.kill('SIGTERM');
+  await waitForChildExit(child, 1500);
+  if (!pidExists(pid)) return;
+  process.kill(pid, 'SIGKILL');
+  await waitForChildExit(child, 1500);
+}
+
+async function terminateChildren(children) {
+  for (const child of children.reverse()) {
+    await terminateChild(child);
+  }
+}
+
 function buildServer() {
   const result = spawnSync('npm', ['run', 'build'], {
     cwd: path.join(root, 'server'),
@@ -247,9 +319,11 @@ function describeStep(step) {
     case 'launch_app':
       return '启动测试客户端并等待主界面加载。';
     case 'create_conversation':
-      return `新建会话：${step.name}。`;
+      return `新建会话：${step.name}${step.model ? `，选择模型 ${step.model}` : ''}${Array.isArray(step.skills) && step.skills.length > 0 ? `，选择 Skill ${step.skills.join(', ')}` : ''}。`;
     case 'send_message':
       return `在当前会话发送消息：${step.text}。`;
+    case 'delete_conversation':
+      return `删除会话：${step.name}。`;
     case 'wait_for_text':
       return `等待界面出现文本：${step.text}。`;
     case 'wait_for_absent_text':
@@ -336,7 +410,7 @@ function classifyFailure(error) {
     };
   }
 
-  if (/Server health check timed out|server build failed/.test(evidenceText)) {
+  if (/Server health check timed out|server build failed|Port \d+ .*already in use|EADDRINUSE/.test(evidenceText)) {
     return {
       type: 'environment_or_setup',
       confidence: 'confirmed',
@@ -641,6 +715,7 @@ ${error.message || String(error)}
 async function main() {
   writeTestConfig();
   buildServer();
+  await ensurePortsAvailable();
 
   const children = [];
   try {
@@ -757,9 +832,7 @@ async function main() {
     console.error(`Artifacts: ${runDir}`);
     process.exitCode = 1;
   } finally {
-    for (const child of children.reverse()) {
-      if (!child.killed) child.kill('SIGTERM');
-    }
+    await terminateChildren(children);
   }
 }
 

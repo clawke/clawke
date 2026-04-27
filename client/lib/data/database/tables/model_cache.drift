@@ -1,0 +1,22 @@
+CREATE TABLE model_cache (
+  user_id       TEXT    NOT NULL,
+  gateway_id    TEXT    NOT NULL,
+  model_id      TEXT    NOT NULL,
+  display_name  TEXT    NOT NULL,
+  provider      TEXT,
+  updated_at    INTEGER NOT NULL,
+  last_seen_at  INTEGER NOT NULL,
+  PRIMARY KEY (user_id, gateway_id, model_id)
+);
+
+watchModels:
+  SELECT *
+  FROM model_cache
+  WHERE user_id = :userId AND gateway_id = :gatewayId
+  ORDER BY display_name COLLATE NOCASE ASC, model_id ASC;
+
+getModels:
+  SELECT *
+  FROM model_cache
+  WHERE user_id = :userId AND gateway_id = :gatewayId
+  ORDER BY display_name COLLATE NOCASE ASC, model_id ASC;

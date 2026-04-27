@@ -236,7 +236,7 @@
   "noModelsAvailable": "No models available. Check Gateway connection.",
   "noSkillsAvailable": "No skills installed.",
   "skillModePriority": "Prefer these skills",
-  "skillModeExclusive": "Must use these skills",
+  "skillModeExclusive": "Strongly suggest skills",
   "today": "Today",
   "yesterday": "Yesterday",
   "monthDay": "{month}/{day}",

@@ -6,6 +6,7 @@ import 'package:client/services/media_resolver.dart';
 import 'package:client/core/ws_service.dart';
 import 'package:http/http.dart' as http;
 import 'package:client/l10n/l10n.dart';
+import 'package:client/widgets/app_snack_bar.dart';
 
 /// 服务器连接子页面 — 地址 + Token 输入，统一保存 + 验证。
 class ServerSettingsPage extends ConsumerStatefulWidget {
@@ -110,12 +111,7 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
 
     if (mounted) {
       setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(context.l10n.saved),
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      showAppSnackBar(context, context.l10n.saved, duration: const Duration(seconds: 2));
       Navigator.of(context).pop();
     }
   }

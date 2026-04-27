@@ -737,7 +737,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get skillModePriority => '优先使用这些 Skills';
 
   @override
-  String get skillModeExclusive => '必须使用这些 Skills';
+  String get skillModeExclusive => '强提示使用 Skills';
 
   @override
   String get today => '今天';

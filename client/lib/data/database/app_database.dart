@@ -16,6 +16,7 @@ part 'app_database.g.dart';
     'tables/task_cache.drift',
     'tables/skill_cache.drift',
     'tables/skill_localizations.drift',
+    'tables/model_cache.drift',
   },
 )
 class AppDatabase extends _$AppDatabase {
@@ -31,7 +32,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   /// 获取 metadata 值
   Future<String?> getMetadata(String key) async {
@@ -192,6 +193,11 @@ class AppDatabase extends _$AppDatabase {
       if (from < 10) {
         await m.createTable(skillCache);
         await m.createTable(skillLocalizations);
+      }
+      if (from < 11) {
+        // 中文：升级旧数据库时创建网关模型缓存表。
+        // English: Creates the gateway model cache table when upgrading older databases.
+        await m.createTable(modelCache);
       }
     },
   );

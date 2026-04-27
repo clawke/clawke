@@ -10,6 +10,7 @@ import 'package:client/providers/server_host_provider.dart';
 import 'package:client/screens/welcome_screen.dart';
 import 'package:client/main.dart';
 import 'package:client/l10n/l10n.dart';
+import 'package:client/widgets/app_snack_bar.dart';
 
 /// 切换账号页面 — 展示历史登录账号列表 + 添加账号入口。
 class AccountSwitcherScreen extends ConsumerStatefulWidget {
@@ -89,9 +90,7 @@ class _AccountSwitcherScreenState extends ConsumerState<AccountSwitcherScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _switching = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(t.accountExpired)),
-      );
+      showAppSnackBar(context, t.accountExpired);
       // 刷新列表（过期账号已被移除）
       _loadAccounts();
     }

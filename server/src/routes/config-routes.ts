@@ -1,67 +1,122 @@
 /**
  * 会话配置 REST API
  *
- * - GET  /api/config/models?account_id=xxx  → 查询 Gateway 可用模型
+ * - GET  /api/models?gateway_id=xxx         → 查询 Gateway 可用模型
+ * - GET  /api/config/models?account_id=xxx  → 查询 Gateway 可用模型（兼容旧接口）
  * - GET  /api/config/skills?account_id=xxx  → 查询 Gateway 可用 Skills
  * - GET  /api/conv/:id/config → 读取会话配置
  * - PUT  /api/conv/:id/config → 保存会话配置
  */
 import type { Request, Response } from 'express';
 import type { ConversationConfigStore } from '../store/conversation-config-store.js';
+import type { GatewayModelCacheStore } from '../store/gateway-model-cache-store.js';
 
 // ─── 依赖注入 ───
 
 let configStore: ConversationConfigStore | null = null;
-let queryModelsFunc: ((accountId: string) => Promise<string[]>) | null = null;
+let modelCacheStore: GatewayModelCacheStore | null = null;
+let queryModelsFunc: ((gatewayId: string) => Promise<string[]>) | null = null;
 let querySkillsFunc: ((accountId: string) => Promise<Array<{ name: string; description: string }>>) | null = null;
 
 export function initConfigRoutes(deps: {
   configStore: ConversationConfigStore;
-  queryModels: (accountId: string) => Promise<string[]>;
+  modelCacheStore?: GatewayModelCacheStore;
+  queryModels: (gatewayId: string) => Promise<string[]>;
   querySkills: (accountId: string) => Promise<Array<{ name: string; description: string }>>;
 }): void {
   configStore = deps.configStore;
+  modelCacheStore = deps.modelCacheStore ?? null;
   queryModelsFunc = deps.queryModels;
   querySkillsFunc = deps.querySkills;
-  modelCache.clear();
   skillsCache.clear();
 }
 
 // ─── Models ───
 
-// 按 accountId 分 key 缓存
-const modelCache = new Map<string, { models: string[]; expiresAt: number }>();
-const MODEL_CACHE_TTL = 30 * 60 * 1000; // 30 分钟
+export async function listModels(req: Request, res: Response): Promise<void> {
+  await respondModels(req, res);
+}
 
+// 兼容旧版会话设置页的模型列表接口，新代码使用 /api/models。 — Compatibility endpoint for legacy conversation settings model list. New code should use /api/models.
 export async function getModels(req: Request, res: Response): Promise<void> {
+  await respondModels(req, res);
+}
+
+async function respondModels(req: Request, res: Response): Promise<void> {
   try {
-    const accountId = (req.query.account_id as string) || '';
-    if (!accountId) {
-      res.status(400).json({ error: 'account_id is required' });
+    const gatewayId = resolveGatewayId(req);
+    if (!gatewayId) {
+      res.status(400).json({ error: 'gateway_id is required' });
       return;
     }
 
-    const forceRefresh = req.query.refresh === '1';
-    const cached = modelCache.get(accountId);
-    if (!forceRefresh && cached && Date.now() < cached.expiresAt) {
-      res.json({ models: cached.models });
+    const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true';
+    const cachedModels = readCachedModels(gatewayId);
+    if (!forceRefresh && cachedModels.length > 0) {
+      res.json({ models: cachedModels });
+      scheduleModelRefresh(gatewayId);
       return;
     }
 
     let models: string[] = [];
-    if (queryModelsFunc) {
-      models = await queryModelsFunc(accountId);
+    try {
+      models = await queryModelsFromGateway(gatewayId);
+    } catch (err) {
+      console.warn(`[ConfigAPI] model gateway query failed: ${err instanceof Error ? err.message : String(err)}`);
+      res.json({ models: cachedModels });
+      return;
+    }
+    if (models.length > 0) {
+      writeCachedModels(gatewayId, models);
+      res.json({ models });
+      return;
     }
 
-    // 空结果不缓存（gateway 可能还没连接）
-    if (models.length > 0) {
-      modelCache.set(accountId, { models, expiresAt: Date.now() + MODEL_CACHE_TTL });
-    }
-    res.json({ models });
+    res.json({ models: cachedModels });
   } catch (err: any) {
     console.error('[ConfigAPI] getModels error:', err.message);
     res.status(500).json({ error: err.message });
   }
+}
+
+async function queryModelsFromGateway(gatewayId: string): Promise<string[]> {
+  if (!queryModelsFunc) return [];
+  return queryModelsFunc(gatewayId);
+}
+
+function readCachedModels(gatewayId: string): string[] {
+  if (!modelCacheStore) return [];
+  try {
+    return modelCacheStore.getGatewayModels(gatewayId);
+  } catch (err) {
+    console.warn(`[ConfigAPI] model cache read failed: ${err instanceof Error ? err.message : String(err)}`);
+    return [];
+  }
+}
+
+function writeCachedModels(gatewayId: string, models: string[]): void {
+  if (!modelCacheStore || models.length === 0) return;
+  try {
+    modelCacheStore.replaceGatewayModels(gatewayId, models);
+  } catch (err) {
+    console.warn(`[ConfigAPI] model cache write failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+function scheduleModelRefresh(gatewayId: string): void {
+  setTimeout(() => {
+    void queryModelsFromGateway(gatewayId)
+      .then((models) => {
+        if (models.length > 0) writeCachedModels(gatewayId, models);
+      })
+      .catch((err) => {
+        console.warn(`[ConfigAPI] model background refresh failed: ${err instanceof Error ? err.message : String(err)}`);
+      });
+  }, 0).unref?.();
+}
+
+function resolveGatewayId(req: Request): string {
+  return (req.query.gateway_id as string) || (req.query.account_id as string) || '';
 }
 
 // ─── Skills ───
@@ -69,6 +124,7 @@ export async function getModels(req: Request, res: Response): Promise<void> {
 const skillsCache = new Map<string, { skills: Array<{ name: string; description: string }>; expiresAt: number }>();
 const SKILLS_CACHE_TTL = 30 * 60 * 1000; // 30 分钟
 
+// 兼容旧版会话设置页的 Skills 列表接口，新代码使用 /api/skills 并走客户端本地缓存。 — Compatibility endpoint for legacy conversation settings skills list. New code should use /api/skills with client-side cache.
 export async function getSkills(req: Request, res: Response): Promise<void> {
   try {
     const accountId = (req.query.account_id as string) || '';

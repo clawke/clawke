@@ -10,6 +10,7 @@ import 'package:client/models/managed_skill.dart';
 import 'package:client/providers/database_providers.dart';
 import 'package:client/providers/gateway_provider.dart';
 import 'package:client/providers/skills_provider.dart';
+import 'package:client/widgets/app_snack_bar.dart';
 import 'package:client/widgets/empty_state_panel.dart';
 import 'package:client/widgets/gateway_selector_pane.dart';
 import 'package:client/widgets/gateway_unavailable_panel.dart';
@@ -118,13 +119,17 @@ class _SkillsManagementScreenState
     final unavailableGateway = _selectedUnavailableGateway(gateways, state);
     final hasGatewayIssue =
         unavailableGateway != null || state.errorGatewayId != null;
+    final canPop = Navigator.of(context).canPop();
 
     return AppBar(
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back),
-        tooltip: _localized(context, 'Back', '返回'),
-        onPressed: () => Navigator.of(context).maybePop(),
-      ),
+      automaticallyImplyLeading: false,
+      leading: canPop
+          ? IconButton(
+              icon: const Icon(Icons.arrow_back),
+              tooltip: _localized(context, 'Back', '返回'),
+              onPressed: () => Navigator.of(context).maybePop(),
+            )
+          : null,
       centerTitle: true,
       title: Text(context.l10n.navSkills),
       backgroundColor: colorScheme.surface,
@@ -387,6 +392,7 @@ class _SkillsManagementScreenState
             controller: _searchController,
             filter: _statusFilter,
             sourceFilter: _sourceFilter,
+            compact: compact,
             total: state.skills.length,
             enabled: state.skills.where((skill) => skill.enabled).length,
             onFilterChanged: (filter) => setState(() => _statusFilter = filter),
@@ -537,6 +543,7 @@ class _SkillsManagementScreenState
         controller: _searchController,
         filter: _statusFilter,
         sourceFilter: _sourceFilter,
+        compact: compact,
         total: state.skills.length,
         enabled: state.skills.where((skill) => skill.enabled).length,
         onFilterChanged: (filter) => setState(() => _statusFilter = filter),
@@ -637,15 +644,11 @@ class _SkillsManagementScreenState
         });
       }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              initial == null
-                  ? context.l10n.skillsCreated
-                  : context.l10n.skillsSaved,
-            ),
-            behavior: SnackBarBehavior.floating,
-          ),
+        showAppSnackBar(
+          context,
+          initial == null
+              ? context.l10n.skillsCreated
+              : context.l10n.skillsSaved,
         );
       }
     } catch (_) {
@@ -710,12 +713,7 @@ class _SkillsManagementScreenState
       await ref.read(skillsControllerProvider.notifier).delete(skill.id);
       if (mounted && _activeSkillId == skill.id) _showList();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(context.l10n.skillsDeleted),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        showAppSnackBar(context, context.l10n.skillsDeleted);
       }
     } catch (_) {
       // The provider listener displays the API error.
@@ -832,6 +830,7 @@ class _Toolbar extends StatelessWidget {
   final TextEditingController controller;
   final _SkillStatusFilter filter;
   final _SkillSourceFilter sourceFilter;
+  final bool compact;
   final int total;
   final int enabled;
   final ValueChanged<_SkillStatusFilter> onFilterChanged;
@@ -842,6 +841,7 @@ class _Toolbar extends StatelessWidget {
     required this.controller,
     required this.filter,
     required this.sourceFilter,
+    required this.compact,
     required this.total,
     required this.enabled,
     required this.onFilterChanged,
@@ -859,93 +859,97 @@ class _Toolbar extends StatelessWidget {
     );
     final disabled = total - enabled;
 
-    FilterChip filterChip({
-      required String label,
-      required bool selected,
-      required VoidCallback onSelected,
-      Key? key,
-    }) {
-      return FilterChip(
-        key: key,
-        label: Text(label),
-        labelStyle: filterTextStyle,
-        selected: selected,
-        onSelected: (_) => onSelected(),
-      );
-    }
-
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: colorScheme.outlineVariant),
       ),
-      child: Wrap(
-        spacing: 10,
-        runSpacing: 10,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          SizedBox(
-            width: 320,
-            child: TextField(
-              controller: controller,
-              onChanged: onChanged,
-              style: searchTextStyle,
-              decoration: InputDecoration(
-                hintText: context.l10n.searchSkills,
-                hintStyle: searchTextStyle?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-                prefixIcon: const Icon(Icons.search),
-                isDense: true,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final searchWidth = compact
+              ? constraints.maxWidth
+              : math.min(430.0, constraints.maxWidth);
+          return Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              SizedBox(
+                width: searchWidth,
+                child: TextField(
+                  controller: controller,
+                  onChanged: onChanged,
+                  style: searchTextStyle,
+                  decoration: InputDecoration(
+                    hintText: context.l10n.searchSkills,
+                    hintStyle: searchTextStyle?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                    prefixIcon: const Icon(Icons.search),
+                    isDense: true,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-          filterChip(
-            key: const ValueKey('skills_filter_all'),
-            label: '${context.l10n.skillsStatusAll} $total',
-            selected: filter == _SkillStatusFilter.all,
-            onSelected: () => onFilterChanged(_SkillStatusFilter.all),
-          ),
-          filterChip(
-            key: const ValueKey('skills_filter_enabled'),
-            label: '${context.l10n.skillsStatusEnabled} $enabled',
-            selected: filter == _SkillStatusFilter.enabled,
-            onSelected: () => onFilterChanged(_SkillStatusFilter.enabled),
-          ),
-          filterChip(
-            key: const ValueKey('skills_filter_disabled'),
-            label: '${context.l10n.skillsStatusDisabled} $disabled',
-            selected: filter == _SkillStatusFilter.disabled,
-            onSelected: () => onFilterChanged(_SkillStatusFilter.disabled),
-          ),
-          filterChip(
-            label: context.l10n.skillsSourceAll,
-            selected: sourceFilter == _SkillSourceFilter.all,
-            onSelected: () => onSourceFilterChanged(_SkillSourceFilter.all),
-          ),
-          filterChip(
-            label: context.l10n.skillsSourceManaged,
-            selected: sourceFilter == _SkillSourceFilter.managed,
-            onSelected: () => onSourceFilterChanged(_SkillSourceFilter.managed),
-          ),
-          filterChip(
-            label: context.l10n.skillsSourceExternal,
-            selected: sourceFilter == _SkillSourceFilter.external,
-            onSelected: () =>
-                onSourceFilterChanged(_SkillSourceFilter.external),
-          ),
-          filterChip(
-            label: context.l10n.skillsSourceReadonly,
-            selected: sourceFilter == _SkillSourceFilter.readonly,
-            onSelected: () =>
-                onSourceFilterChanged(_SkillSourceFilter.readonly),
-          ),
-        ],
+              SegmentedButton<_SkillStatusFilter>(
+                key: const ValueKey('skills_status_filter'),
+                style: ButtonStyle(
+                  textStyle: WidgetStatePropertyAll(filterTextStyle),
+                ),
+                selected: {filter},
+                onSelectionChanged: (selected) =>
+                    onFilterChanged(selected.first),
+                segments: [
+                  ButtonSegment(
+                    value: _SkillStatusFilter.all,
+                    label: Text('${context.l10n.skillsStatusAll} $total'),
+                  ),
+                  ButtonSegment(
+                    value: _SkillStatusFilter.enabled,
+                    label: Text('${context.l10n.skillsStatusEnabled} $enabled'),
+                  ),
+                  ButtonSegment(
+                    value: _SkillStatusFilter.disabled,
+                    label: Text(
+                      '${context.l10n.skillsStatusDisabled} $disabled',
+                    ),
+                  ),
+                ],
+              ),
+              SegmentedButton<_SkillSourceFilter>(
+                key: const ValueKey('skills_source_filter'),
+                style: ButtonStyle(
+                  textStyle: WidgetStatePropertyAll(filterTextStyle),
+                ),
+                selected: {sourceFilter},
+                onSelectionChanged: (selected) =>
+                    onSourceFilterChanged(selected.first),
+                segments: [
+                  ButtonSegment(
+                    value: _SkillSourceFilter.all,
+                    label: Text(context.l10n.skillsSourceAll),
+                  ),
+                  ButtonSegment(
+                    value: _SkillSourceFilter.managed,
+                    label: Text(context.l10n.skillsSourceManaged),
+                  ),
+                  ButtonSegment(
+                    value: _SkillSourceFilter.external,
+                    label: Text(context.l10n.skillsSourceExternal),
+                  ),
+                  ButtonSegment(
+                    value: _SkillSourceFilter.readonly,
+                    label: Text(context.l10n.skillsSourceReadonly),
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -1780,13 +1784,6 @@ class _SkillSubpageAppBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final hasAction = actionIcon != null && actionLabel != null;
-    final icon = isBusy
-        ? const SizedBox(
-            width: 18,
-            height: 18,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          )
-        : Icon(actionIcon);
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -1813,22 +1810,60 @@ class _SkillSubpageAppBar extends StatelessWidget {
               ? [
                   Padding(
                     padding: const EdgeInsets.only(right: 8),
-                    child: TextButton.icon(
+                    child: _SkillAppBarAction(
+                      icon: actionIcon!,
+                      label: actionLabel!,
                       onPressed: onAction,
-                      icon: icon,
-                      label: Text(actionLabel!),
-                      style: TextButton.styleFrom(
-                        foregroundColor: colorScheme.primary,
-                        disabledForegroundColor: colorScheme.onSurfaceVariant,
-                        textStyle: Theme.of(context).textTheme.labelLarge
-                            ?.copyWith(fontWeight: FontWeight.w700),
-                      ),
+                      busy: isBusy,
                     ),
                   ),
                 ]
               : null,
         ),
       ),
+    );
+  }
+}
+
+class _SkillAppBarAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+  final bool busy;
+
+  const _SkillAppBarAction({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+    this.busy = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final actionIcon = busy
+        ? SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: colorScheme.primary,
+            ),
+          )
+        : Icon(icon, size: 20);
+
+    return TextButton.icon(
+      key: const ValueKey('skill_app_bar_action'),
+      onPressed: busy ? null : onPressed,
+      style: TextButton.styleFrom(
+        foregroundColor: colorScheme.primary,
+        disabledForegroundColor: colorScheme.onSurfaceVariant,
+        textStyle: Theme.of(
+          context,
+        ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
+      ),
+      icon: actionIcon,
+      label: Text(label),
     );
   }
 }
