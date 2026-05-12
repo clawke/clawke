@@ -20,8 +20,22 @@ import readline from 'readline';
 import { spawn, execSync, type ChildProcess } from 'child_process';
 import { resolveGatewayStartShell } from './gateway-start-config.js';
 import { formatClawkeVersion, runClawkeUpdate } from './clawke-update.js';
+import { loadConfig } from '../config.js';
+import { parseProfileArgv, resolveProfileContext } from '../profile.js';
 
-const args = process.argv.slice(2);
+let parsedArgv;
+try {
+  parsedArgv = parseProfileArgv(process.argv.slice(2));
+} catch (err: any) {
+  console.error(`[clawke] ❌ ${err.message}`);
+  process.exit(1);
+}
+
+const args = parsedArgv.args;
+const profileContext = resolveProfileContext({ profile: parsedArgv.profile });
+if (profileContext.profile) {
+  process.env.CLAWKE_PROFILE = profileContext.profile;
+}
 const command = args[0];
 const subCommand = args[1];
 
@@ -146,7 +160,7 @@ async function installGateway(): Promise<void> {
 
 // ────────────── PID 管理 ──────────────
 
-const CLAWKE_HOME = path.join(os.homedir(), '.clawke');
+const CLAWKE_HOME = profileContext.runtimeHome;
 const PID_FILE = path.join(CLAWKE_HOME, 'server.pid');
 const FRPC_PID_FILE = path.join(CLAWKE_HOME, 'frpc.pid');
 
@@ -161,10 +175,12 @@ interface GatewayInstance {
 }
 
 function loadGatewayInstances(): GatewayInstance[] {
-  const configPath = path.join(CLAWKE_HOME, 'clawke.json');
-  if (!fs.existsSync(configPath)) return [];
   try {
-    const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    const config = loadConfig({
+      profile: profileContext.profile,
+      baseHome: profileContext.baseHome,
+      ensure: false,
+    });
     if (!config.gateways) return [];
     const instances: GatewayInstance[] = [];
     for (const [, list] of Object.entries(config.gateways)) {
@@ -535,7 +551,10 @@ async function main(): Promise<void> {
 
   } else if (command === 'doctor') {
     const { runClawkeDoctor } = await import('./clawke-doctor.js');
-    const result = runClawkeDoctor();
+    const result = runClawkeDoctor({
+      profile: profileContext.profile,
+      clawkeHome: profileContext.baseHome,
+    });
     if (result.errorCount > 0) process.exit(1);
 
   // 统一入口：clawke gateway install
@@ -544,7 +563,11 @@ async function main(): Promise<void> {
 
   } else if (command === 'gateway' && subCommand === 'update') {
     const { runGatewayUpdate } = await import('./gateway-updater.js');
-    const result = runGatewayUpdate({ localOnly: args.includes('--local-only') });
+    const result = runGatewayUpdate({
+      localOnly: args.includes('--local-only'),
+      profile: profileContext.profile,
+      baseClawkeHome: profileContext.baseHome,
+    });
     if (result !== 0) process.exit(result);
 
   // 旧命令别名兼容 — Legacy command aliases
@@ -602,6 +625,7 @@ function printHelp(): void {
     hermes-gateway install     Install Hermes gateway
 
   Options:
+    --profile <name>           Use ~/.clawke/profiles/<name> runtime overlay
     --version, -V              Show version and exit
     --help, -h                 Show this help message
 

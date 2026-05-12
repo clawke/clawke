@@ -4,12 +4,11 @@
  * 所有运行时数据统一存放在 ~/.clawke/ 下。
  * 可通过环境变量 CLAWKE_DATA_DIR 覆盖（CI、Docker 等场景）。
  */
-import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
+import { resolveProfileContext } from '../profile.js';
 
-export const CLAWKE_HOME = process.env.CLAWKE_DATA_DIR
-  || path.join(os.homedir(), '.clawke');
+export const CLAWKE_HOME = resolveProfileContext().runtimeHome;
 
 export const DATA_DIR = path.join(CLAWKE_HOME, 'data');
 export const UPLOAD_DIR = path.join(CLAWKE_HOME, 'uploads');

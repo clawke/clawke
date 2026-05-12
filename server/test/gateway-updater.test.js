@@ -308,13 +308,109 @@ test('gateway update restarts Clawke Server when Hermes is updated and server is
   assert.match(stdout.text(), /Restarting Clawke Server to reload the updated Hermes gateway/);
 });
 
+test('gateway update with profile writes profile config and restarts profile server', async () => {
+  const { runGatewayUpdate } = await import('../dist/cli/gateway-updater.js');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'clawke-gateway-update-'));
+  const projectRoot = path.join(dir, 'clawke');
+  const baseHome = path.join(dir, '.clawke');
+  const profileHome = path.join(baseHome, 'profiles', 'dev');
+  const baseConfigPath = path.join(baseHome, 'clawke.json');
+  const profileConfigPath = path.join(profileHome, 'clawke.json');
+  const hermesSourceDir = path.join(projectRoot, 'gateways', 'hermes', 'clawke');
+  const cliPath = path.join(projectRoot, 'server', 'dist', 'cli', 'clawke.js');
+  const stdout = makeCapture();
+  const stderr = makeCapture();
+  const spawnCalls = [];
+  const spawnProcess = (command, args, options) => {
+    spawnCalls.push({ command, args, options, unrefed: false });
+    return {
+      unref() {
+        spawnCalls[0].unrefed = true;
+      },
+    };
+  };
+
+  fs.mkdirSync(hermesSourceDir, { recursive: true });
+  fs.writeFileSync(path.join(hermesSourceDir, 'run.py'), 'print("gateway")\n');
+  fs.mkdirSync(path.dirname(cliPath), { recursive: true });
+  fs.writeFileSync(cliPath, '#!/usr/bin/env node\n');
+  fs.mkdirSync(profileHome, { recursive: true });
+  fs.writeFileSync(path.join(profileHome, 'server.pid'), String(process.pid));
+  writeJson(baseConfigPath, {
+    gateways: {
+      hermes: [{ id: 'hermes', start_shell: '/opt/hermes/bin/python /old/clawke/run.py' }],
+    },
+  });
+
+  const code = runGatewayUpdate({
+    projectRoot,
+    baseClawkeHome: baseHome,
+    profile: 'dev',
+    spawnProcess,
+    stdout: stdout.stream,
+    stderr: stderr.stream,
+  });
+
+  const baseConfig = JSON.parse(fs.readFileSync(baseConfigPath, 'utf-8'));
+  const profileConfig = JSON.parse(fs.readFileSync(profileConfigPath, 'utf-8'));
+
+  assert.equal(code, 0);
+  assert.equal(baseConfig.gateways.hermes[0].start_shell, '/opt/hermes/bin/python /old/clawke/run.py');
+  assert.equal(
+    profileConfig.gateways.hermes[0].start_shell,
+    `/opt/hermes/bin/python ${path.join(hermesSourceDir, 'run.py')}`,
+  );
+  assert.deepEqual(spawnCalls[0].args, [cliPath, 'server', 'restart', '--profile', 'dev']);
+  assert.match(stdout.text(), new RegExp(`Gateway config updated: ${profileConfigPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+});
+
+test('gateway update local-only with profile writes profile config without restart', async () => {
+  const { runGatewayUpdate } = await import('../dist/cli/gateway-updater.js');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'clawke-gateway-update-'));
+  const projectRoot = path.join(dir, 'clawke');
+  const baseHome = path.join(dir, '.clawke');
+  const profileConfigPath = path.join(baseHome, 'profiles', 'dev', 'clawke.json');
+  const hermesSourceDir = path.join(projectRoot, 'gateways', 'hermes', 'clawke');
+  const stdout = makeCapture();
+  const stderr = makeCapture();
+
+  fs.mkdirSync(hermesSourceDir, { recursive: true });
+  fs.writeFileSync(path.join(hermesSourceDir, 'run.py'), 'print("gateway")\n');
+  writeJson(path.join(baseHome, 'clawke.json'), {
+    gateways: {
+      hermes: [{ id: 'hermes', start_shell: '/opt/hermes/bin/python /old/clawke/run.py' }],
+    },
+  });
+
+  const code = runGatewayUpdate({
+    projectRoot,
+    baseClawkeHome: baseHome,
+    profile: 'dev',
+    localOnly: true,
+    spawnProcess() {
+      throw new Error('spawn should not be called');
+    },
+    stdout: stdout.stream,
+    stderr: stderr.stream,
+  });
+
+  const profileConfig = JSON.parse(fs.readFileSync(profileConfigPath, 'utf-8'));
+
+  assert.equal(code, 0);
+  assert.equal(
+    profileConfig.gateways.hermes[0].start_shell,
+    `/opt/hermes/bin/python ${path.join(hermesSourceDir, 'run.py')}`,
+  );
+  assert.match(stdout.text(), /Hermes gateway updated\. Next `clawke server start` will load it/);
+});
+
 test('cli exposes gateway update and clawke update calls it after rebuild', () => {
   const repoRoot = path.resolve(__dirname, '..', '..');
   const cliSource = fs.readFileSync(path.join(repoRoot, 'server', 'src', 'cli', 'clawke.ts'), 'utf-8');
   const updateSource = fs.readFileSync(path.join(repoRoot, 'server', 'src', 'cli', 'clawke-update.ts'), 'utf-8');
 
   assert.match(cliSource, /command === 'gateway' && subCommand === 'update'/);
-  assert.match(cliSource, /runGatewayUpdate\(\{ localOnly: args\.includes\('--local-only'\) \}\)/);
+  assert.match(cliSource, /runGatewayUpdate\(\{[\s\S]*localOnly: args\.includes\('--local-only'\)[\s\S]*profile: profileContext\.profile[\s\S]*\}\)/);
   assert.match(updateSource, /runGatewayUpdate\(/);
   assert.match(updateSource, /commitCount === 0[\s\S]*return runGatewayUpdateAfterBuild\(projectRoot/);
   assert.match(updateSource, /Rebuilding server[\s\S]*const gatewayUpdateCode = runGatewayUpdateAfterBuild\(projectRoot/);

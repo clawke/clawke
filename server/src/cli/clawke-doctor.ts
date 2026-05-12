@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { loadConfig } from '../config.js';
+import { resolveProfileContext, type ProfileContext } from '../profile.js';
 import { resolveGatewayStartShell } from './gateway-start-config.js';
 
 type DoctorStatus = 'ok' | 'warn' | 'error' | 'info';
@@ -20,6 +22,7 @@ interface GatewayInstance {
 
 interface DoctorOptions {
   clawkeHome?: string;
+  profile?: string;
   homeDir?: string;
   projectRoot?: string;
   serverDir?: string;
@@ -37,10 +40,25 @@ export interface DoctorResult {
 const DEFAULT_SERVER_DIR = path.resolve(__dirname, '..', '..');
 const DEFAULT_PROJECT_ROOT = path.resolve(DEFAULT_SERVER_DIR, '..');
 
-function resolveClawkeHome(options: DoctorOptions): string {
-  if (options.clawkeHome) return options.clawkeHome;
+function resolveDoctorProfileContext(options: DoctorOptions): ProfileContext {
+  if (options.clawkeHome && !options.profile) {
+    const baseConfigPath = path.join(options.clawkeHome, 'clawke.json');
+    return {
+      profile: undefined,
+      isProfile: false,
+      baseHome: options.clawkeHome,
+      runtimeHome: options.clawkeHome,
+      baseConfigPath,
+      configPath: baseConfigPath,
+    };
+  }
   const env = options.env || process.env;
-  return env.CLAWKE_DATA_DIR || path.join(options.homeDir || os.homedir(), '.clawke');
+  return resolveProfileContext({
+    profile: options.profile,
+    baseHome: options.clawkeHome,
+    homeDir: options.homeDir,
+    env,
+  });
 }
 
 function addCheck(
@@ -279,9 +297,24 @@ function renderChecks(checks: DoctorCheck[], stdout: NodeJS.WritableStream): voi
   }
 }
 
+function inspectProfile(checks: DoctorCheck[], context: ProfileContext): void {
+  if (!context.isProfile || !context.profile) return;
+
+  addCheck(checks, 'Profile', 'info', `Profile: ${context.profile}`, context.runtimeHome);
+  addCheck(checks, 'Profile', fs.existsSync(context.baseConfigPath) ? 'ok' : 'warn', 'Base config', context.baseConfigPath);
+  addCheck(
+    checks,
+    'Profile',
+    context.profileConfigPath && fs.existsSync(context.profileConfigPath) ? 'ok' : 'info',
+    'Profile config',
+    context.profileConfigPath,
+  );
+}
+
 export function runClawkeDoctor(options: DoctorOptions = {}): DoctorResult {
   const stdout = options.stdout || process.stdout;
-  const clawkeHome = resolveClawkeHome(options);
+  const profileContext = resolveDoctorProfileContext(options);
+  const clawkeHome = profileContext.runtimeHome;
   const homeDir = options.homeDir || os.homedir();
   const projectRoot = options.projectRoot || DEFAULT_PROJECT_ROOT;
   const serverDir = options.serverDir || DEFAULT_SERVER_DIR;
@@ -289,11 +322,28 @@ export function runClawkeDoctor(options: DoctorOptions = {}): DoctorResult {
 
   inspectProjectFiles(checks, projectRoot, serverDir);
   inspectAgentPlatforms(checks, homeDir);
+  inspectProfile(checks, profileContext);
   inspectServerPid(checks, clawkeHome);
 
-  const configPath = path.join(clawkeHome, 'clawke.json');
+  const configPath = profileContext.configPath;
   let config: any = null;
-  if (!fs.existsSync(configPath)) {
+  if (profileContext.isProfile) {
+    try {
+      config = loadConfig({
+        profile: profileContext.profile,
+        baseHome: profileContext.baseHome,
+        ensure: false,
+        env: options.env,
+      });
+      addCheck(checks, 'Configuration', 'ok', 'clawke.json overlay parsed', configPath);
+      validatePort(checks, config, 'clientPort');
+      validatePort(checks, config, 'httpPort');
+      validatePort(checks, config, 'upstreamPort');
+      validatePort(checks, config, 'mediaPort');
+    } catch (err: any) {
+      addCheck(checks, 'Configuration', 'error', 'clawke.json overlay is not valid', err?.message || String(err));
+    }
+  } else if (!fs.existsSync(configPath)) {
     addCheck(
       checks,
       'Configuration',

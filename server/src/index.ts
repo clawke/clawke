@@ -148,7 +148,7 @@ export async function startClawkeServer() {
   async function startRelay() {
     // 读取配置（从 ~/.clawke/clawke.json）
     const configPath = getConfigPath();
-    const freshConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    const freshConfig = loadConfig();
     const relay = freshConfig.relay || {};
 
     if (relay.enable === false) {
@@ -177,13 +177,17 @@ export async function startClawkeServer() {
       process.removeListener('SIGINT', onSigInt);
       console.log(`[Server] ✅ Authorization successful! Relay: ${credentials.relayUrl}`);
 
-      const cfg = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      let cfg: Record<string, any> = {};
+      if (fs.existsSync(configPath)) {
+        cfg = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      }
       cfg.relay = {
         ...(cfg.relay || {}),
         enable: true, serverAddr: credentials.serverAddr || 'relay.clawke.ai',
         serverPort: credentials.serverPort || 7000,
         token: credentials.token, relayUrl: credentials.relayUrl,
       };
+      fs.mkdirSync(path.dirname(configPath), { recursive: true });
       fs.writeFileSync(configPath, JSON.stringify(cfg, null, 2) + '\n');
 
       const sub = new URL(credentials.relayUrl).hostname.split('.')[0];

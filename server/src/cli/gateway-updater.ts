@@ -2,11 +2,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
+import { loadConfig } from '../config.js';
+import { resolveProfileContext } from '../profile.js';
 import { mergeOpenClawConfigFile } from './openclaw-gateway-installer.js';
 
 const DEFAULT_PROJECT_ROOT = path.resolve(__dirname, '..', '..', '..');
-const DEFAULT_CLAWKE_HOME = process.env.CLAWKE_DATA_DIR || path.join(os.homedir(), '.clawke');
-const DEFAULT_CLAWKE_CONFIG = path.join(DEFAULT_CLAWKE_HOME, 'clawke.json');
 const DEFAULT_OPENCLAW_HOME = path.join(os.homedir(), '.openclaw');
 
 interface WritableLike {
@@ -16,8 +16,12 @@ interface WritableLike {
 interface GatewayUpdateOptions {
   projectRoot?: string;
   clawkeHome?: string;
+  baseClawkeHome?: string;
   clawkeConfigPath?: string;
   openclawHome?: string;
+  profile?: string;
+  homeDir?: string;
+  env?: NodeJS.ProcessEnv;
   localOnly?: boolean;
   restartUpdatedGateways?: boolean;
   spawnProcess?: typeof spawn;
@@ -50,6 +54,7 @@ interface ClawkeConfig {
 interface RestartContext {
   projectRoot: string;
   clawkeHome: string;
+  profile?: string;
   restartUpdatedGateways: boolean;
   spawnProcess: typeof spawn;
   spawnSyncProcess: typeof spawnSync;
@@ -71,6 +76,7 @@ function writeConfig(configPath: string, config: ClawkeConfig): void {
   try {
     fs.copyFileSync(configPath, `${configPath}.bak`);
   } catch {}
+  fs.mkdirSync(path.dirname(configPath), { recursive: true });
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
 }
 
@@ -122,6 +128,41 @@ function printOpenClawRestartHint(stdout: WritableLike): void {
   stdout.write('[clawke] ℹ️ OpenClaw gateway updated. Restart OpenClaw to load it: openclaw gateway restart\n');
 }
 
+function cloneJson<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function prepareWritableConfig(
+  configPath: string,
+  context: ReturnType<typeof resolveProfileContext>,
+  stderr: WritableLike,
+): ClawkeConfig | null {
+  if (!context.isProfile) {
+    return readConfig(configPath, stderr);
+  }
+
+  const profileConfig = readConfig(configPath, stderr) || {};
+  const effectiveConfig = loadConfig({
+    baseHome: context.baseHome,
+    profile: context.profile,
+    ensure: false,
+  }) as ClawkeConfig;
+
+  if (effectiveConfig.gateways) {
+    const profileGateways = (
+      profileConfig.gateways && typeof profileConfig.gateways === 'object' && !Array.isArray(profileConfig.gateways)
+    ) ? profileConfig.gateways as Record<string, unknown> : {};
+    for (const [gatewayType, value] of Object.entries(effectiveConfig.gateways)) {
+      if (!(gatewayType in profileGateways)) {
+        profileGateways[gatewayType] = cloneJson(value);
+      }
+    }
+    profileConfig.gateways = profileGateways;
+  }
+
+  return profileConfig;
+}
+
 function restartHermesGateway(context: RestartContext): void {
   if (!context.restartUpdatedGateways) {
     printHermesRestartHint(context.stdout);
@@ -141,7 +182,12 @@ function restartHermesGateway(context: RestartContext): void {
   }
 
   try {
-    const child = context.spawnProcess(process.execPath, [cliPath, 'server', 'restart'], {
+    const restartArgs = [cliPath, 'server', 'restart'];
+    if (context.profile) {
+      restartArgs.push('--profile', context.profile);
+    }
+
+    const child = context.spawnProcess(process.execPath, restartArgs, {
       cwd: path.join(context.projectRoot, 'server'),
       detached: true,
       stdio: 'ignore',
@@ -263,8 +309,14 @@ function updateOpenClawGateway(
 
 export function runGatewayUpdate(options: GatewayUpdateOptions = {}): number {
   const projectRoot = options.projectRoot || DEFAULT_PROJECT_ROOT;
-  const clawkeHome = options.clawkeHome || DEFAULT_CLAWKE_HOME;
-  const configPath = options.clawkeConfigPath || DEFAULT_CLAWKE_CONFIG;
+  const profileContext = resolveProfileContext({
+    profile: options.profile,
+    baseHome: options.baseClawkeHome,
+    homeDir: options.homeDir,
+    env: options.env,
+  });
+  const clawkeHome = options.clawkeHome || profileContext.runtimeHome;
+  const configPath = options.clawkeConfigPath || profileContext.configPath;
   const openclawHome = options.openclawHome || DEFAULT_OPENCLAW_HOME;
   const localOnly = options.localOnly === true;
   const restartUpdatedGateways = options.restartUpdatedGateways ?? !localOnly;
@@ -272,7 +324,9 @@ export function runGatewayUpdate(options: GatewayUpdateOptions = {}): number {
   const spawnSyncProcess = options.spawnSyncProcess || spawnSync;
   const stdout = options.stdout || process.stdout;
   const stderr = options.stderr || process.stderr;
-  const config = readConfig(configPath, stderr);
+  const config = options.clawkeConfigPath
+    ? readConfig(configPath, stderr)
+    : prepareWritableConfig(configPath, profileContext, stderr);
   const gateways = collectConfiguredGateways(config);
 
   if (!config || gateways.length === 0) {
@@ -315,6 +369,7 @@ export function runGatewayUpdate(options: GatewayUpdateOptions = {}): number {
   const restartContext: RestartContext = {
     projectRoot,
     clawkeHome,
+    profile: profileContext.profile,
     restartUpdatedGateways,
     spawnProcess,
     spawnSyncProcess,
