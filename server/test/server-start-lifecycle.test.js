@@ -54,3 +54,11 @@ test('server stop cleans gateways even when the server pid is missing or stale',
   assert.match(serverStopBody[1], /stale PID file/);
   assert.match(serverStopBody[1], /return/);
 });
+
+test('server lifecycle treats EPERM as an existing process and protects pid cleanup', () => {
+  const cliSource = fs.readFileSync(path.join(repoRoot, 'server', 'src', 'cli', 'clawke.ts'), 'utf8');
+
+  assert.match(cliSource, /return err\?\.code === 'EPERM'/);
+  assert.match(cliSource, /function removePidFile\(expectedPid\?: number\): void/);
+  assert.match(cliSource, /removePidFile\(process\.pid\)/);
+});

@@ -405,12 +405,17 @@ function isProcessAlive(pid: number): boolean {
   try {
     process.kill(pid, 0); // signal 0 = check existence
     return true;
-  } catch {
-    return false;
+  } catch (err: any) {
+    // EPERM 说明进程存在但当前上下文无权发送信号 — EPERM means the process exists but cannot be signalled here.
+    return err?.code === 'EPERM';
   }
 }
 
-function removePidFile(): void {
+function removePidFile(expectedPid?: number): void {
+  if (expectedPid !== undefined) {
+    const currentPid = readPid();
+    if (currentPid !== expectedPid) return;
+  }
   try { fs.unlinkSync(PID_FILE); } catch {}
 }
 
@@ -425,6 +430,8 @@ async function serverStart(): Promise<void> {
     console.error(`[clawke] ⚠️  Server already running (PID ${existingPid})`);
     console.error('[clawke] Use "clawke server stop" to stop it first, or "clawke server restart".');
     process.exit(1);
+  } else if (existingPid) {
+    removePidFile(existingPid);
   }
 
   // 自动编译 TypeScript（增量模式，没改动时秒完成）— Auto-build before start
@@ -443,7 +450,7 @@ async function serverStart(): Promise<void> {
   writePid();
 
   // 进程退出时清理 PID 文件 + Gateway 子进程 — Cleanup on exit
-  const cleanup = () => { stopAllGateways(); stopFrpcFromPidFile(); removePidFile(); };
+  const cleanup = () => { stopAllGateways(); stopFrpcFromPidFile(); removePidFile(process.pid); };
   process.on('exit', cleanup);
   process.on('SIGINT', () => { cleanup(); if (!serverStartupStarted) process.exit(0); });
   process.on('SIGTERM', () => { cleanup(); if (!serverStartupStarted) process.exit(0); });

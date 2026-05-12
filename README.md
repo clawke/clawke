@@ -135,6 +135,11 @@ clawke/
 ## Changelog
 
 <!-- README_CHANGELOG_START -->
+### v1.1.30 (2026-05-11)
+
+**[Bug Fix]** Stabilized OpenClaw gateway integration and UI E2E regression checks.
+**[Enhancement]** Improved Linux desktop registration, setup compatibility, icon/font fallback, and gateway install guidance.
+
 ### v1.1.29 (2026-05-10)
 
 **[Bug Fix]** Fixed Mac App Store build behavior for Apple/Google sign-in, production APNs, and App Store-managed updates.

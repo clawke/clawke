@@ -134,6 +134,11 @@ clawke/
 ## 版本演进
 
 <!-- README_CHANGELOG_START -->
+### v1.1.30 (2026-05-11)
+
+**[问题修复]** 稳定 OpenClaw Gateway 集成和 UI E2E 回归校验。
+**[功能优化]** 改进 Linux 桌面端注册、安装脚本兼容性、图标/字体 fallback 和 Gateway 安装指引。
+
 ### v1.1.29 (2026-05-10)
 
 **[问题修复]** 修复 Mac App Store 构建中的 Apple/Google 登录、production APNs 和 App Store 托管更新行为。

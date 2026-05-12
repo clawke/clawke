@@ -4,6 +4,17 @@
 
 <!-- CHANGELOG_START -->
 
+## v1.1.30 (2026-05-11)
+
+**[Bug Fix]** OpenClaw gateway and UI regression stability.
+- Stabilized the OpenClaw gateway integration path so prepared gateway changes are reflected reliably in release validation.
+- Hardened the UI E2E regression suite to reduce flaky release checks before publishing.
+
+**[Enhancement]** Linux desktop setup and packaging polish.
+- Added Linux desktop registration and shell-friendly setup support for packaged desktop installs.
+- Repaired Linux icon and font fallback behavior, and polished desktop app icon/title metadata.
+- Improved the gateway install flow so post-install next steps are clearer.
+
 ## v1.1.29 (2026-05-10)
 
 **[Bug Fix]** macOS App Store login and review readiness.
