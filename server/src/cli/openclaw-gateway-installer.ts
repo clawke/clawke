@@ -14,6 +14,19 @@ const OPENCLAW_CONFIG = path.join(OPENCLAW_HOME, 'openclaw.json');
 const EXTENSIONS_DIR = path.join(OPENCLAW_HOME, 'extensions');
 const TARGET_DIR = path.join(EXTENSIONS_DIR, 'clawke');
 
+interface OpenClawConfigMergeLogger {
+  info(message: string): void;
+  warn(message: string): void;
+}
+
+interface OpenClawConfigMergeResult {
+  addedChannelConfig: boolean;
+  addedConversationHookAccess: boolean;
+  enabledControlUiInsecureAuth: boolean;
+  updatedSessionDmScope: boolean;
+  preservedSessionDmScope?: string;
+}
+
 /** 获取项目内 gateway 插件源路径 */
 function getSourceDir(): string {
   // dist/cli/gateway-installer.js → server/ → ../gateways/openclaw/clawke/
@@ -67,19 +80,44 @@ export async function installOpenClawGateway(): Promise<void> {
 }
 
 function mergeOpenClawConfig(): void {
+  mergeOpenClawConfigFile(OPENCLAW_CONFIG, {
+    info: (message) => console.log(message),
+    warn: (message) => console.error(message),
+  });
+}
+
+export function mergeOpenClawConfigFile(
+  configPath: string,
+  logger: OpenClawConfigMergeLogger,
+): void {
   let config: Record<string, any> = {};
   try {
-    config = JSON.parse(fs.readFileSync(OPENCLAW_CONFIG, 'utf-8'));
+    config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
   } catch (err: any) {
-    console.error(`[clawke] ⚠️  Could not parse ${OPENCLAW_CONFIG}: ${err.message}`);
-    console.error('[clawke] Creating backup and writing fresh config...');
+    logger.warn(`[clawke] ⚠️  Could not parse ${configPath}: ${err.message}`);
+    logger.warn('[clawke] Creating backup and writing fresh config...');
   }
 
   // 备份
   try {
-    fs.copyFileSync(OPENCLAW_CONFIG, OPENCLAW_CONFIG + '.bak');
-    console.log(`[clawke] 📋 Config backed up: ${OPENCLAW_CONFIG}.bak`);
+    fs.copyFileSync(configPath, configPath + '.bak');
+    logger.info(`[clawke] 📋 Config backed up: ${configPath}.bak`);
   } catch {}
+
+  const result = mergeOpenClawConfigForClawke(config);
+  logOpenClawConfigMergeResult(result, logger);
+
+  fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
+  logger.info(`[clawke] ✅ OpenClaw config updated: ${configPath}`);
+}
+
+export function mergeOpenClawConfigForClawke(config: Record<string, any>): OpenClawConfigMergeResult {
+  const result: OpenClawConfigMergeResult = {
+    addedChannelConfig: false,
+    addedConversationHookAccess: false,
+    enabledControlUiInsecureAuth: false,
+    updatedSessionDmScope: false,
+  };
 
   // 合并 channels.clawke
   if (!config.channels) config.channels = {};
@@ -88,39 +126,57 @@ function mergeOpenClawConfig(): void {
       enabled: true,
       url: 'ws://127.0.0.1:8766',
     };
-    console.log('[clawke] ✅ Added channels.clawke config (url: ws://127.0.0.1:8766)');
+    result.addedChannelConfig = true;
   } else {
     // 不覆盖已有的 url，只确保 enabled
     config.channels.clawke.enabled = true;
-    console.log('[clawke] ✅ Enabled channels.clawke (existing url preserved)');
   }
 
   // 合并 plugins.entries.clawke
-  const addedConversationHookAccess = enableClawkePluginEntryForClawke(config);
-  if (addedConversationHookAccess) {
-    console.log('[clawke] ✅ Enabled plugins.entries.clawke with hooks.allowConversationAccess = true');
-  } else {
-    console.log('[clawke] ✅ Enabled plugins.entries.clawke (existing hook config preserved)');
-  }
+  result.addedConversationHookAccess = enableClawkePluginEntryForClawke(config);
 
-  if (enableControlUiInsecureAuthForClawke(config)) {
-    console.log('[clawke] ✅ Set gateway.controlUi.allowInsecureAuth = true');
-  } else {
-    console.log('[clawke] ✅ gateway.controlUi.allowInsecureAuth already enabled');
-  }
+  result.enabledControlUiInsecureAuth = enableControlUiInsecureAuthForClawke(config);
 
   // 合并 session.dmScope — 多会话隔离需要 per-account-channel-peer
   if (!config.session) config.session = {};
   const currentScope = config.session.dmScope;
   if (!currentScope || currentScope === 'main') {
     config.session.dmScope = 'per-account-channel-peer';
-    console.log('[clawke] ✅ Set session.dmScope = "per-account-channel-peer" (multi-session isolation)');
+    result.updatedSessionDmScope = true;
   } else if (currentScope !== 'per-account-channel-peer') {
-    console.log(`[clawke] ℹ️  session.dmScope already set to "${currentScope}" — keeping user config`);
+    result.preservedSessionDmScope = String(currentScope);
   }
 
-  fs.writeFileSync(OPENCLAW_CONFIG, JSON.stringify(config, null, 2) + '\n');
-  console.log(`[clawke] ✅ Config updated: ${OPENCLAW_CONFIG}`);
+  return result;
+}
+
+function logOpenClawConfigMergeResult(
+  result: OpenClawConfigMergeResult,
+  logger: OpenClawConfigMergeLogger,
+): void {
+  if (result.addedChannelConfig) {
+    logger.info('[clawke] ✅ Added channels.clawke config (url: ws://127.0.0.1:8766)');
+  } else {
+    logger.info('[clawke] ✅ Enabled channels.clawke (existing url preserved)');
+  }
+
+  if (result.addedConversationHookAccess) {
+    logger.info('[clawke] ✅ Enabled plugins.entries.clawke with hooks.allowConversationAccess = true');
+  } else {
+    logger.info('[clawke] ✅ Enabled plugins.entries.clawke (existing hook config preserved)');
+  }
+
+  if (result.enabledControlUiInsecureAuth) {
+    logger.info('[clawke] ✅ Set gateway.controlUi.allowInsecureAuth = true');
+  } else {
+    logger.info('[clawke] ✅ gateway.controlUi.allowInsecureAuth already enabled');
+  }
+
+  if (result.updatedSessionDmScope) {
+    logger.info('[clawke] ✅ Set session.dmScope = "per-account-channel-peer" (multi-session isolation)');
+  } else if (result.preservedSessionDmScope) {
+    logger.info(`[clawke] ℹ️  session.dmScope already set to "${result.preservedSessionDmScope}" — keeping user config`);
+  }
 }
 
 function mergeClawkeConfig(): void {

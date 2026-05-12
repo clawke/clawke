@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
+import { mergeOpenClawConfigFile } from './openclaw-gateway-installer.js';
 
 const DEFAULT_PROJECT_ROOT = path.resolve(__dirname, '..', '..', '..');
 const DEFAULT_CLAWKE_HOME = process.env.CLAWKE_DATA_DIR || path.join(os.homedir(), '.clawke');
@@ -247,6 +248,15 @@ function updateOpenClawGateway(
       return { ok: false, updated: false };
     }
   }
+
+  mergeOpenClawConfigFile(openclawConfig, {
+    info(message) {
+      stdout.write(`${message}\n`);
+    },
+    warn(message) {
+      stderr.write(`${message}\n`);
+    },
+  });
 
   return { ok: true, updated: true };
 }

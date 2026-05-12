@@ -69,6 +69,86 @@ test('gateway update syncs configured local OpenClaw gateway and restarts it', a
   assert.match(stdout.text(), /OpenClaw gateway restarted/);
 });
 
+test('gateway update merges missing OpenClaw Clawke hook config', async () => {
+  const { runGatewayUpdate } = await import('../dist/cli/gateway-updater.js');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'clawke-gateway-update-'));
+  const projectRoot = path.join(dir, 'clawke');
+  const configPath = path.join(dir, 'clawke.json');
+  const openclawHome = path.join(dir, '.openclaw');
+  const sourceDir = path.join(projectRoot, 'gateways', 'openclaw', 'clawke');
+  const stdout = makeCapture();
+  const stderr = makeCapture();
+
+  fs.mkdirSync(sourceDir, { recursive: true });
+  fs.writeFileSync(path.join(sourceDir, 'index.ts'), 'export const version = "new";\n');
+  writeJson(path.join(openclawHome, 'openclaw.json'), {});
+  writeJson(configPath, {
+    gateways: {
+      openclaw: [{ id: 'OpenClaw' }],
+    },
+  });
+
+  const code = runGatewayUpdate({
+    projectRoot,
+    clawkeConfigPath: configPath,
+    openclawHome,
+    localOnly: true,
+    stdout: stdout.stream,
+    stderr: stderr.stream,
+  });
+
+  const openclawConfig = JSON.parse(fs.readFileSync(path.join(openclawHome, 'openclaw.json'), 'utf-8'));
+  assert.equal(code, 0);
+  assert.equal(openclawConfig.plugins.entries.clawke.enabled, true);
+  assert.equal(openclawConfig.plugins.entries.clawke.hooks.allowConversationAccess, true);
+  assert.match(stdout.text(), /OpenClaw config updated/);
+});
+
+test('gateway update preserves explicit OpenClaw conversation hook opt-out', async () => {
+  const { runGatewayUpdate } = await import('../dist/cli/gateway-updater.js');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'clawke-gateway-update-'));
+  const projectRoot = path.join(dir, 'clawke');
+  const configPath = path.join(dir, 'clawke.json');
+  const openclawHome = path.join(dir, '.openclaw');
+  const sourceDir = path.join(projectRoot, 'gateways', 'openclaw', 'clawke');
+  const stdout = makeCapture();
+  const stderr = makeCapture();
+
+  fs.mkdirSync(sourceDir, { recursive: true });
+  fs.writeFileSync(path.join(sourceDir, 'index.ts'), 'export const version = "new";\n');
+  writeJson(path.join(openclawHome, 'openclaw.json'), {
+    plugins: {
+      entries: {
+        clawke: {
+          enabled: true,
+          hooks: {
+            allowConversationAccess: false,
+          },
+        },
+      },
+    },
+  });
+  writeJson(configPath, {
+    gateways: {
+      openclaw: [{ id: 'OpenClaw' }],
+    },
+  });
+
+  const code = runGatewayUpdate({
+    projectRoot,
+    clawkeConfigPath: configPath,
+    openclawHome,
+    localOnly: true,
+    stdout: stdout.stream,
+    stderr: stderr.stream,
+  });
+
+  const openclawConfig = JSON.parse(fs.readFileSync(path.join(openclawHome, 'openclaw.json'), 'utf-8'));
+  assert.equal(code, 0);
+  assert.equal(openclawConfig.plugins.entries.clawke.enabled, true);
+  assert.equal(openclawConfig.plugins.entries.clawke.hooks.allowConversationAccess, false);
+});
+
 test('gateway update local-only skips configured OpenClaw when local install is missing', async () => {
   const { runGatewayUpdate } = await import('../dist/cli/gateway-updater.js');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'clawke-gateway-update-'));
