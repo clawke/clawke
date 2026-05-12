@@ -825,5 +825,5 @@ async function loadStartGatewayClientWhenEventLoopReady(): Promise<StartGatewayC
   } catch {
     // OpenClaw SDK 只在插件运行时可用 — OpenClaw SDK is only available at plugin runtime.
   }
-  throw new Error("OpenClaw GatewayClient readiness helper is unavailable");
+  throw new Error("OpenClaw GatewayClient readiness helper is unavailable. Please upgrade OpenClaw to the latest version.");
 }
