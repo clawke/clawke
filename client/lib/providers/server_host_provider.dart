@@ -8,6 +8,7 @@ const _kTokenKey = 'clawke_token';
 const _kLoggedOutKey = 'clawke_logged_out';
 const kForcedHttpUrl = String.fromEnvironment('CLAWKE_FORCE_HTTP_URL');
 const kForcedWsUrl = String.fromEnvironment('CLAWKE_FORCE_WS_URL');
+const kForcedToken = String.fromEnvironment('CLAWKE_FORCE_TOKEN');
 
 /// 旧 key（迁移用）
 const _kLegacyHostKey = 'clawke_server_host';
@@ -40,12 +41,21 @@ String normalizeServerHttpUrl(String url) {
   ).toString();
 }
 
-Future<void> applyForcedServerConfig(SharedPreferences prefs) async {
-  if (kForcedHttpUrl.isEmpty || kForcedWsUrl.isEmpty) return;
+Future<void> applyForcedServerConfig(
+  SharedPreferences prefs, {
+  String forcedHttpUrl = kForcedHttpUrl,
+  String forcedWsUrl = kForcedWsUrl,
+  String forcedToken = kForcedToken,
+}) async {
+  if (forcedHttpUrl.isEmpty || forcedWsUrl.isEmpty) return;
   // 调试覆盖服务器地址，便于真机连接本机 Server — Debug-only server override for device testing.
-  await prefs.setString(_kHttpUrlKey, kForcedHttpUrl);
-  await prefs.setString(_kWsUrlKey, kForcedWsUrl);
-  await prefs.remove(_kTokenKey);
+  await prefs.setString(_kHttpUrlKey, forcedHttpUrl);
+  await prefs.setString(_kWsUrlKey, forcedWsUrl);
+  if (forcedToken.isEmpty) {
+    await prefs.remove(_kTokenKey);
+  } else {
+    await prefs.setString(_kTokenKey, forcedToken);
+  }
   await prefs.remove(_kLoggedOutKey);
 }
 
@@ -140,7 +150,11 @@ class ServerConfigNotifier extends StateNotifier<ServerConfig> {
     final prefs = await SharedPreferences.getInstance();
     if (kForcedHttpUrl.isNotEmpty && kForcedWsUrl.isNotEmpty) {
       await applyForcedServerConfig(prefs);
-      state = const ServerConfig(httpUrl: kForcedHttpUrl, wsUrl: kForcedWsUrl);
+      state = const ServerConfig(
+        httpUrl: kForcedHttpUrl,
+        wsUrl: kForcedWsUrl,
+        token: kForcedToken,
+      );
       _loadCompleter.complete(state);
       return;
     }

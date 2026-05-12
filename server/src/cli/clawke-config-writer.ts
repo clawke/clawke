@@ -1,9 +1,6 @@
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
-
-const DEFAULT_CLAWKE_HOME = path.join(os.homedir(), '.clawke');
-const DEFAULT_CLAWKE_CONFIG = path.join(DEFAULT_CLAWKE_HOME, 'clawke.json');
+import { getConfigPath } from '../config.js';
 
 interface RegisterGatewayOptions {
   configPath?: string;
@@ -13,7 +10,7 @@ interface RegisterGatewayOptions {
 }
 
 export function registerGatewayInClawkeConfig(options: RegisterGatewayOptions): void {
-  const configPath = options.configPath || DEFAULT_CLAWKE_CONFIG;
+  const configPath = options.configPath || getConfigPath();
   let config: Record<string, any> = {};
 
   if (fs.existsSync(configPath)) {

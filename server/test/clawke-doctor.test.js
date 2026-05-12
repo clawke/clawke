@@ -89,3 +89,46 @@ test('clawke doctor reports configured gateways and stale gateway pid files', ()
   assert.doesNotMatch(capture.output(), /openclaw-remote\) is not running/);
   assert.doesNotMatch(capture.output(), /openclaw-remote.*No gateway PID file/);
 });
+
+test('clawke doctor reports profile paths and reads effective profile config', () => {
+  const { runClawkeDoctor } = require('../dist/cli/clawke-doctor.js');
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'clawke-doctor-'));
+  const clawkeHome = path.join(tmpDir, '.clawke');
+  const profileHome = path.join(clawkeHome, 'profiles', 'dev');
+  fs.mkdirSync(profileHome, { recursive: true });
+  fs.writeFileSync(
+    path.join(clawkeHome, 'clawke.json'),
+    JSON.stringify({
+      server: {
+        httpPort: 19080,
+      },
+      gateways: {
+        openclaw: [{ id: 'openclaw-remote' }],
+      },
+    }),
+  );
+  fs.writeFileSync(
+    path.join(profileHome, 'clawke.json'),
+    JSON.stringify({
+      server: {
+        httpPort: 19880,
+      },
+    }),
+  );
+  const capture = makeCaptureStream();
+
+  const result = runClawkeDoctor({
+    profile: 'dev',
+    homeDir: tmpDir,
+    projectRoot,
+    serverDir: serverRoot,
+    stdout: capture.stream,
+  });
+
+  assert.equal(result.errorCount, 0);
+  assert.match(capture.output(), /Profile: dev/);
+  assert.match(capture.output(), new RegExp(profileHome.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(capture.output(), /clawke\.json overlay parsed/);
+  assert.match(capture.output(), /httpPort: 19880/);
+  assert.match(capture.output(), /1 gateway instance configured/);
+});

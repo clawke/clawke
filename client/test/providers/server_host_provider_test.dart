@@ -99,4 +99,39 @@ void main() {
     expect(prefs.getString('clawke_http_url'), 'http://127.0.0.1:8780');
     expect(prefs.getString('clawke_ws_url'), 'ws://127.0.0.1:8780/ws');
   });
+
+  test('forced server config can include local relay token', () async {
+    SharedPreferences.setMockInitialValues({
+      'clawke_token': 'stale-token',
+      'clawke_logged_out': true,
+    });
+    final prefs = await SharedPreferences.getInstance();
+
+    await applyForcedServerConfig(
+      prefs,
+      forcedHttpUrl: 'http://10.0.2.2:8780',
+      forcedWsUrl: 'ws://10.0.2.2:8780/ws',
+      forcedToken: 'local-token',
+    );
+
+    expect(prefs.getString('clawke_http_url'), 'http://10.0.2.2:8780');
+    expect(prefs.getString('clawke_ws_url'), 'ws://10.0.2.2:8780/ws');
+    expect(prefs.getString('clawke_token'), 'local-token');
+    expect(prefs.getBool('clawke_logged_out'), isNull);
+  });
+
+  test('forced server config clears token when no token is supplied', () async {
+    SharedPreferences.setMockInitialValues({'clawke_token': 'stale-token'});
+    final prefs = await SharedPreferences.getInstance();
+
+    await applyForcedServerConfig(
+      prefs,
+      forcedHttpUrl: 'http://127.0.0.1:8780',
+      forcedWsUrl: 'ws://127.0.0.1:8780/ws',
+    );
+
+    expect(prefs.getString('clawke_http_url'), 'http://127.0.0.1:8780');
+    expect(prefs.getString('clawke_ws_url'), 'ws://127.0.0.1:8780/ws');
+    expect(prefs.getString('clawke_token'), isNull);
+  });
 }
