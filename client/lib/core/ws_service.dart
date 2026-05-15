@@ -6,7 +6,31 @@ import 'package:client/core/backoff_machine.dart';
 
 enum WsState { connecting, connected, disconnected }
 
+typedef WebSocketConnector = WebSocketChannel Function(Uri uri);
+
+@visibleForTesting
+bool isRecoverableWsAuthError(String error, {required bool hasToken}) {
+  final lower = error.toLowerCase();
+  if (lower.contains('401') || lower.contains('unauthorized')) return true;
+  if (hasToken && lower.contains('not upgraded to websocket')) return true;
+  return false;
+}
+
+@visibleForTesting
+String redactWsConnectError(String error) {
+  return error.replaceAllMapped(
+    RegExp(r'''([?&]token=)[^&#\s'"]+'''),
+    (match) => '${match.group(1)}<redacted>',
+  );
+}
+
 class WsService {
+  WsService({WebSocketConnector? connectChannel})
+    : _connectChannel =
+          connectChannel ?? ((uri) => WebSocketChannel.connect(uri));
+
+  final WebSocketConnector _connectChannel;
+
   /// 完整 WS URL（由 ServerConfig 驱动）
   static String _wsUrl = 'ws://127.0.0.1:8780/ws';
 
@@ -22,12 +46,17 @@ class WsService {
   /// 当前连接 URL（供 UI 显示）
   static String get currentUrl => _wsUrl;
 
+  @visibleForTesting
+  static String get currentToken => _token;
+
   WebSocketChannel? _channel;
   StreamSubscription? _channelSub;
   final _stateController = StreamController<WsState>.broadcast();
   final _messageController = StreamController<Map<String, dynamic>>.broadcast();
   final _backoff = BackoffMachine();
   bool _shouldReconnect = true;
+  bool _authRecoveryAttempted = false;
+  bool _authRecoveryInProgress = false;
 
   Stream<WsState> get stateStream => _stateController.stream;
   Stream<Map<String, dynamic>> get messageStream => _messageController.stream;
@@ -37,6 +66,10 @@ class WsService {
 
   /// 认证失败回调（CS 返回 401 → token 无效/过期，不自动重连）
   void Function()? onAuthFailed;
+
+  /// 认证恢复回调：刷新 relay 凭证并返回是否可重连。
+  /// Auth recovery callback: refresh relay credentials and report if reconnect can proceed.
+  Future<bool> Function()? onAuthRecoveryRequired;
 
   WsState _state = WsState.disconnected;
   WsState get state => _state;
@@ -79,11 +112,13 @@ class WsService {
           queryParameters: params.isEmpty ? null : params,
         );
       }
-      _channel = WebSocketChannel.connect(connectUri);
+      _channel = _connectChannel(connectUri);
       await _channel!.ready;
 
       _setState(WsState.connected);
       _lastError = null;
+      _authRecoveryAttempted = false;
+      _authRecoveryInProgress = false;
       _backoff.reset();
       // 每次连接成功都触发（首次 + 重连），用于发 sync 拉增量
       onConnected?.call();
@@ -106,7 +141,7 @@ class WsService {
           _autoReconnect();
         },
         onError: (e) {
-          _lastError = 'Stream error: $e';
+          _lastError = 'Stream error: ${redactWsConnectError('$e')}';
           debugPrint('[WS] ❌ $_lastError');
           _setState(WsState.disconnected);
           _autoReconnect();
@@ -116,17 +151,47 @@ class WsService {
       // 查询 AI 后端状态（必须在 stream.listen 之后，否则响应会丢失）
       sendJson({'event_type': 'ping'});
     } catch (e) {
-      _lastError = '$e';
+      _lastError = redactWsConnectError('$e');
       debugPrint('[WS] ❌ Connection failed: $_lastError');
       _setState(WsState.disconnected);
-      // 检测 401 Unauthorized（token 被拒）→ 不重连，通知 UI
-      if (_lastError != null && _lastError!.contains('401')) {
-        debugPrint('[WS] 🔒 Auth failed (401), not reconnecting');
-        onAuthFailed?.call();
+      await _handleConnectFailure();
+    }
+  }
+
+  Future<void> _handleConnectFailure() async {
+    final error = _lastError ?? '';
+    if (!isRecoverableWsAuthError(error, hasToken: _token.isNotEmpty)) {
+      _autoReconnect();
+      return;
+    }
+
+    if (_authRecoveryAttempted ||
+        _authRecoveryInProgress ||
+        onAuthRecoveryRequired == null) {
+      debugPrint('[WS] 🔒 Auth recovery unavailable, not reconnecting');
+      onAuthFailed?.call();
+      return;
+    }
+
+    _authRecoveryAttempted = true;
+    _authRecoveryInProgress = true;
+    try {
+      debugPrint('[WS] 🔄 Auth failed, refreshing relay credentials');
+      final recovered = await onAuthRecoveryRequired!.call();
+      if (!_shouldReconnect) return;
+      if (recovered) {
+        debugPrint('[WS] 🔄 Relay credentials refreshed, reconnecting');
+        await connect();
         return;
       }
-      _autoReconnect();
+    } catch (e) {
+      debugPrint('[WS] ❌ Auth recovery failed: ${redactWsConnectError('$e')}');
+    } finally {
+      _authRecoveryInProgress = false;
     }
+
+    debugPrint('[WS] 🔒 Auth recovery failed, prompting re-login');
+    onAuthFailed?.call();
   }
 
   Future<void> _autoReconnect() async {
@@ -178,6 +243,7 @@ class WsService {
   void reconnect() {
     if (_state == WsState.connecting) return;
     debugPrint('[WS] 🔄 Manual reconnect requested');
+    _authRecoveryAttempted = false;
     _channel?.sink.close();
     connect();
   }

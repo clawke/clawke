@@ -2,11 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:client/screens/settings_screen.dart';
 import 'package:client/providers/auth_provider.dart';
+import 'package:client/providers/app_version_provider.dart';
 import 'package:client/services/media_resolver.dart';
 import 'package:client/l10n/l10n.dart';
-
-/// 版本号常量（与 pubspec.yaml 同步，每次发布递增）
-const _appVersion = '1.1.21';
 
 /// 「我的」页面 — 移动端 Profile 入口
 class ProfileScreen extends ConsumerWidget {
@@ -21,6 +19,9 @@ class ProfileScreen extends ConsumerWidget {
     final loginId = user?.loginId ?? '';
     final displaySub = loginId.isNotEmpty ? loginId : (user?.uid ?? '');
     final initial = name.isNotEmpty ? name.characters.first.toUpperCase() : '?';
+    final appVersion = ref
+        .watch(appVersionProvider)
+        .maybeWhen(data: (info) => info.fullVersion, orElse: () => '');
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
@@ -103,7 +104,7 @@ class ProfileScreen extends ConsumerWidget {
             onTap: () => showAboutDialog(
               context: context,
               applicationName: 'Clawke',
-              applicationVersion: _appVersion,
+              applicationVersion: appVersion,
             ),
           ),
         ],

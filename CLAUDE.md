@@ -161,6 +161,13 @@ Flutter Client ←ws:8765→ Clawke Server ←ws:8766→ OpenClaw Gateway（192.
 | OpenClaw 启动命令       | 在 192.168.0.7 的 OpenClaw 项目目录下执行        | `pnpm dev gateway --force`                        |
 | OpenClaw 环境变量       | `~/.openclaw/gateway/.env`（192.168.0.7）        | `BRAVE_API_KEY`, `GOOGLE_API_KEY`                 |
 
+### 🔴 发布版本号红线
+
+- **语义版本号（如 `1.1.24`、Git tag `v1.1.24`）只能由用户升级，AI 严禁擅自修改。**
+- 如确需升级语义版本号，必须先说明原因并获得用户审批同意。
+- AI 为重新验证发布包、重新触发构建或区分构建产物时，只能递增 Flutter build number（`client/pubspec.yaml` 中 `version: 1.1.24+75` 的 `+75` 部分），不得改变 `+` 前面的版本号。
+- 已推送失败 tag / release 时，不得通过直接升级语义版本号绕过；应先向用户说明失败 tag 状态，再由用户决定删除 / 重打 tag 或使用新语义版本。
+
 ### ⚠️ 开发模式规则
 
 **开发阶段，Server 和 Gateway（OpenClaw）都在本机运行，严禁部署到 192.168.0.7 远程服务器。**

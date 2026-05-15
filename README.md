@@ -38,15 +38,15 @@ Manage OpenClaw, Hermes, Codex and Claude Code from your phone or desktop.
 
 ## Features
 
-- **CUP Protocol** — Streaming AI responses with thinking blocks, tool calls, and usage tracking
-- **SDUI** — Server-driven UI: dashboards, forms, dialogs rendered from server instructions
-- **Multi-agent online management** — Manage OpenClaw, Hermes, and other agents from mobile or desktop clients
+- **Cross-device collaboration** — Supports Mac, Windows, Linux, iOS, and Android, so you can keep working wherever you go
+- **Remote agent workspace** — Run OpenClaw or Hermes on a cloud server, Mac mini, or home machine, then control it from Clawke on desktop or mobile
+- **Multi-agent management** — Manage OpenClaw, Hermes, Nanobot, and other AI agents at the same time
 - **Media** — Image/PDF/text file upload and inline rendering
 - **Relay** — Built-in tunnel for remote access without port forwarding
 
 ## Step 1: Install Clawke Server
 
-### Quick Install
+### Quick Install (Recommended)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/clawke/clawke/main/scripts/install.sh | bash
@@ -82,6 +82,7 @@ clawke doctor             # Check local Clawke setup and runtime status
 clawke update             # Update Clawke to the latest version
 clawke update --check     # Check for updates without installing
 clawke gateway install    # Auto-detect and install gateway plugin
+clawke gateway update     # Update configured gateway plugin code (no restart)
 clawke server start       # Start Clawke Server
 clawke server stop        # Stop Clawke Server
 clawke server restart     # Restart Clawke Server
@@ -104,6 +105,14 @@ flutter build macos  # Or: ios, apk, windows, linux
 
 > To run in debug mode, use `flutter run -d macos` (replace `macos` with your target platform).
 
+## Community
+
+Have questions or want to discuss Clawke? Scan the QR code below to join the Clawke WeChat discussion group.
+
+<p align="center">
+  <img src=".github/wechat-group.jpg" width="320" alt="Clawke WeChat discussion group QR code" />
+</p>
+
 ## Project Structure
 
 ```
@@ -125,6 +134,43 @@ clawke/
 ## Changelog
 
 <!-- README_CHANGELOG_START -->
+### v1.1.31 (2026-05-12)
+
+**[New Feature]** Added gateway usage visibility, automatic gateway restart handling, and clearer local server connection hints.
+**[Bug Fix]** Fixed OpenClaw gateway config merging, improved GatewayClient guidance, and hardened server PID lifecycle checks.
+
+### v1.1.30 (2026-05-11)
+
+**[Bug Fix]** Stabilized OpenClaw gateway integration and UI E2E regression checks.
+**[Enhancement]** Improved Linux desktop registration, setup compatibility, icon/font fallback, and gateway install guidance.
+
+### v1.1.29 (2026-05-10)
+
+**[Bug Fix]** Fixed Mac App Store build behavior for Apple/Google sign-in, production APNs, and App Store-managed updates.
+**[Enhancement]** Hardened Mac App Store package validation and improved debug runtime path safety on mobile.
+
+### v1.1.28 (2026-05-10)
+
+**[Bug Fix]** Fixed macOS Google Sign-In keychain access for GitHub release builds.
+**[Enhancement]** Unified desktop package entry names so macOS, Windows, and Linux expose `Clawke` consistently.
+
+### v1.1.27 (2026-05-09)
+
+**[Bug Fix]** Preserved native macOS Google Sign-In and hid unavailable Apple login until the release profile supports it.
+**[Enhancement]** Polished desktop OAuth packaging, refreshed desktop icons, and updated release workflows for the current GitHub Actions runtime.
+
+### v1.1.26 (2026-05-09)
+
+**[Bug Fix]** Fixed macOS release signing for macOS 26 validation and added Windows desktop Google OAuth via browser loopback flow.
+
+### v1.1.23 (2026-05-09)
+
+**[Bug Fix]** Bundled Windows Visual C++ runtime DLLs and hid unsupported desktop Google sign-in so official Windows packages start reliably.
+
+### v1.1.22 (2026-05-09)
+
+**[Bug Fix]** Restored Android release signing and added certificate verification to prevent Google login failures caused by debug-signed APKs.
+
 ### v1.1.21 (2026-05-03)
 
 **[Enhancement]** Stabilized runtime path handling and task UI E2E setup for release validation.

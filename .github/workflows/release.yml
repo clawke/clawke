@@ -16,7 +16,7 @@ jobs:
   build-android:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-java@v4
         with:
@@ -43,21 +43,111 @@ jobs:
           test -n "$ANDROID_GOOGLE_SERVICES_JSON_BASE64"
           echo "$ANDROID_GOOGLE_SERVICES_JSON_BASE64" | base64 -d > client/android/app/google-services.json
 
+      - name: Restore Android release signing key
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_RELEASE_CERT_SHA256: ${{ secrets.ANDROID_RELEASE_CERT_SHA256 }}
+        run: |
+          test -n "$ANDROID_KEYSTORE_BASE64"
+          test -n "$ANDROID_KEYSTORE_PASSWORD"
+          test -n "$ANDROID_KEY_PASSWORD"
+          test -n "$ANDROID_KEY_ALIAS"
+          test -n "$ANDROID_RELEASE_CERT_SHA256"
+
+          mkdir -p client/android/keystore
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > client/android/keystore/clawke-release.jks
+          {
+            printf 'storePassword=%s\n' "$ANDROID_KEYSTORE_PASSWORD"
+            printf 'keyPassword=%s\n' "$ANDROID_KEY_PASSWORD"
+            printf 'keyAlias=%s\n' "$ANDROID_KEY_ALIAS"
+            printf 'storeFile=%s\n' '../keystore/clawke-release.jks'
+          } > client/android/key.properties
+
+          CERT_INFO="$(keytool -list -v \
+            -keystore client/android/keystore/clawke-release.jks \
+            -alias "$ANDROID_KEY_ALIAS" \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD")"
+          RELEASE_CERT_SHA1="$(printf '%s\n' "$CERT_INFO" | awk -F': ' '/SHA1:/ {print $2; exit}' | tr -d '[:space:]:' | tr '[:upper:]' '[:lower:]')"
+          RELEASE_CERT_SHA256="$(printf '%s\n' "$CERT_INFO" | awk -F': ' '/SHA256:/ {print $2; exit}' | tr -d '[:space:]:' | tr '[:upper:]' '[:lower:]')"
+          EXPECTED_SHA256="$(printf '%s' "$ANDROID_RELEASE_CERT_SHA256" | tr -d '[:space:]:' | tr '[:upper:]' '[:lower:]')"
+          test -n "$RELEASE_CERT_SHA1"
+          test -n "$RELEASE_CERT_SHA256"
+          if [ "$RELEASE_CERT_SHA256" != "$EXPECTED_SHA256" ]; then
+            echo "::error::Android release keystore certificate SHA-256 does not match ANDROID_RELEASE_CERT_SHA256."
+            echo "Actual SHA-256: $RELEASE_CERT_SHA256"
+            exit 1
+          fi
+          echo "ANDROID_RELEASE_CERT_SHA1=$RELEASE_CERT_SHA1" >> "$GITHUB_ENV"
+
+      - name: Verify Android Firebase OAuth config
+        run: |
+          test -n "$ANDROID_RELEASE_CERT_SHA1"
+          node <<'NODE'
+          const fs = require('node:fs');
+          const expected = process.env.ANDROID_RELEASE_CERT_SHA1.replace(/[^a-fA-F0-9]/g, '').toLowerCase();
+          const config = JSON.parse(fs.readFileSync('client/android/app/google-services.json', 'utf8'));
+          const hashes = [];
+          for (const client of config.client || []) {
+            for (const oauthClient of client.oauth_client || []) {
+              const hash = oauthClient.android_info?.certificate_hash;
+              if (hash) hashes.push(hash.replace(/[^a-fA-F0-9]/g, '').toLowerCase());
+            }
+          }
+          if (!hashes.includes(expected)) {
+            console.error(`::error::Android google-services.json does not include the release certificate SHA-1 ${expected}. Update Firebase Android app SHA fingerprints and refresh ANDROID_GOOGLE_SERVICES_JSON_BASE64.`);
+            console.error(`Configured SHA-1 values: ${hashes.join(', ') || '(none)'}`);
+            process.exit(1);
+          }
+          console.log(`Android Firebase OAuth SHA-1 verified: ${expected}`);
+          NODE
+
       - name: Build APK
         working-directory: client
         run: flutter build apk --release
 
+      - name: Verify Android release signing
+        env:
+          ANDROID_RELEASE_CERT_SHA256: ${{ secrets.ANDROID_RELEASE_CERT_SHA256 }}
+        run: |
+          test -n "$ANDROID_RELEASE_CERT_SHA256"
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)"
+          test -x "$APKSIGNER"
+          "$APKSIGNER" verify --print-certs client/build/app/outputs/flutter-apk/app-release.apk | tee "$RUNNER_TEMP/apk-signing.txt"
+          if grep -q "CN=Android Debug" "$RUNNER_TEMP/apk-signing.txt"; then
+            echo "::error::Android release APK was signed with the debug certificate."
+            exit 1
+          fi
+          EXPECTED_SHA256="$(printf '%s' "$ANDROID_RELEASE_CERT_SHA256" | tr -d '[:space:]:' | tr '[:upper:]' '[:lower:]')"
+          ACTUAL_SHA256="$(awk -F': ' '/certificate SHA-256 digest/ {print $NF; exit}' "$RUNNER_TEMP/apk-signing.txt" | tr -d '[:space:]:' | tr '[:upper:]' '[:lower:]')"
+          test -n "$ACTUAL_SHA256"
+          if [ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]; then
+            echo "::error::Android release APK certificate SHA-256 does not match the expected release certificate."
+            echo "Actual SHA-256: $ACTUAL_SHA256"
+            exit 1
+          fi
+          echo "Android release certificate SHA-256 verified: $ACTUAL_SHA256"
+          cp "$RUNNER_TEMP/apk-signing.txt" apk-signing.txt
+
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: android-apk
           path: client/build/app/outputs/flutter-apk/app-release.apk
 
+      - name: Upload Android signing report
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-signing-report
+          path: apk-signing.txt
+
   # ── macOS ────────────────────────────────────────────────────
   build-macos:
-    runs-on: macos-latest
+    runs-on: macos-26
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: subosito/flutter-action@v2
         with:
@@ -130,7 +220,7 @@ jobs:
 
       - name: Build macOS
         working-directory: client
-        run: flutter build macos --release
+        run: flutter build macos --release --dart-define=CLAWKE_MACOS_APPLE_SIGN_IN_ENABLED=false
 
       - name: Sign and verify macOS production app
         run: |
@@ -147,21 +237,55 @@ jobs:
             fi
           }
 
-          APP_PATH="client/build/macos/Build/Products/Release/clawke.app"
-          if [ ! -d "$APP_PATH" ]; then
-            APP_PATH=$(find client/build/macos/Build/Products/Release -maxdepth 1 -name "*.app" | head -1)
+          APP_PATH="$(find client/build/macos/Build/Products/Release -maxdepth 1 -type d -name "*.app" | head -1)"
+          if [ -z "$APP_PATH" ]; then
+            echo "::error::macOS app bundle not found."
+            exit 1
           fi
+          if [ "$(basename "$APP_PATH")" != "Clawke.app" ]; then
+            echo "::error::Unexpected macOS app bundle name: $(basename "$APP_PATH")"
+            exit 1
+          fi
+          echo "Using macOS app bundle: $APP_PATH"
 
           cp "$RUNNER_TEMP/macos.provisionprofile" "$APP_PATH/Contents/embedded.provisionprofile"
           security cms -D -i "$RUNNER_TEMP/macos.provisionprofile" > "$RUNNER_TEMP/macos-profile.plist"
           APP_ID_PREFIX=$(/usr/libexec/PlistBuddy -c 'Print :ApplicationIdentifierPrefix:0' "$RUNNER_TEMP/macos-profile.plist")
           PROFILE_APP_ID=$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.application-identifier' "$RUNNER_TEMP/macos-profile.plist")
+          PROFILE_TEAM_ID=$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.developer.team-identifier' "$RUNNER_TEMP/macos-profile.plist")
           export APP_ID_PREFIX
           export APP_ID_PREFIX_PLACEHOLDER='$(AppIdentifierPrefix)'
           cp client/macos/Runner/Release.entitlements "$RUNNER_TEMP/macos-release.entitlements"
           perl -0pi -e 's/\Q$ENV{APP_ID_PREFIX_PLACEHOLDER}\E/$ENV{APP_ID_PREFIX}./g' "$RUNNER_TEMP/macos-release.entitlements"
+          /usr/libexec/PlistBuddy -c 'Delete :com.apple.developer.applesignin' "$RUNNER_TEMP/macos-release.entitlements" >/dev/null 2>&1 || true
+          /usr/libexec/PlistBuddy -c 'Delete :com.apple.application-identifier' "$RUNNER_TEMP/macos-release.entitlements" >/dev/null 2>&1 || true
+          /usr/libexec/PlistBuddy -c "Add :com.apple.application-identifier string $PROFILE_APP_ID" "$RUNNER_TEMP/macos-release.entitlements"
+          /usr/libexec/PlistBuddy -c 'Delete :com.apple.developer.team-identifier' "$RUNNER_TEMP/macos-release.entitlements" >/dev/null 2>&1 || true
+          /usr/libexec/PlistBuddy -c "Add :com.apple.developer.team-identifier string $PROFILE_TEAM_ID" "$RUNNER_TEMP/macos-release.entitlements"
 
-          codesign --force --deep --options runtime --timestamp \
+          validate_profile_entitlement() {
+            local entitlement="$1"
+            if /usr/libexec/PlistBuddy -c "Print :${entitlement}" "$RUNNER_TEMP/macos-release.entitlements" >/dev/null 2>&1; then
+              if ! /usr/libexec/PlistBuddy -c "Print :Entitlements:${entitlement}" "$RUNNER_TEMP/macos-profile.plist" >/dev/null 2>&1; then
+                echo "::error::Missing macOS provisioning profile entitlement: ${entitlement}"
+                exit 1
+              fi
+            fi
+          }
+
+          validate_profile_entitlement "com.apple.application-identifier"
+          validate_profile_entitlement "com.apple.developer.team-identifier"
+          validate_profile_entitlement "com.apple.developer.aps-environment"
+          validate_profile_entitlement "keychain-access-groups"
+
+          find "$APP_PATH/Contents/Frameworks" -maxdepth 1 -name "*.framework" -type d -print0 | while IFS= read -r -d '' framework; do
+            codesign --force --options runtime --timestamp \
+              --keychain "$MACOS_SIGNING_KEYCHAIN" \
+              --sign "$MACOS_SIGN_IDENTITY_HASH" \
+              "$framework"
+          done
+
+          codesign --force --options runtime --timestamp \
             --keychain "$MACOS_SIGNING_KEYCHAIN" \
             --sign "$MACOS_SIGN_IDENTITY_HASH" \
             --entitlements "$RUNNER_TEMP/macos-release.entitlements" \
@@ -178,14 +302,22 @@ jobs:
           grep -q "com.apple.developer.aps-environment" "$RUNNER_TEMP/macos-entitlements.txt"
           grep -q "production" "$RUNNER_TEMP/macos-entitlements.txt"
           grep -q "$PROFILE_APP_ID" "$RUNNER_TEMP/macos-entitlements.txt"
+          grep -q "$PROFILE_TEAM_ID" "$RUNNER_TEMP/macos-entitlements.txt"
+          grep -q "com.google.GIDSignIn" "$RUNNER_TEMP/macos-entitlements.txt"
 
       - name: Create DMG
         run: |
-          APP_PATH="client/build/macos/Build/Products/Release/clawke.app"
-          # Fallback: find the .app if name differs
-          if [ ! -d "$APP_PATH" ]; then
-            APP_PATH=$(find client/build/macos/Build/Products/Release -name "*.app" -maxdepth 1 | head -1)
+          set -euo pipefail
+          APP_PATH="$(find client/build/macos/Build/Products/Release -maxdepth 1 -type d -name "*.app" | head -1)"
+          if [ -z "$APP_PATH" ]; then
+            echo "::error::macOS app bundle not found."
+            exit 1
           fi
+          if [ "$(basename "$APP_PATH")" != "Clawke.app" ]; then
+            echo "::error::Unexpected macOS app bundle name: $(basename "$APP_PATH")"
+            exit 1
+          fi
+          echo "Using macOS app bundle for DMG: $APP_PATH"
           bash scripts/create_macos_dmg.sh "$APP_PATH" Clawke-macOS.dmg Clawke
 
       - name: Notarize and staple DMG
@@ -229,6 +361,7 @@ jobs:
           trap 'hdiutil detach "$VERIFY_MOUNT" >/dev/null 2>&1 || true' EXIT
           DMG_APP_PATH="$(find "$VERIFY_MOUNT" -maxdepth 1 -name "*.app" -type d | head -1)"
           test -n "$DMG_APP_PATH"
+          test "$(basename "$DMG_APP_PATH")" = "Clawke.app"
           codesign --verify --deep --strict --verbose=2 "$DMG_APP_PATH"
           assert_signature_has_certificate "$DMG_APP_PATH"
           find "$DMG_APP_PATH/Contents/Frameworks" -maxdepth 1 -name "*.framework" -type d -print0 | while IFS= read -r -d '' framework; do
@@ -237,7 +370,7 @@ jobs:
           spctl --assess --type execute --verbose=4 "$DMG_APP_PATH"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: macos-dmg
           path: Clawke-macOS.dmg
@@ -245,7 +378,7 @@ jobs:
   # ── Verify published macOS asset ─────────────────────────────
   verify-macos-release:
     needs: release
-    runs-on: macos-latest
+    runs-on: macos-26
     steps:
       - name: Download and verify published macOS DMG
         env:
@@ -280,6 +413,16 @@ jobs:
 
           DMG_APP_PATH="$(find "$VERIFY_MOUNT" -maxdepth 1 -name "*.app" -type d | head -1)"
           test -n "$DMG_APP_PATH"
+          test "$(basename "$DMG_APP_PATH")" = "Clawke.app"
+          DMG_EXE_NAME=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$DMG_APP_PATH/Contents/Info.plist")
+          DMG_EXE_PATH="$DMG_APP_PATH/Contents/MacOS/$DMG_EXE_NAME"
+          test -x "$DMG_EXE_PATH"
+          DMG_ARCHS="$(lipo -archs "$DMG_EXE_PATH")"
+          echo "Published macOS binary architectures: $DMG_ARCHS"
+          if ! printf '%s\n' "$DMG_ARCHS" | grep -qw x86_64 || ! printf '%s\n' "$DMG_ARCHS" | grep -qw arm64; then
+            echo "::error::Published macOS binary is not universal: $DMG_ARCHS"
+            exit 1
+          fi
           codesign --verify --deep --strict --verbose=2 "$DMG_APP_PATH"
           assert_signature_has_certificate "$DMG_APP_PATH"
           find "$DMG_APP_PATH/Contents/Frameworks" -maxdepth 1 -name "*.framework" -type d -print0 | while IFS= read -r -d '' framework; do
@@ -289,13 +432,86 @@ jobs:
           cat "$RUNNER_TEMP/macos-release-entitlements.txt"
           grep -q "com.apple.developer.aps-environment" "$RUNNER_TEMP/macos-release-entitlements.txt"
           grep -q "production" "$RUNNER_TEMP/macos-release-entitlements.txt"
+          grep -q "com.google.GIDSignIn" "$RUNNER_TEMP/macos-release-entitlements.txt"
           spctl --assess --type execute --verbose=4 "$DMG_APP_PATH"
+
+  # ── Verify published Android asset ───────────────────────────
+  verify-android-release:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download and verify published Android APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ANDROID_RELEASE_CERT_SHA256: ${{ secrets.ANDROID_RELEASE_CERT_SHA256 }}
+        run: |
+          test -n "$ANDROID_RELEASE_CERT_SHA256"
+          TAG="${GITHUB_REF_NAME}"
+          VERIFY_DIR="$RUNNER_TEMP/release-verify"
+          mkdir -p "$VERIFY_DIR"
+          gh release download "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "Clawke-${TAG}-android.apk" \
+            --dir "$VERIFY_DIR" \
+            --clobber
+
+          APK_PATH="$VERIFY_DIR/Clawke-${TAG}-android.apk"
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)"
+          test -x "$APKSIGNER"
+          "$APKSIGNER" verify --print-certs "$APK_PATH" | tee "$RUNNER_TEMP/release-apk-signing.txt"
+          if grep -q "CN=Android Debug" "$RUNNER_TEMP/release-apk-signing.txt"; then
+            echo "::error::Published Android APK was signed with the debug certificate."
+            exit 1
+          fi
+          EXPECTED_SHA256="$(printf '%s' "$ANDROID_RELEASE_CERT_SHA256" | tr -d '[:space:]:' | tr '[:upper:]' '[:lower:]')"
+          ACTUAL_SHA256="$(awk -F': ' '/certificate SHA-256 digest/ {print $NF; exit}' "$RUNNER_TEMP/release-apk-signing.txt" | tr -d '[:space:]:' | tr '[:upper:]' '[:lower:]')"
+          test -n "$ACTUAL_SHA256"
+          if [ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]; then
+            echo "::error::Published Android APK certificate SHA-256 does not match the expected release certificate."
+            echo "Actual SHA-256: $ACTUAL_SHA256"
+            exit 1
+          fi
+          echo "Published Android release certificate SHA-256 verified: $ACTUAL_SHA256"
+
+  # ── Verify published Linux assets ────────────────────────────
+  verify-linux-release:
+    needs: release
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            expected_pattern: x86-64
+          - arch: arm64
+            expected_pattern: ARM aarch64|aarch64|ARM64
+    steps:
+      - name: Download and verify published Linux tarball
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          VERIFY_DIR="$RUNNER_TEMP/release-verify-linux-${{ matrix.arch }}"
+          mkdir -p "$VERIFY_DIR/extract"
+          gh release download "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "Clawke-${TAG}-linux-${{ matrix.arch }}.tar.gz" \
+            --dir "$VERIFY_DIR" \
+            --clobber
+
+          TARBALL_PATH="$VERIFY_DIR/Clawke-${TAG}-linux-${{ matrix.arch }}.tar.gz"
+          tar xzf "$TARBALL_PATH" -C "$VERIFY_DIR/extract"
+          EXE_PATH="$VERIFY_DIR/extract/Clawke"
+          test -x "$EXE_PATH"
+          file "$EXE_PATH" | tee "$RUNNER_TEMP/published-linux-${{ matrix.arch }}-file.txt"
+          grep -Eq '${{ matrix.expected_pattern }}' "$RUNNER_TEMP/published-linux-${{ matrix.arch }}-file.txt"
 
   # ── Windows ──────────────────────────────────────────────────
   build-windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: subosito/flutter-action@v2
         with:
@@ -312,71 +528,188 @@ jobs:
 
       - name: Build Windows
         working-directory: client
-        run: flutter build windows --release
+        shell: pwsh
+        env:
+          GOOGLE_DESKTOP_CLIENT_ID: ${{ secrets.GOOGLE_DESKTOP_CLIENT_ID }}
+          GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.GOOGLE_DESKTOP_CLIENT_SECRET }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:GOOGLE_DESKTOP_CLIENT_ID) {
+            Write-Host "Building Windows with desktop Google OAuth enabled."
+            $defines = @("--dart-define=GOOGLE_DESKTOP_CLIENT_ID=$env:GOOGLE_DESKTOP_CLIENT_ID")
+            if ($env:GOOGLE_DESKTOP_CLIENT_SECRET) {
+              $defines += "--dart-define=GOOGLE_DESKTOP_CLIENT_SECRET=$env:GOOGLE_DESKTOP_CLIENT_SECRET"
+            } else {
+              Write-Warning "GOOGLE_DESKTOP_CLIENT_SECRET secret is not configured; Google token exchange may fail if the OAuth client requires it."
+            }
+            flutter build windows --release $defines
+          } else {
+            Write-Warning "GOOGLE_DESKTOP_CLIENT_ID secret is not configured; Windows Google login will remain disabled."
+            flutter build windows --release
+          }
+
+      - name: Bundle Visual C++ runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $releaseDir = "client\build\windows\x64\runner\Release"
+          $clawkeExe = Join-Path $releaseDir "Clawke.exe"
+          if (-not (Test-Path $clawkeExe)) {
+            throw "Windows release output is missing Clawke.exe."
+          }
+
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsInstall = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vsInstall) {
+            throw "Unable to locate Visual Studio with VC tools."
+          }
+
+          $redistRoot = Join-Path $vsInstall "VC\Redist\MSVC"
+          $crtDir = Get-ChildItem -Path $redistRoot -Directory |
+            Sort-Object Name -Descending |
+            ForEach-Object { Join-Path $_.FullName "x64\Microsoft.VC143.CRT" } |
+            Where-Object { Test-Path (Join-Path $_ "vcruntime140_1.dll") } |
+            Select-Object -First 1
+          if (-not $crtDir) {
+            throw "Unable to locate x64 Visual C++ runtime under $redistRoot."
+          }
+
+          $runtimeDlls = @("msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll")
+          foreach ($dll in $runtimeDlls) {
+            $source = Join-Path $crtDir $dll
+            if (-not (Test-Path $source)) {
+              throw "Missing Visual C++ runtime DLL: $source"
+            }
+            Copy-Item -Path $source -Destination $releaseDir -Force
+          }
+
+          foreach ($dll in $runtimeDlls) {
+            $bundled = Join-Path $releaseDir $dll
+            if (-not (Test-Path $bundled)) {
+              throw "Failed to bundle Visual C++ runtime DLL: $dll"
+            }
+          }
+          Write-Host "Bundled Visual C++ runtime from $crtDir"
 
       - name: Create ZIP
         run: |
           Compress-Archive -Path "client\build\windows\x64\runner\Release\*" -DestinationPath "Clawke-windows-x64.zip"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-zip
           path: Clawke-windows-x64.zip
 
   # ── Linux ────────────────────────────────────────────────────
   build-linux:
-    runs-on: ubuntu-latest
+    name: build-linux-${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-latest
+            container_platform: linux/amd64
+            archive_name: Clawke-linux-x64.tar.gz
+            artifact_name: linux-x64-tar
+            bundle_path: client/build/linux/x64/release/bundle
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            container_platform: linux/arm64
+            archive_name: Clawke-linux-arm64.tar.gz
+            artifact_name: linux-arm64-tar
+            bundle_path: client/build/linux/arm64/release/bundle
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: stable
-
-      - name: Install Linux dependencies
+      - name: Build Linux in Ubuntu 20.04 container
+        env:
+          GOOGLE_DESKTOP_CLIENT_ID: ${{ secrets.GOOGLE_DESKTOP_CLIENT_ID }}
+          GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.GOOGLE_DESKTOP_CLIENT_SECRET }}
         run: |
           set -euo pipefail
-          for attempt in 1 2 3; do
-            echo "Linux dependency install attempt ${attempt}/3"
-            if timeout 600s bash -c 'sudo apt-get update -y && sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y ninja-build libgtk-3-dev'; then
-              exit 0
+          if [ -z "${GOOGLE_DESKTOP_CLIENT_ID:-}" ]; then
+            echo "::error::GOOGLE_DESKTOP_CLIENT_ID secret is required for Linux Google login release builds."
+            exit 1
+          fi
+          if [ -z "${GOOGLE_DESKTOP_CLIENT_SECRET:-}" ]; then
+            echo "::error::GOOGLE_DESKTOP_CLIENT_SECRET secret is required for Linux Google login release builds."
+            exit 1
+          fi
+          echo "Building Linux with desktop Google OAuth enabled."
+          docker run --rm \
+            --platform "${{ matrix.container_platform }}" \
+            -e DEBIAN_FRONTEND=noninteractive \
+            -e FLUTTER_VERSION="${FLUTTER_VERSION}" \
+            -e GOOGLE_DESKTOP_CLIENT_ID="${GOOGLE_DESKTOP_CLIENT_ID}" \
+            -e GOOGLE_DESKTOP_CLIENT_SECRET="${GOOGLE_DESKTOP_CLIENT_SECRET}" \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            -w /workspace \
+            ubuntu:20.04 bash -euxo pipefail -c '
+              apt-get update -y
+              apt-get install -y ca-certificates curl git unzip xz-utils zip clang lld cmake ninja-build pkg-config libgtk-3-dev liblzma-dev binutils file
+              git clone --branch "$FLUTTER_VERSION" --depth 1 https://github.com/flutter/flutter.git /opt/flutter
+              export PATH="/opt/flutter/bin:/opt/flutter/bin/cache/dart-sdk/bin:$PATH"
+              git config --global --add safe.directory /opt/flutter
+              git config --global --add safe.directory /workspace
+              flutter --version
+              flutter config --enable-linux-desktop
+              cd /workspace/client
+              flutter pub get
+              dart run build_runner build --delete-conflicting-outputs
+              flutter build linux --release \
+                "--dart-define=GOOGLE_DESKTOP_CLIENT_ID=${GOOGLE_DESKTOP_CLIENT_ID}" \
+                "--dart-define=GOOGLE_DESKTOP_CLIENT_SECRET=${GOOGLE_DESKTOP_CLIENT_SECRET}"
+            '
+
+      - name: Verify Linux binary architecture
+        run: |
+          set -euo pipefail
+          EXE_PATH="${{ matrix.bundle_path }}/Clawke"
+          test -x "$EXE_PATH"
+          file "$EXE_PATH" | tee "linux-${{ matrix.arch }}-file.txt"
+          case "${{ matrix.arch }}" in
+            x64)
+              grep -Eq 'x86-64' "linux-${{ matrix.arch }}-file.txt"
+              ;;
+            arm64)
+              grep -Eq 'ARM aarch64|aarch64|ARM64' "linux-${{ matrix.arch }}-file.txt"
+              ;;
+            *)
+              echo "::error::Unsupported Linux architecture: ${{ matrix.arch }}"
+              exit 1
+              ;;
+          esac
+          command -v readelf
+          while IFS= read -r -d '' binary; do
+            if readelf --version-info "$binary" 2>/dev/null | grep -Eq 'GLIBC_2\.(3[2-9]|[4-9][0-9])'; then
+              echo "::error::$binary requires glibc newer than 2.31."
+              readelf --version-info "$binary" | grep -E 'GLIBC_2\.(3[2-9]|[4-9][0-9])' || true
+              exit 1
             fi
-            sleep $((attempt * 15))
-          done
-          exit 1
-
-      - name: Install dependencies
-        working-directory: client
-        run: flutter pub get
-
-      - name: Generate code (Drift ORM)
-        working-directory: client
-        run: dart run build_runner build --delete-conflicting-outputs
-
-      - name: Build Linux
-        working-directory: client
-        run: flutter build linux --release
+          done < <(find "${{ matrix.bundle_path }}" -type f \( -name Clawke -o -name "*.so" \) -print0)
 
       - name: Create tar.gz
         run: |
-          cd client/build/linux/x64/release/bundle
-          tar czf $GITHUB_WORKSPACE/Clawke-linux-x64.tar.gz .
+          set -euo pipefail
+          test -x "${{ matrix.bundle_path }}/Clawke"
+          tar -C "${{ matrix.bundle_path }}" -czf "$GITHUB_WORKSPACE/${{ matrix.archive_name }}" .
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: linux-tar
-          path: Clawke-linux-x64.tar.gz
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.archive_name }}
 
   # ── Create GitHub Release ────────────────────────────────────
   release:
     needs: [build-android, build-macos, build-windows, build-linux]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -392,7 +725,8 @@ jobs:
           cp artifacts/android-apk/app-release.apk    "release/Clawke-${TAG}-android.apk"
           cp artifacts/macos-dmg/Clawke-macOS.dmg      "release/Clawke-${TAG}-macOS.dmg"
           cp artifacts/windows-zip/Clawke-windows-x64.zip "release/Clawke-${TAG}-windows-x64.zip"
-          cp artifacts/linux-tar/Clawke-linux-x64.tar.gz  "release/Clawke-${TAG}-linux-x64.tar.gz"
+          cp artifacts/linux-x64-tar/Clawke-linux-x64.tar.gz  "release/Clawke-${TAG}-linux-x64.tar.gz"
+          cp artifacts/linux-arm64-tar/Clawke-linux-arm64.tar.gz  "release/Clawke-${TAG}-linux-arm64.tar.gz"
 
       - name: Generate release notes
         run: |
@@ -415,8 +749,9 @@ jobs:
           | 🍎 iOS | — | [App Store](https://apps.apple.com/app/clawke/id6744313782) |
           | 🖥 macOS | `Clawke-TAG-macOS.dmg` | Open DMG, drag to Applications |
           | 🤖 Android | `Clawke-TAG-android.apk` | Enable "Unknown sources", install APK |
-          | 🪟 Windows | `Clawke-TAG-windows-x64.zip` | Unzip, run `clawke.exe` |
-          | 🐧 Linux | `Clawke-TAG-linux-x64.tar.gz` | Extract, run `./clawke` |
+          | 🪟 Windows | `Clawke-TAG-windows-x64.zip` | Unzip, run `Clawke.exe` |
+          | 🐧 Linux x64 | `Clawke-TAG-linux-x64.tar.gz` | Extract, run `./Clawke` |
+          | 🐧 Linux ARM64 | `Clawke-TAG-linux-arm64.tar.gz` | Extract, run `./Clawke` |
 
           ## Server Setup
           ```bash

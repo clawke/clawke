@@ -1,0 +1,66 @@
+{
+  "id": "p0-relay-token-recovery",
+  "title": "客户端可在 Relay Token 失效后自动刷新凭证并恢复会话",
+  "module": "连接认证",
+  "objective": "验证客户端先持有旧 Relay Token 时，首次 WebSocket 握手被 Server 拒绝后，会自动刷新 relay 凭证、更新连接配置、重连成功，并能继续发送消息。",
+  "coverage": [
+    "客户端启动时使用旧 token",
+    "Server 使用新 token 拒绝首次 WS 握手",
+    "客户端自动刷新 relay 凭证",
+    "客户端使用新 token 重连成功",
+    "重连后可正常创建会话并发送消息"
+  ],
+  "tags": ["p0", "auth", "relay", "websocket", "recovery", "ui"],
+  "setup": {
+    "serverMode": "openclaw",
+    "accountId": "e2e_mock",
+    "agentName": "E2E Mock Gateway",
+    "httpPort": 18780,
+    "upstreamPort": 18766,
+    "mediaPort": 18781,
+    "relayToken": "fresh-e2e-token",
+    "clientToken": "stale-e2e-token"
+  },
+  "mockAuth": {
+    "relayCredentials": {
+      "relayUrl": "http://127.0.0.1:18780",
+      "token": "fresh-e2e-token"
+    }
+  },
+  "steps": [
+    { "action": "launch_app" },
+    { "action": "create_conversation", "name": "E2E Relay Token Recovery" },
+    { "action": "send_message", "text": "验证 Relay Token 自动恢复" },
+    { "action": "wait_for_text", "text": "Token 恢复后的稳定回复" },
+    { "action": "wait_for_icon", "icon": "send" }
+  ],
+  "mockGateway": {
+    "onUserMessage": {
+      "contains": "验证 Relay Token 自动恢复",
+      "replies": [
+        {
+          "type": "agent_text_delta",
+          "message_id": "agent_msg_relay_recovery_1",
+          "delta": "Token 恢复后的",
+          "delayMs": 80
+        },
+        {
+          "type": "agent_text_delta",
+          "message_id": "agent_msg_relay_recovery_1",
+          "delta": "稳定回复",
+          "delayMs": 120
+        },
+        {
+          "type": "agent_text_done",
+          "message_id": "agent_msg_relay_recovery_1",
+          "fullText": "Token 恢复后的稳定回复",
+          "delayMs": 80
+        }
+      ]
+    }
+  },
+  "assert": [
+    { "uiTextVisible": "验证 Relay Token 自动恢复" },
+    { "uiTextVisible": "Token 恢复后的稳定回复" }
+  ]
+}

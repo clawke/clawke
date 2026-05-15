@@ -36,7 +36,30 @@ target 'Runner' do
   end
 end
 
+def patch_google_sign_in_keychain_access_group
+  gid_sign_in = File.join(__dir__, 'Pods', 'GoogleSignIn', 'GoogleSignIn', 'Sources', 'GIDSignIn.m')
+  return unless File.exist?(gid_sign_in)
+
+  original = "    GTMKeychainStore *keychainStore =\n" \
+             "        [[GTMKeychainStore alloc] initWithItemName:kGTMAppAuthKeychainName];\n"
+  replacement = "    NSString *keychainAccessGroup = @\"CBGN3JTHC4.ai.clawke.app\";\n" \
+                "    GTMKeychainStore *keychainStore =\n" \
+                "        [[GTMKeychainStore alloc] initWithItemName:kGTMAppAuthKeychainName\n" \
+                "                                keychainAttributes:[NSSet setWithObject:\n" \
+                "                                    [GTMKeychainAttribute keychainAccessGroupWithName:keychainAccessGroup]]];\n"
+
+  contents = File.read(gid_sign_in)
+  return if contents.include?(replacement.strip)
+
+  unless contents.include?(original)
+    raise 'GoogleSignIn keychain patch target was not found'
+  end
+
+  File.write(gid_sign_in, contents.sub(original, replacement))
+end
+
 post_install do |installer|
+  patch_google_sign_in_keychain_access_group
   installer.pods_project.targets.each do |target|
     flutter_additional_macos_build_settings(target)
   end

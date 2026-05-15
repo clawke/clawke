@@ -9,8 +9,11 @@ Directory? resolveDebugRuntimeDirectory({
   Directory? startDirectory,
   bool debugMode = kDebugMode,
   Map<String, String>? environment,
+  bool? isAndroid,
+  bool? isIOS,
 }) {
   if (!debugMode) return null;
+  if (_isMobilePlatform(isAndroid: isAndroid, isIOS: isIOS)) return null;
 
   final configuredPath = _configuredRuntimePath(environment);
   if (configuredPath == null) {
@@ -23,10 +26,14 @@ Directory? resolveDebugRuntimeDirectory({
 
   final repoDir = _findRepoDirectory(startDirectory);
   if (repoDir == null) {
-    return Directory(p.normalize(p.absolute(configuredPath)));
+    return null;
   }
 
   return Directory(p.normalize(p.join(repoDir.path, configuredPath)));
+}
+
+bool _isMobilePlatform({bool? isAndroid, bool? isIOS}) {
+  return (isAndroid ?? Platform.isAndroid) || (isIOS ?? Platform.isIOS);
 }
 
 String? _configuredRuntimePath(Map<String, String>? environment) {

@@ -10,10 +10,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:integration_test/integration_test.dart';
 
 import 'package:client/l10n/app_localizations.dart';
+import 'package:client/models/user_model.dart';
 import 'package:client/providers/conversation_provider.dart';
 import 'package:client/providers/locale_provider.dart';
 import 'package:client/providers/server_host_provider.dart';
 import 'package:client/screens/main_layout.dart';
+import 'package:client/services/auth_service.dart';
 
 const _mockControlUrl = String.fromEnvironment('CLAWKE_E2E_MOCK_CONTROL_URL');
 
@@ -35,7 +37,12 @@ void main() {
           caseFile: caseFile,
           caseJsonBase64: caseJsonBase64,
         );
-        final serverConfig = _loadServerConfig(httpUrl: httpUrl, wsUrl: wsUrl);
+        final serverConfig = _loadServerConfig(
+          httpUrl: httpUrl,
+          wsUrl: wsUrl,
+          testCase: testCase,
+        );
+        _configureMockAuth(testCase);
         tester.view.physicalSize = const Size(1400, 900);
         tester.view.devicePixelRatio = 1.0;
         addTearDown(() {
@@ -119,11 +126,31 @@ Map<String, dynamic> _loadCase({
 ServerConfig _loadServerConfig({
   required String httpUrl,
   required String wsUrl,
+  required Map<String, dynamic> testCase,
 }) {
   if (httpUrl.isEmpty || wsUrl.isEmpty) {
     throw StateError('CLAWKE_E2E_HTTP_URL and CLAWKE_E2E_WS_URL are required');
   }
-  return ServerConfig(httpUrl: httpUrl, wsUrl: wsUrl);
+  final setup = (testCase['setup'] as Map?)?.cast<String, dynamic>() ?? {};
+  return ServerConfig(
+    httpUrl: httpUrl,
+    wsUrl: wsUrl,
+    token: (setup['clientToken'] as String?) ?? '',
+  );
+}
+
+void _configureMockAuth(Map<String, dynamic> testCase) {
+  final mockAuth = (testCase['mockAuth'] as Map?)?.cast<String, dynamic>();
+  final rawRelay = (mockAuth?['relayCredentials'] as Map?)
+      ?.cast<String, dynamic>();
+  if (rawRelay == null) {
+    AuthService.setRelayCredentialsFetcherForTesting(null);
+    return;
+  }
+
+  AuthService.setRelayCredentialsFetcherForTesting(() async {
+    return RelayCredentials.fromJson(rawRelay);
+  });
 }
 
 Future<void> _runStep(WidgetTester tester, Map<String, dynamic> step) async {
@@ -304,6 +331,7 @@ Future<void> _simulateRemotePush(
     'message_id': step['message_id'] as String,
     'gateway_id': step['gateway_id'] as String,
     'seq': step['seq'] as int? ?? 0,
+    'event_type': step['event_type'] as String? ?? 'notification_tap',
   };
   final message = const StandardMethodCodec().encodeMethodCall(
     MethodCall('remotePushReceived', payload),

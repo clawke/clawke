@@ -123,19 +123,19 @@ print_banner() {
 }
 
 log_info() {
-    echo -e "${CYAN}→${NC} $1"
+    printf "%b\n" "${CYAN}→${NC} $1"
 }
 
 log_success() {
-    echo -e "${GREEN}✓${NC} $1"
+    printf "%b\n" "${GREEN}✓${NC} $1"
 }
 
 log_warn() {
-    echo -e "${YELLOW}⚠${NC} $1"
+    printf "%b\n" "${YELLOW}⚠${NC} $1"
 }
 
 log_error() {
-    echo -e "${RED}✗${NC} $1"
+    printf "%b\n" "${RED}✗${NC} $1"
 }
 
 prompt_yes_no() {
@@ -151,9 +151,11 @@ prompt_yes_no() {
 
     if [ "$IS_INTERACTIVE" = true ]; then
         read -r -p "$question $prompt_suffix " answer || answer=""
-    elif [ -r /dev/tty ] && [ -w /dev/tty ]; then
+        [ -z "$answer" ] && printf '\n'
+    elif can_use_tty; then
         printf "%s %s " "$question" "$prompt_suffix" > /dev/tty
         IFS= read -r answer < /dev/tty || answer=""
+        [ -z "$answer" ] && printf '\n'
     else
         answer=""
     fi
@@ -175,12 +177,95 @@ prompt_yes_no() {
     esac
 }
 
+prompt_yes_no_required() {
+    local question="$1"
+    local answer=""
+
+    while true; do
+        answer=""
+        if [ "$IS_INTERACTIVE" = true ]; then
+            read -r -p "$question [y/n] " answer || answer=""
+            [ -z "$answer" ] && printf '\n'
+        elif can_use_tty; then
+            printf "%s [y/n] " "$question" > /dev/tty
+            IFS= read -r answer < /dev/tty || answer=""
+            [ -z "$answer" ] && printf '\n'
+        else
+            return 1
+        fi
+
+        answer="${answer#"${answer%%[![:space:]]*}"}"
+        answer="${answer%"${answer##*[![:space:]]}"}"
+
+        case "$answer" in
+            [yY]|[yY][eE][sS]) return 0 ;;
+            [nN]|[nN][oO]) return 1 ;;
+            *) log_warn "Please enter y or n." ;;
+        esac
+    done
+}
+
 get_command_link_dir() {
     echo "$HOME/.local/bin"
 }
 
+resolve_existing_dir() {
+    local target="$1"
+    [ -d "$target" ] || return 1
+    (cd "$target" && pwd -P)
+}
+
+resolve_path() {
+    local target="$1"
+    local parent
+    local base
+    parent="$(dirname "$target")"
+    base="$(basename "$target")"
+
+    if [ -d "$parent" ]; then
+        printf "%s/%s\n" "$(cd "$parent" && pwd -P)" "$base"
+    else
+        printf "%s\n" "$target"
+    fi
+}
+
+is_path_inside() {
+    local child="$1"
+    local parent="$2"
+
+    case "$child" in
+        "$parent"|"$parent"/*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+assert_safe_local_sync_target() {
+    local source="$1"
+    local target="$2"
+    local clawke_home="$3"
+
+    [ "$source" != "$target" ] || return 0
+
+    if [ -f "$target/.git" ]; then
+        log_error "Refusing to sync local install into a linked Git worktree: $target"
+        log_info "Use a dedicated install directory under $clawke_home, or set --dir to the source directory to skip copying."
+        exit 1
+    fi
+
+    if [ -d "$target/.git" ] && ! is_path_inside "$target" "$clawke_home"; then
+        log_error "Refusing to sync local install into a Git repository outside Clawke home: $target"
+        log_info "Use a dedicated install directory under $clawke_home, or set --dir to the source directory to skip copying."
+        exit 1
+    fi
+}
+
+can_use_tty() {
+    [ -r /dev/tty ] && [ -w /dev/tty ] || return 1
+    { : < /dev/tty > /dev/tty; } 2>/dev/null
+}
+
 can_prompt() {
-    [ "$IS_INTERACTIVE" = true ] || { [ -r /dev/tty ] && [ -w /dev/tty ]; }
+    [ "$IS_INTERACTIVE" = true ] || can_use_tty
 }
 
 run_clawke_command() {
@@ -192,10 +277,36 @@ run_clawke_command() {
         return 1
     fi
 
-    if [ -r /dev/tty ] && [ -w /dev/tty ]; then
+    if [ "$IS_INTERACTIVE" = true ]; then
+        "$clawke_cmd" "$@"
+    elif can_use_tty; then
         "$clawke_cmd" "$@" < /dev/tty
     else
         "$clawke_cmd" "$@"
+    fi
+}
+
+run_clawke_command_record() {
+    RUN_CLAWKE_COMMAND_OUTPUT=""
+    local output_file
+    output_file="$(mktemp "${TMPDIR:-/tmp}/clawke-command-output.XXXXXX")" || return 1
+
+    run_clawke_command "$@" 2>&1 | tee "$output_file"
+    local status="${PIPESTATUS[0]}"
+    RUN_CLAWKE_COMMAND_OUTPUT="$(cat "$output_file")"
+    rm -f "$output_file"
+    return "$status"
+}
+
+sync_configured_local_gateways() {
+    local clawke_cmd
+    clawke_cmd="$(get_command_link_dir)/clawke"
+
+    log_info "Updating configured local gateways..."
+    if run_clawke_command gateway update --local-only; then
+        log_success "Configured local gateways updated"
+    else
+        log_warn "Configured local gateway update did not complete. Run later: $clawke_cmd gateway update"
     fi
 }
 
@@ -434,6 +545,21 @@ clone_repo() {
             exit 1
         fi
 
+        if [ ! -d "$LOCAL_SOURCE" ]; then
+            log_error "Local source not found: $LOCAL_SOURCE"
+            exit 1
+        fi
+
+        # 规范化路径，避免相同目录因相对/绝对路径不同而误触发同步 — Normalize paths so identical directories do not sync by mistake
+        LOCAL_SOURCE="$(resolve_existing_dir "$LOCAL_SOURCE")"
+        INSTALL_DIR="$(resolve_path "$INSTALL_DIR")"
+        CLAWKE_HOME="$(resolve_path "$CLAWKE_HOME")"
+
+        if [ ! -f "$LOCAL_SOURCE/server/package.json" ] || [ ! -d "$LOCAL_SOURCE/gateways" ]; then
+            log_error "Local source does not look like a Clawke checkout: $LOCAL_SOURCE"
+            exit 1
+        fi
+
         log_info "Local mode: using $LOCAL_SOURCE"
 
         if [ "$INSTALL_DIR" = "$LOCAL_SOURCE" ]; then
@@ -441,8 +567,9 @@ clone_repo() {
             log_success "Install dir is the source dir, skipping copy"
         elif [ -d "$INSTALL_DIR" ]; then
             log_info "Existing installation found at $INSTALL_DIR, updating from local..."
-            # rsync for incremental update, exclude runtime artifacts
-            rsync -a --delete \
+            assert_safe_local_sync_target "$LOCAL_SOURCE" "$INSTALL_DIR" "$CLAWKE_HOME"
+            # 禁止添加 --delete，错误的 INSTALL_DIR 会清空 worktree 或用户目录 — Do not add --delete; a wrong INSTALL_DIR can erase worktrees or user directories
+            rsync -a \
                 --exclude 'node_modules' \
                 --exclude 'dist' \
                 --exclude '.git' \
@@ -1087,13 +1214,27 @@ run_post_install_setup() {
     echo ""
 
     if prompt_yes_no "Install an AI gateway now?" "yes"; then
-        log_info "Running: $clawke_cmd gateway install"
-        if run_clawke_command gateway install; then
-            log_success "Gateway setup completed"
-        else
-            log_warn "Gateway setup did not complete. Run later: $clawke_cmd gateway install"
-        fi
-        echo ""
+        while true; do
+            log_info "Running: $clawke_cmd gateway install"
+            if run_clawke_command_record gateway install; then
+                case "$RUN_CLAWKE_COMMAND_OUTPUT" in
+                    *"Gateway installation skipped."*)
+                        break
+                        ;;
+                    *)
+                        log_success "Gateway setup finished"
+                        ;;
+                esac
+            else
+                log_warn "Gateway setup did not complete. Run later: $clawke_cmd gateway install"
+            fi
+            echo ""
+
+            if ! prompt_yes_no_required "Install another AI gateway?"; then
+                break
+            fi
+            echo ""
+        done
     else
         log_info "Gateway setup skipped. Run later: $clawke_cmd gateway install"
         echo ""
@@ -1125,6 +1266,7 @@ main() {
     setup_clawke_command
     setup_config
     install_builtin_skills
+    sync_configured_local_gateways
 
     print_success
     run_post_install_setup

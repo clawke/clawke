@@ -15,6 +15,8 @@ export interface OpenClawGatewayRpcOptions {
   gatewayUrl?: string;
   token?: string;
   password?: string;
+  gatewayClientCtor?: GatewayClientCtor;
+  startGatewayClientWhenEventLoopReady?: StartGatewayClientWhenEventLoopReady;
 }
 
 export interface OpenClawTaskAdapterOptions extends OpenClawGatewayRpcOptions {
@@ -139,24 +141,72 @@ type GatewayConnectOptions = {
   gatewayUrl: string;
   token?: string;
   password?: string;
+  gatewayClientCtor?: GatewayClientCtor;
+  startGatewayClientWhenEventLoopReady?: StartGatewayClientWhenEventLoopReady;
 };
 
-type RpcWebSocket = {
-  readyState: number;
-  send: (data: string) => void;
-  close: () => void;
-  on?: (event: string, handler: (...args: any[]) => void) => void;
-  onmessage?: ((event: { data: unknown }) => void) | null;
-  onerror?: ((event: unknown) => void) | null;
-  onclose?: (() => void) | null;
+type ActiveGatewayClient = {
+  stop: (error: Error) => void;
 };
 
-type RpcWebSocketCtor = new (url: string) => RpcWebSocket;
+export type GatewayClientHello = {
+  type?: string;
+  features?: { methods?: string[]; events?: string[] };
+};
+
+export type GatewayClientOptions = {
+  url?: string;
+  token?: string;
+  password?: string;
+  requestTimeoutMs?: number;
+  clientName?: string;
+  clientDisplayName?: string;
+  clientVersion?: string;
+  platform?: string;
+  mode?: string;
+  role?: string;
+  scopes?: string[];
+  caps?: string[];
+  onHelloOk?: (hello: GatewayClientHello) => void | Promise<void>;
+  onConnectError?: (error: Error) => void;
+  onClose?: (code: number, reason: string) => void;
+};
+
+export type GatewayClientLike = {
+  start: () => void;
+  request: <T = unknown>(
+    method: string,
+    params?: unknown,
+    options?: { timeoutMs?: number | null; expectFinal?: boolean },
+  ) => Promise<T>;
+  stopAndWait?: (options?: { timeoutMs?: number }) => Promise<void>;
+  stop?: () => void;
+};
+
+export type GatewayClientCtor = new (options: GatewayClientOptions) => GatewayClientLike;
+
+export type GatewayClientStartReadiness = {
+  ready?: boolean;
+  aborted?: boolean;
+};
+
+export type StartGatewayClientWhenEventLoopReady = (
+  client: GatewayClientLike,
+  options?: { timeoutMs?: number; signal?: AbortSignal },
+) => Promise<GatewayClientStartReadiness>;
 
 const SAFE_SEGMENT = /^[A-Za-z0-9_.:-]+$/;
 const DEFAULT_GATEWAY_PORT = 18789;
 const DEFAULT_SCHEDULE = "0 9 * * *";
-const WS_OPEN = 1;
+const DEFAULT_RPC_TIMEOUT_MS = 30_000;
+const GATEWAY_CLIENT_VERSION = "1.0.2";
+const GATEWAY_CLIENT_SCOPES = [
+  "operator.read",
+  "operator.write",
+  "operator.admin",
+  "operator.approvals",
+] as const;
+const GATEWAY_CLIENT_CAPS = ["tool-events", "thinking-events"] as const;
 
 export class OpenClawTaskAdapter {
   private readonly rpc: OpenClawGatewayRpc;
@@ -495,196 +545,135 @@ function resolveGatewayConnectOptions(options: OpenClawGatewayRpcOptions): Gatew
     gatewayUrl: options.gatewayUrl ?? `${tls ? "wss" : "ws"}://127.0.0.1:${port}`,
     token: mode === "token" ? token : undefined,
     password: mode === "password" ? password : undefined,
+    gatewayClientCtor: options.gatewayClientCtor,
+    startGatewayClientWhenEventLoopReady: options.startGatewayClientWhenEventLoopReady,
   };
 }
 
 class OpenClawGatewayRpcClient {
-  private ws: RpcWebSocket | null = null;
-  private connectPromise: Promise<void> | null = null;
-  private authenticated = false;
-  private requestId = 0;
   private readonly options: GatewayConnectOptions;
-  private readonly pending = new Map<
-    string,
-    {
-      resolve: (value: unknown) => void;
-      reject: (error: Error) => void;
-      timer: NodeJS.Timeout;
-    }
-  >();
+  private readonly activeClients = new Map<GatewayClientLike, ActiveGatewayClient>();
+  private closed = false;
 
   constructor(options: GatewayConnectOptions) {
     this.options = options;
   }
 
   async call(method: string, params?: unknown, options?: { timeoutMs?: number }): Promise<unknown> {
-    await this.ensureConnected();
-    const ws = this.ws;
-    if (!ws || ws.readyState !== WS_OPEN) {
-      throw new Error("OpenClaw Gateway RPC is not connected");
+    if (this.closed) {
+      throw new Error("OpenClaw Gateway RPC client closed");
     }
-    const id = String(++this.requestId);
-    const timeoutMs = options?.timeoutMs ?? 30_000;
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pending.delete(id);
-        reject(new Error(`Request timeout: ${method}`));
-      }, timeoutMs);
-      this.pending.set(id, { resolve, reject, timer });
-      ws.send(JSON.stringify({ type: "req", id, method, params }));
-    });
-  }
-
-  close(): void {
-    this.rejectPending(new Error("OpenClaw Gateway RPC client closed"));
-    this.authenticated = false;
-    this.connectPromise = null;
-    try {
-      this.ws?.close();
-    } catch {
-      // WebSocket 关闭是尽力而为 — WebSocket shutdown is best-effort.
-    }
-    this.ws = null;
-  }
-
-  private ensureConnected(): Promise<void> {
-    if (this.ws?.readyState === WS_OPEN && this.authenticated) {
-      return Promise.resolve();
-    }
-    if (this.connectPromise) return this.connectPromise;
-
-    this.connectPromise = this.openConnection().catch((error) => {
-      this.connectPromise = null;
-      throw error;
-    });
-    return this.connectPromise;
-  }
-
-  private async openConnection(): Promise<void> {
-    const WebSocketCtor = await loadWebSocketCtor();
-    return new Promise((resolve, reject) => {
-      const ws = new WebSocketCtor(this.options.gatewayUrl);
-      this.ws = ws;
-
-      const timer = setTimeout(() => {
-        ws.close();
-        reject(new Error("OpenClaw Gateway RPC connect timeout"));
-      }, 15_000);
-
-      const finish = () => {
-        clearTimeout(timer);
-        this.authenticated = true;
-        resolve();
-      };
-
-      const onMessage = (data: unknown) => {
-        this.handleMessage(messageDataToString(data), finish, reject);
-      };
-      const onError = (error: unknown) => {
-        clearTimeout(timer);
-        reject(error instanceof Error ? error : new Error(String(error)));
-      };
-      const onClose = () => {
-        clearTimeout(timer);
-        this.authenticated = false;
-        this.ws = null;
-        this.connectPromise = null;
-        this.rejectPending(new Error("OpenClaw Gateway RPC connection closed"));
-      };
-
-      if (typeof ws.on === "function") {
-        ws.on("message", onMessage);
-        ws.on("error", onError);
-        ws.on("close", onClose);
-      } else {
-        ws.onmessage = (event) => onMessage(event.data);
-        ws.onerror = onError;
-        ws.onclose = onClose;
-      }
-    });
-  }
-
-  private handleMessage(data: string, onHelloOk: () => void, onConnectError: (error: Error) => void): void {
-    let message: unknown;
-    try {
-      message = JSON.parse(data);
-    } catch {
-      return;
-    }
-    if (!isRecord(message)) return;
-
-    if (message.type === "event" && message.event === "connect.challenge") {
-      this.sendConnect();
-      return;
-    }
-
-    if (message.type !== "res") return;
-    const id = typeof message.id === "string" ? message.id : String(message.id ?? "");
-
-    if (!this.authenticated && message.ok === true && isRecord(message.payload) && message.payload.type === "hello-ok") {
-      onHelloOk();
-      return;
-    }
-
-    const pending = this.pending.get(id);
-    if (pending) {
-      clearTimeout(pending.timer);
-      this.pending.delete(id);
-      if (message.ok === true) {
-        pending.resolve(message.payload);
-      } else {
-        pending.reject(new Error(this.errorMessage(message.error)));
-      }
-      return;
-    }
-
-    if (!this.authenticated && message.ok === false) {
-      onConnectError(new Error(this.errorMessage(message.error)));
-    }
-  }
-
-  private sendConnect(): void {
-    const id = String(++this.requestId);
-    const auth = this.options.token
-      ? { token: this.options.token }
-      : this.options.password
-        ? { password: this.options.password }
-        : undefined;
-    this.ws?.send(
-      JSON.stringify({
-        type: "req",
-        id,
-        method: "connect",
-        params: {
-          minProtocol: 3,
-          maxProtocol: 3,
-          role: "operator",
-          scopes: ["operator.read", "operator.write", "operator.admin", "operator.approvals"],
-          client: {
-            id: "gateway-client",
-            displayName: "Clawke Plugin",
-            version: "1.0.2",
-            platform: "openclaw-plugin",
-            mode: "backend",
-          },
-          caps: ["tool-events", "thinking-events"],
-          auth,
-        },
-      }),
+    const GatewayClient = this.options.gatewayClientCtor ?? await loadGatewayClientCtor();
+    const startGatewayClientWhenEventLoopReady =
+      this.options.startGatewayClientWhenEventLoopReady ??
+      await loadStartGatewayClientWhenEventLoopReady();
+    const timeoutMs = options?.timeoutMs ?? DEFAULT_RPC_TIMEOUT_MS;
+    return await this.callWithClient(
+      GatewayClient,
+      startGatewayClientWhenEventLoopReady,
+      method,
+      params,
+      timeoutMs,
     );
   }
 
-  private rejectPending(error: Error): void {
-    for (const [id, pending] of this.pending) {
-      clearTimeout(pending.timer);
-      pending.reject(error);
-      this.pending.delete(id);
+  close(): void {
+    this.closed = true;
+    for (const active of Array.from(this.activeClients.values())) {
+      active.stop(new Error("OpenClaw Gateway RPC client closed"));
     }
   }
 
-  private errorMessage(value: unknown): string {
-    if (isRecord(value) && typeof value.message === "string") return value.message;
-    return "OpenClaw Gateway RPC request failed";
+  private async callWithClient(
+    GatewayClient: GatewayClientCtor,
+    startGatewayClientWhenEventLoopReady: StartGatewayClientWhenEventLoopReady,
+    method: string,
+    params: unknown,
+    timeoutMs: number,
+  ): Promise<unknown> {
+    return new Promise((resolve, reject) => {
+      let client: GatewayClientLike | null = null;
+      let settled = false;
+      const startAbort = new AbortController();
+      const stop = (error?: Error, value?: unknown) => {
+        if (settled) return;
+        settled = true;
+        startAbort.abort();
+        if (client) {
+          this.activeClients.delete(client);
+        }
+        const finish = async () => {
+          if (client) {
+            await this.stopClient(client);
+          }
+        };
+        void finish().finally(() => {
+          if (error) {
+            reject(error);
+          } else {
+            resolve(value);
+          }
+        });
+      };
+      client = new GatewayClient({
+        url: this.options.gatewayUrl,
+        token: this.options.token,
+        password: this.options.password,
+        requestTimeoutMs: timeoutMs,
+        clientName: "gateway-client",
+        clientDisplayName: "Clawke Plugin",
+        clientVersion: GATEWAY_CLIENT_VERSION,
+        mode: "backend",
+        role: "operator",
+        scopes: [...GATEWAY_CLIENT_SCOPES],
+        caps: [...GATEWAY_CLIENT_CAPS],
+        onHelloOk: async () => {
+          if (!client || settled) return;
+          try {
+            const result = await client.request(method, params, { timeoutMs });
+            stop(undefined, result);
+          } catch (error) {
+            stop(error instanceof Error ? error : new Error(String(error)));
+          }
+        },
+        onConnectError: (error) => {
+          stop(error);
+        },
+        onClose: (code, reason) => {
+          if (!settled) {
+            stop(new Error(`OpenClaw Gateway RPC connection closed (${code}): ${reason}`));
+          }
+        },
+      });
+      this.activeClients.set(client, {
+        stop: (error) => stop(error),
+      });
+      // 通过 SDK readiness helper 启动，避免直接 start() 的时序差异 — Start through the SDK readiness helper to avoid direct start() timing drift.
+      void startGatewayClientWhenEventLoopReady(client, {
+        timeoutMs,
+        signal: startAbort.signal,
+      })
+        .then((readiness) => {
+          if (settled || readiness.ready || readiness.aborted) return;
+          stop(new Error(`OpenClaw Gateway RPC readiness timeout after ${timeoutMs}ms`));
+        })
+        .catch((error) => {
+          if (settled) return;
+          stop(error instanceof Error ? error : new Error(String(error)));
+        });
+    });
+  }
+
+  private async stopClient(client: GatewayClientLike): Promise<void> {
+    try {
+      if (typeof client.stopAndWait === "function") {
+        await client.stopAndWait({ timeoutMs: 1_000 });
+        return;
+      }
+      client.stop?.();
+    } catch {
+      client.stop?.();
+    }
   }
 }
 
@@ -811,24 +800,30 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object");
 }
 
-async function loadWebSocketCtor(): Promise<RpcWebSocketCtor> {
+async function loadGatewayClientCtor(): Promise<GatewayClientCtor> {
   try {
-    const module = await import("ws");
-    return module.default as unknown as RpcWebSocketCtor;
+    const module = await import("openclaw/plugin-sdk/gateway-runtime");
+    const GatewayClient = (module as { GatewayClient?: unknown }).GatewayClient;
+    if (typeof GatewayClient === "function") {
+      return GatewayClient as GatewayClientCtor;
+    }
   } catch {
-    // 插件依赖不可用时回退到运行时 WebSocket — Fall back to the runtime WebSocket when the plugin dependency is unavailable.
+    // OpenClaw SDK 只在插件运行时可用 — OpenClaw SDK is only available at plugin runtime.
   }
-  if (typeof globalThis.WebSocket === "function") {
-    return globalThis.WebSocket as unknown as RpcWebSocketCtor;
-  }
-  throw new Error("WebSocket implementation is unavailable");
+  throw new Error("OpenClaw GatewayClient is unavailable");
 }
 
-function messageDataToString(data: unknown): string {
-  if (typeof data === "string") return data;
-  if (data instanceof ArrayBuffer) return new TextDecoder().decode(data);
-  if (ArrayBuffer.isView(data)) {
-    return new TextDecoder().decode(data);
+async function loadStartGatewayClientWhenEventLoopReady(): Promise<StartGatewayClientWhenEventLoopReady> {
+  try {
+    const module = await import("openclaw/plugin-sdk/gateway-runtime");
+    const startGatewayClientWhenEventLoopReady = (
+      module as { startGatewayClientWhenEventLoopReady?: unknown }
+    ).startGatewayClientWhenEventLoopReady;
+    if (typeof startGatewayClientWhenEventLoopReady === "function") {
+      return startGatewayClientWhenEventLoopReady as StartGatewayClientWhenEventLoopReady;
+    }
+  } catch {
+    // OpenClaw SDK 只在插件运行时可用 — OpenClaw SDK is only available at plugin runtime.
   }
-  return String(data);
+  throw new Error("OpenClaw GatewayClient readiness helper is unavailable. Please upgrade OpenClaw to the latest version.");
 }

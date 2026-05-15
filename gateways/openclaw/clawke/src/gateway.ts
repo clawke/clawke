@@ -10,7 +10,7 @@ import { getClawkeRuntime } from "./runtime.js";
 import { OpenClawTaskAdapter, type OpenClawTaskDraft, type OpenClawTaskPatch } from "./task-adapter.js";
 import { OpenClawSkillAdapter, type OpenClawSkillDraft } from "./skill-adapter.js";
 import { OpenClawModelAdapter } from "./model-adapter.js";
-import { GatewayBoundaryFinalizer } from "./gateway-stream-finalizer.js";
+import { GatewayFinalDeliveryGuard } from "./gateway-stream-finalizer.js";
 import {
   handleGatewaySystemRequest,
   runOpenClawSystemPrompt,
@@ -915,9 +915,8 @@ async function handleClawkeInbound(
   let lastThinkingLength = 0;
   let hasStreamedThinking = false;
 
-  // P1: 投递去重追踪器 — 防止同一内容被意外发送两次
-  const deliveredTexts = new Set<string>();
-  const boundaryFinalizer = new GatewayBoundaryFinalizer();
+  // P1: 投递去重追踪器 — Deduplicate repeated final delivery before stream finalization.
+  const finalDeliveryGuard = new GatewayFinalDeliveryGuard();
 
   const { dispatcher, replyOptions, markDispatchIdle } =
     core.channel.reply.createReplyDispatcherWithTyping({
@@ -934,13 +933,32 @@ async function handleClawkeInbound(
         // P0-0.1: disableBlockStreaming=true 后，deliver 只会收到 kind="final"
         // 无需处理 block 逻辑
 
-        // P1: deliveryTracker 去重 — 防止同一文本被重复投递
-        const dedupeKey = `${kind}:${replyText.slice(0, 200)}`;
-        if (deliveredTexts.has(dedupeKey)) {
-          ctx.log?.info(`⏭️ deliver SKIP duplicate: ${replyText.slice(0, 60)}`);
+        // 边界 final 已在 onAssistantMessageStart 发出时，后续 SDK final 回调必须先跳过。
+        // Boundary final already sent from onAssistantMessageStart; skip later SDK final callbacks first.
+        const guardResult = finalDeliveryGuard.check(kind, replyText);
+        if (guardResult.skip) {
+          ctx.log?.info(`⏭️ deliver SKIP ${guardResult.reason}: ${replyText.slice(0, 60)}`);
+          if (
+            guardResult.reason === "boundary_duplicate" &&
+            !hasStreamedAny &&
+            (pendingUsage || pendingModel)
+          ) {
+            _sendToClawkeServer({
+              type: GatewayMessageType.AgentUsage,
+              message_id: streamMsgId,
+              to: clawkeTo,
+              account_id: ctx.accountId,
+              conversation_id: senderId,
+              usage: pendingUsage ?? undefined,
+              model: pendingModel,
+              provider: pendingProvider,
+            });
+            pendingUsage = null;
+            pendingModel = '';
+            pendingProvider = '';
+          }
           return;
         }
-        deliveredTexts.add(dedupeKey);
 
         const mediaList = payload.mediaUrls?.length
           ? payload.mediaUrls
@@ -977,26 +995,6 @@ async function handleClawkeInbound(
           pendingModel = '';
           pendingProvider = '';
         } else if (replyText.trim()) {
-          if (boundaryFinalizer.consumeDuplicateFinal(replyText)) {
-            ctx.log?.info(`⏭️ deliver SKIP boundary duplicate: ${replyText.slice(0, 60)}`);
-            if (pendingUsage || pendingModel) {
-              _sendToClawkeServer({
-                type: GatewayMessageType.AgentUsage,
-                message_id: streamMsgId,
-                to: clawkeTo,
-                account_id: ctx.accountId,
-                conversation_id: senderId,
-                usage: pendingUsage ?? undefined,
-                model: pendingModel,
-                provider: pendingProvider,
-              });
-            }
-            pendingUsage = null;
-            pendingModel = '';
-            pendingProvider = '';
-            return;
-          }
-
           // 没有流式输出（fallback），直接发完整文本
           _sendToClawkeServer({
             type: GatewayMessageType.AgentText,
@@ -1102,7 +1100,7 @@ async function handleClawkeInbound(
               account_id: ctx.accountId,
               conversation_id: senderId,
             });
-            boundaryFinalizer.recordBoundaryFinalized(finalizedText);
+            finalDeliveryGuard.recordBoundaryFinalized(finalizedText);
           }
           // 重置流式状态，准备接收新的 assistant message
           streamMsgId = `reply_${Date.now()}_${++msgCounter}`;

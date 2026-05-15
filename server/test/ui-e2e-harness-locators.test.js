@@ -83,6 +83,16 @@ test('UI E2E text entry can target stable widget keys', () => {
   assert.match(harness, /key: step\['key'\] as String\?/);
 });
 
+test('UI E2E remote push simulation defaults to notification tap', () => {
+  const simulateRemotePush = harness.match(
+    /Future<void> _simulateRemotePush[\s\S]*?\n}\n/,
+  )?.[0];
+
+  assert.ok(simulateRemotePush, 'simulate_remote_push helper should exist');
+  assert.match(simulateRemotePush, /event_type/);
+  assert.match(simulateRemotePush, /notification_tap/);
+});
+
 test('P0 UI E2E cases do not depend on injected ui_e2e keys', () => {
   const caseDir = join(root, 'test', 'ui-e2e', 'test-cases');
   const caseFiles = readdirSync(caseDir).filter((name) => name.endsWith('.json'));

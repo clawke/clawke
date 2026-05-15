@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -133,7 +134,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final activeConversationController = _activeConversationController;
     if (activeConvId != null &&
         activeConversationController?.state == activeConvId) {
-      Future<void>.delayed(Duration.zero, () {
+      scheduleMicrotask(() {
         if (!activeConversationController!.mounted) return;
         if (activeConversationController.state == activeConvId) {
           activeConversationController.state = null;

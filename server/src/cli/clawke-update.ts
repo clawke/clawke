@@ -203,6 +203,16 @@ function runNpmInstallDeterministic(
   return 0;
 }
 
+function runGatewayUpdateAfterBuild(
+  projectRoot: string,
+  stdout: NodeJS.WriteStream,
+  stderr: NodeJS.WriteStream,
+): number {
+  delete require.cache[require.resolve('./gateway-updater.js')];
+  const { runGatewayUpdate } = require('./gateway-updater.js') as typeof import('./gateway-updater.js');
+  return runGatewayUpdate({ projectRoot, stdout, stderr });
+}
+
 export function getClawkeServerRoot(): string {
   return DEFAULT_SERVER_ROOT;
 }
@@ -306,7 +316,7 @@ export function runClawkeUpdate(options: UpdateOptions = {}): number {
         runGit(gitCmd, ['checkout', currentBranch], projectRoot);
       }
       stdout.write('[clawke] ✓ Already up to date!\n');
-      return 0;
+      return runGatewayUpdateAfterBuild(projectRoot, stdout, stderr);
     }
 
     stdout.write(`[clawke] Found ${commitCount} new commit(s)\n`);
@@ -332,6 +342,9 @@ export function runClawkeUpdate(options: UpdateOptions = {}): number {
     stdout.write('[clawke] Rebuilding server...\n');
     result = runArgv(['npm', 'run', 'build'], serverRoot, true);
     if (result.status !== 0) return fail(stderr, 'Failed to rebuild server.', result);
+
+    const gatewayUpdateCode = runGatewayUpdateAfterBuild(projectRoot, stdout, stderr);
+    if (gatewayUpdateCode !== 0) return gatewayUpdateCode;
 
     stdout.write('\n[clawke] ✓ Update complete!\n');
     return 0;

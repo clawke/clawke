@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:client/screens/conversation_list_screen.dart';
 import 'package:client/screens/chat_screen.dart';
+import 'package:client/screens/dashboard_management_screen.dart';
 import 'package:client/screens/profile_screen.dart';
 import 'package:client/screens/skills_management_screen.dart';
 import 'package:client/screens/tasks_management_screen.dart';
@@ -49,7 +50,14 @@ class MainLayout extends ConsumerStatefulWidget {
 }
 
 Widget buildLazyIndexedChild({required bool isActive, required Widget child}) {
-  return isActive ? child : const SizedBox.shrink();
+  return buildIndexedChild(
+    isActive: isActive,
+    child: isActive ? child : const SizedBox.shrink(),
+  );
+}
+
+Widget buildIndexedChild({required bool isActive, required Widget child}) {
+  return TickerMode(enabled: isActive, child: child);
 }
 
 class _MainLayoutState extends ConsumerState<MainLayout> {
@@ -438,7 +446,6 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
   Widget _buildMobileLayout(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final l10n = context.l10n;
-    final sduiCache = ref.watch(sduiPageCacheProvider);
     final debugLogEnabled = ref.watch(debugLogEnabledProvider);
     final unreadCount = ref.watch(totalUnseenCountProvider);
 
@@ -452,9 +459,15 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
                 index: _mobileTabIndex,
                 children: [
                   // 0: 会话列表（点击后 push 到聊天页）
-                  _buildMobileConversationList(context),
+                  buildIndexedChild(
+                    isActive: _mobileTabIndex == 0,
+                    child: _buildMobileConversationList(context),
+                  ),
                   // 1: 仪表盘
-                  _buildMobileDashboard(context, sduiCache, colorScheme),
+                  buildIndexedChild(
+                    isActive: _mobileTabIndex == 1,
+                    child: const DashboardManagementScreen(showAppBar: true),
+                  ),
                   // 2: 任务管理
                   buildLazyIndexedChild(
                     isActive: _mobileTabIndex == 2,
@@ -482,10 +495,6 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
         currentIndex: _mobileTabIndex,
         onTap: (index) {
           setState(() => _mobileTabIndex = index);
-          // 切到仪表盘时请求 SDUI 数据
-          if (index == 1) {
-            ref.read(wsMessageHandlerProvider).requestDashboard();
-          }
         },
         type: BottomNavigationBarType.fixed,
         backgroundColor: colorScheme.surface,
@@ -547,23 +556,6 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
     );
   }
 
-  /// 移动端仪表盘：AppBar + SDUI 内容
-  Widget _buildMobileDashboard(
-    BuildContext context,
-    Map<NavPage, dynamic> sduiCache,
-    ColorScheme colorScheme,
-  ) {
-    return Scaffold(
-      backgroundColor: colorScheme.surface,
-      appBar: AppBar(
-        title: Text(context.l10n.navDashboard),
-        backgroundColor: colorScheme.surface,
-        surfaceTintColor: Colors.transparent,
-      ),
-      body: _buildSduiPage(NavPage.dashboard, sduiCache, colorScheme),
-    );
-  }
-
   /// 移动端会话列表：AppBar 只有标题，点击会话 push 到聊天页
   Widget _buildMobileConversationList(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -617,78 +609,102 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
                     index: activePage.index,
                     children: [
                       // 0: 会话页（侧栏 + 聊天）
-                      Row(
-                        children: [
-                          // 可拖拽侧边栏（含内部拖拽手柄）
-                          Container(
-                            width: _sidebarWidth,
-                            decoration: BoxDecoration(
-                              color: colorScheme.surfaceContainerLow,
-                              border: Border(
-                                right: BorderSide(
-                                  color: colorScheme.outlineVariant,
+                      buildIndexedChild(
+                        isActive: activePage == NavPage.chat,
+                        child: Row(
+                          children: [
+                            // 可拖拽侧边栏（含内部拖拽手柄）
+                            Container(
+                              width: _sidebarWidth,
+                              decoration: BoxDecoration(
+                                color: colorScheme.surfaceContainerLow,
+                                border: Border(
+                                  right: BorderSide(
+                                    color: colorScheme.outlineVariant,
+                                  ),
                                 ),
                               ),
-                            ),
-                            child: Stack(
-                              children: [
-                                const ConversationListScreen(),
-                                // 拖拽手柄 — 叠加在右侧
-                                Positioned(
-                                  right: 0,
-                                  top: 0,
-                                  bottom: 0,
-                                  child: MouseRegion(
-                                    cursor: SystemMouseCursors.resizeColumn,
-                                    child: GestureDetector(
-                                      behavior: HitTestBehavior.opaque,
-                                      onHorizontalDragUpdate: (details) {
-                                        setState(() {
-                                          _sidebarWidth =
-                                              (_sidebarWidth + details.delta.dx)
-                                                  .clamp(
-                                                    _kMinSidebarWidth,
-                                                    _kMaxSidebarWidth,
-                                                  );
-                                        });
-                                      },
-                                      onHorizontalDragEnd: (_) =>
-                                          _saveSidebarWidth(),
-                                      child: const SizedBox(width: 5),
+                              child: Stack(
+                                children: [
+                                  const ConversationListScreen(),
+                                  // 拖拽手柄 — 叠加在右侧
+                                  Positioned(
+                                    right: 0,
+                                    top: 0,
+                                    bottom: 0,
+                                    child: MouseRegion(
+                                      cursor: SystemMouseCursors.resizeColumn,
+                                      child: GestureDetector(
+                                        behavior: HitTestBehavior.opaque,
+                                        onHorizontalDragUpdate: (details) {
+                                          setState(() {
+                                            _sidebarWidth =
+                                                (_sidebarWidth +
+                                                        details.delta.dx)
+                                                    .clamp(
+                                                      _kMinSidebarWidth,
+                                                      _kMaxSidebarWidth,
+                                                    );
+                                          });
+                                        },
+                                        onHorizontalDragEnd: (_) =>
+                                            _saveSidebarWidth(),
+                                        child: const SizedBox(width: 5),
+                                      ),
                                     ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
-                          Expanded(
-                            child: selectedConvId != null
-                                ? ChatScreen(key: ValueKey(selectedConvId))
-                                : Center(
-                                    child: Text(
-                                      context.l10n.selectConversationToStart,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium
-                                          ?.copyWith(
-                                            color: colorScheme.onSurfaceVariant,
-                                          ),
+                            Expanded(
+                              child: selectedConvId != null
+                                  ? ChatScreen(key: ValueKey(selectedConvId))
+                                  : Center(
+                                      child: Text(
+                                        context.l10n.selectConversationToStart,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.copyWith(
+                                              color:
+                                                  colorScheme.onSurfaceVariant,
+                                            ),
+                                      ),
                                     ),
-                                  ),
-                          ),
-                        ],
+                            ),
+                          ],
+                        ),
                       ),
                       // 1: 仪表盘
-                      _buildSduiPage(NavPage.dashboard, sduiCache, colorScheme),
+                      buildLazyIndexedChild(
+                        isActive: activePage == NavPage.dashboard,
+                        child: const DashboardManagementScreen(),
+                      ),
                       // 2: 任务管理
                       buildLazyIndexedChild(
                         isActive: activePage == NavPage.tasks,
                         child: const TasksManagementScreen(),
                       ),
                       // 3: 定时任务（旧 SDUI 页，导航暂隐藏）
-                      _buildSduiPage(NavPage.cron, sduiCache, colorScheme),
+                      buildIndexedChild(
+                        isActive: activePage == NavPage.cron,
+                        child: _buildSduiPage(
+                          NavPage.cron,
+                          sduiCache,
+                          colorScheme,
+                          isActive: activePage == NavPage.cron,
+                        ),
+                      ),
                       // 4: 频道管理
-                      _buildSduiPage(NavPage.channels, sduiCache, colorScheme),
+                      buildIndexedChild(
+                        isActive: activePage == NavPage.channels,
+                        child: _buildSduiPage(
+                          NavPage.channels,
+                          sduiCache,
+                          colorScheme,
+                          isActive: activePage == NavPage.channels,
+                        ),
+                      ),
                       // 5: 技能中心
                       buildLazyIndexedChild(
                         isActive: activePage == NavPage.skills,
@@ -711,10 +727,15 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
   Widget _buildSduiPage(
     NavPage page,
     Map<NavPage, dynamic> cache,
-    ColorScheme colorScheme,
-  ) {
+    ColorScheme colorScheme, {
+    required bool isActive,
+  }) {
     final sduiMessage = cache[page];
     if (sduiMessage == null) {
+      if (!isActive) {
+        return const SizedBox.shrink();
+      }
+
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,

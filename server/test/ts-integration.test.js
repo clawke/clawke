@@ -505,7 +505,7 @@ describe('TS: MessageRouter', () => {
     const broadcasted = [];
     const stats = {
       recorded: { tokens: [], tools: [], messages: 0, conversations: 0 },
-      recordTokens(i, o, c) { this.recorded.tokens.push({ i, o, c }); },
+      recordTokens(i, o, c, options) { this.recorded.tokens.push({ i, o, c, options }); },
       recordToolCall(n, d) { this.recorded.tools.push({ n, d }); },
       recordMessage() { this.recorded.messages++; },
       recordConversation() { this.recorded.conversations++; },
@@ -550,6 +550,8 @@ describe('TS: MessageRouter', () => {
     assert.equal(stats.recorded.tokens.length, 1);
     assert.equal(stats.recorded.tokens[0].i, 500);
     assert.equal(stats.recorded.tokens[0].o, 100);
+    assert.equal(stats.recorded.tokens[0].options.gatewayId, 'acc1');
+    assert.equal(stats.recorded.tokens[0].options.conversationId, 'acc1');
     db.close();
   });
 
@@ -701,6 +703,69 @@ describe('TS: VersionChecker', () => {
     assert.equal(VersionChecker.matchDownloadUrl(assets, 'linux', 'x64'), 'https://dl/linux');
     assert.equal(VersionChecker.matchDownloadUrl(assets, 'windows', 'x64'), null);
   });
+
+  it('fetchLatestRelease defaults to the Clawke release API and logs failed URL', async () => {
+    const originalFetch = global.fetch;
+    const originalError = console.error;
+    const originalOwner = process.env.GITHUB_OWNER;
+    const originalRepo = process.env.GITHUB_REPO;
+    let requestedUrl = '';
+    let loggedError = '';
+
+    try {
+      delete process.env.GITHUB_OWNER;
+      delete process.env.GITHUB_REPO;
+      global.fetch = async (url) => {
+        requestedUrl = String(url);
+        throw new Error('network down');
+      };
+      console.error = (message) => {
+        loggedError = String(message);
+      };
+
+      const release = await new VersionChecker().fetchLatestRelease();
+
+      assert.equal(release, null);
+      assert.equal(requestedUrl, 'https://api.github.com/repos/clawke/clawke/releases/latest');
+      assert.match(loggedError, /Failed to fetch https:\/\/api\.github\.com\/repos\/clawke\/clawke\/releases\/latest: network down/);
+    } finally {
+      global.fetch = originalFetch;
+      console.error = originalError;
+      if (originalOwner === undefined) delete process.env.GITHUB_OWNER;
+      else process.env.GITHUB_OWNER = originalOwner;
+      if (originalRepo === undefined) delete process.env.GITHUB_REPO;
+      else process.env.GITHUB_REPO = originalRepo;
+    }
+  });
+
+  it('startPeriodicCheck skips fetching when auto update is disabled', () => {
+    const originalDisable = process.env.DISABLE_AUTO_UPDATE;
+    const originalLog = console.log;
+    let fetchCalls = 0;
+    let loggedMessage = '';
+    const checker = new VersionChecker(undefined, 1);
+    checker.fetchLatestRelease = async () => {
+      fetchCalls += 1;
+      return null;
+    };
+
+    try {
+      process.env.DISABLE_AUTO_UPDATE = 'true';
+      console.log = (message) => {
+        loggedMessage = String(message);
+      };
+
+      checker.startPeriodicCheck();
+
+      assert.equal(fetchCalls, 0);
+      assert.match(loggedMessage, /Auto update check disabled/);
+    } finally {
+      if (checker.checkTimer) clearInterval(checker.checkTimer);
+      console.log = originalLog;
+      if (originalDisable === undefined) delete process.env.DISABLE_AUTO_UPDATE;
+      else process.env.DISABLE_AUTO_UPDATE = originalDisable;
+    }
+  });
 });
 
 describe('TS: StatsCollector', () => {
@@ -715,6 +780,33 @@ describe('TS: StatsCollector', () => {
     // Verify stats grid exists
     const statsGrid = dashboard.props.sections.find(s => s.type === 'stats_grid');
     assert.ok(statsGrid, 'stats_grid section exists');
+  });
+
+  it('recordTokens tracks gateway usage dashboard', () => {
+    const stats = new StatsCollector('/tmp/clawke-test-stats-' + Date.now());
+    stats.recordTokens(100, 50, 20, {
+      gatewayId: 'hermes',
+      conversationId: 'conv_1',
+      model: 'claude-sonnet',
+      provider: 'anthropic',
+      cacheWrite: 5,
+      reasoning: 7,
+    });
+
+    const usage = stats.getUsageDashboard('hermes');
+    assert.equal(usage.gateway_id, 'hermes');
+    assert.deepEqual(usage.summary, {
+      input: 100,
+      output: 50,
+      cacheRead: 20,
+      cacheWrite: 5,
+      reasoning: 7,
+      total: 150,
+    });
+    assert.equal(usage.models.length, 1);
+    assert.equal(usage.models[0].model, 'claude-sonnet');
+    assert.equal(usage.models[0].provider, 'anthropic');
+    assert.equal(usage.recent[0].conversation_id, 'conv_1');
   });
 
   it('populateMockData fills all sections', () => {

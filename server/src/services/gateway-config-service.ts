@@ -5,8 +5,13 @@ import type { ConfiguredGateway } from '../types/gateways.js';
 
 const DEFAULT_CAPABILITIES = ['chat', 'tasks', 'skills', 'models'];
 
+function defaultConfigPath(): string {
+  const clawkeHome = process.env.CLAWKE_DATA_DIR || path.join(os.homedir(), '.clawke');
+  return path.join(clawkeHome, 'clawke.json');
+}
+
 export function listConfiguredGateways(
-  configPath = path.join(os.homedir(), '.clawke', 'clawke.json'),
+  configPath = defaultConfigPath(),
 ): ConfiguredGateway[] {
   if (!fs.existsSync(configPath)) return [];
   const raw = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown>;

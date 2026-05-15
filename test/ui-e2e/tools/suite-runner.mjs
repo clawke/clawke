@@ -272,10 +272,12 @@ function readCaseResult(output, caseId) {
   return latestResultForCase(caseId);
 }
 
-function runCase(testCase) {
+function runCase(testCase, { noPub = false } = {}) {
   console.log(`SUITE_CASE_START ${testCase.id}`);
   const runnerPath = path.join(root, 'test', 'ui-e2e', 'tools', 'runner.mjs');
-  const child = spawnSync('node', [runnerPath, '--case', testCase.id], {
+  const runnerArgs = [runnerPath, '--case', testCase.id];
+  if (noPub) runnerArgs.push('--no-pub');
+  const child = spawnSync('node', runnerArgs, {
     cwd: root,
     encoding: 'utf8',
     maxBuffer: 1024 * 1024 * 30,
@@ -309,7 +311,7 @@ async function main() {
   const caseResults = [];
 
   for (const testCase of cases) {
-    const result = runCase(testCase);
+    const result = runCase(testCase, { noPub: Boolean(args['no-pub']) });
     caseResults.push(result);
     if (args.bail && !result.ok) break;
   }

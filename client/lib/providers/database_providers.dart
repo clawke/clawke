@@ -16,6 +16,7 @@ import 'package:client/data/repositories/task_cache_repository.dart';
 import 'package:client/providers/auth_provider.dart';
 import 'package:client/providers/ws_state_provider.dart';
 import 'package:client/services/config_api_service.dart';
+import 'package:client/services/dashboard_api_service.dart';
 import 'package:client/services/gateways_api_service.dart';
 import 'package:client/services/models_api_service.dart';
 import 'package:client/services/skills_api_service.dart';
@@ -46,6 +47,10 @@ final gatewaysApiServiceProvider = Provider<GatewaysApiService>((ref) {
 
 final tasksApiServiceProvider = Provider<TasksApiService>((ref) {
   return TasksApiService();
+});
+
+final dashboardApiServiceProvider = Provider<DashboardApiService>((ref) {
+  return DashboardApiService();
 });
 
 final modelsApiServiceProvider = Provider<ModelsApiService>((ref) {

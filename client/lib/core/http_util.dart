@@ -23,12 +23,14 @@ class HttpUtil {
   static const String _kUidKey = 'clawke_auth_uid';
   static const String _kSecuritKey = 'clawke_auth_securit';
 
-  static final Dio _dio = Dio(BaseOptions(
-    connectTimeout: const Duration(seconds: 15),
-    receiveTimeout: const Duration(seconds: 30),
-    // 不让 Dio 自动抛异常，我们自己解析响应
-    validateStatus: (status) => true,
-  ));
+  static final Dio _dio = Dio(
+    BaseOptions(
+      connectTimeout: const Duration(seconds: 15),
+      receiveTimeout: const Duration(seconds: 30),
+      // 不让 Dio 自动抛异常，我们自己解析响应
+      validateStatus: (status) => true,
+    ),
+  );
 
   static bool _initialized = false;
 
@@ -38,8 +40,10 @@ class HttpUtil {
 
     // 仅开发环境允许自签名证书
     if (EnvConfig.allowBadCertificates) {
-      (_dio.httpClientAdapter as IOHttpClientAdapter).onHttpClientCreate = (client) {
-        client.badCertificateCallback = (X509Certificate cert, String host, int port) => true;
+      (_dio.httpClientAdapter as IOHttpClientAdapter).createHttpClient = () {
+        final client = HttpClient();
+        client.badCertificateCallback =
+            (X509Certificate cert, String host, int port) => true;
         return client;
       };
     }
@@ -93,18 +97,18 @@ class HttpUtil {
       final prefs = await SharedPreferences.getInstance();
       final uid = prefs.getString(_kUidKey);
       final securit = prefs.getString(_kSecuritKey);
-      if (uid != null && uid.isNotEmpty && securit != null && securit.isNotEmpty) {
-        final cookie = '__UID=${Uri.encodeComponent(uid)};'
+      if (uid != null &&
+          uid.isNotEmpty &&
+          securit != null &&
+          securit.isNotEmpty) {
+        final cookie =
+            '__UID=${Uri.encodeComponent(uid)};'
             '__SECURIT=${Uri.encodeComponent(securit)};';
         options.headers = {'Cookie': cookie};
       }
 
       // 4. 发起请求
-      final response = await _dio.post(
-        url,
-        data: formData,
-        options: options,
-      );
+      final response = await _dio.post(url, data: formData, options: options);
 
       // 5. 解析响应（兼容 String 和 Map 两种返回格式）
       Map<String, dynamic>? jsonResult;
@@ -130,7 +134,7 @@ class HttpUtil {
         throw const ApiException('未知的响应格式');
       }
 
-      debugPrint('[HttpUtil] response: $jsonResult');
+      debugPrint('[HttpUtil] response: ${_redactSensitiveForLog(jsonResult)}');
 
       // 6. 统一 success/actionError 处理
       if (jsonResult['success'] == true) {
@@ -144,11 +148,35 @@ class HttpUtil {
       final msg = e.type == DioExceptionType.connectionTimeout
           ? '连接超时，请检查网络'
           : e.type == DioExceptionType.receiveTimeout
-              ? '服务器响应超时'
-              : '网络异常：${e.message}';
+          ? '服务器响应超时'
+          : '网络异常：${e.message}';
       debugPrint('[HttpUtil] DioException: $msg');
       throw ApiException(msg);
     }
+  }
+
+  static Object? _redactSensitiveForLog(Object? value) {
+    if (value is Map) {
+      return value.map((key, child) {
+        final keyText = key.toString();
+        if (_isSensitiveLogKey(keyText)) {
+          return MapEntry(key, '<redacted>');
+        }
+        return MapEntry(key, _redactSensitiveForLog(child));
+      });
+    }
+    if (value is List) {
+      return value.map(_redactSensitiveForLog).toList();
+    }
+    return value;
+  }
+
+  static bool _isSensitiveLogKey(String key) {
+    final lower = key.toLowerCase();
+    return lower.contains('token') ||
+        lower.contains('password') ||
+        lower == 'securit' ||
+        lower == '__securit';
   }
 }
 

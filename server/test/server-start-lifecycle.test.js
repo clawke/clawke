@@ -21,7 +21,13 @@ test('server index exports explicit startup function and keeps standalone startu
 
   assert.match(indexSource, /export async function startClawkeServer\(\)/);
   assert.match(indexSource, /import \{ printClientInstallBanner \} from '\.\/client-install-banner\.js'/);
-  assert.equal((indexSource.match(/printClientInstallBanner\(\)/g) || []).length, 2);
+  assert.match(indexSource, /function printReadyBanner\(httpPort: number\): void/);
+  assert.match(indexSource, /const freshConfig = loadConfig\(\)/);
+  assert.match(indexSource, /serverAddress: `http:\/\/127\.0\.0\.1:\$\{httpPort\}`/);
+  assert.match(indexSource, /token: freshConfig\.relay\?\.token \|\| ''/);
+  assert.equal((indexSource.match(/printReadyBanner\(HTTP_PORT\)/g) || []).length, 2);
+  assert.match(indexSource, /await Promise\.all\(\[unifiedReady, mediaReady, upstreamReady\]\);\n\s+console\.log\('\[Server\] ✅ Ready'\);\n\s+printReadyBanner\(HTTP_PORT\);/);
+  assert.match(indexSource, /await Promise\.all\(\[unifiedReady, mediaReady\]\);\n\s+console\.log\('\[Server\] ✅ Ready'\);\n\s+printReadyBanner\(HTTP_PORT\);/);
   assert.match(indexSource, /function isDirectRun\(entryPath: string \| undefined\): boolean/);
   assert.match(indexSource, /if \(isDirectRun\(process\.argv\[1\]\)\)/);
   assert.doesNotMatch(indexSource, /^main\(\)\.catch/m);
@@ -47,4 +53,12 @@ test('server stop cleans gateways even when the server pid is missing or stale',
   assert.match(serverStopBody[1], /No PID file found/);
   assert.match(serverStopBody[1], /stale PID file/);
   assert.match(serverStopBody[1], /return/);
+});
+
+test('server lifecycle treats EPERM as an existing process and protects pid cleanup', () => {
+  const cliSource = fs.readFileSync(path.join(repoRoot, 'server', 'src', 'cli', 'clawke.ts'), 'utf8');
+
+  assert.match(cliSource, /return err\?\.code === 'EPERM'/);
+  assert.match(cliSource, /function removePidFile\(expectedPid\?: number\): void/);
+  assert.match(cliSource, /removePidFile\(process\.pid\)/);
 });

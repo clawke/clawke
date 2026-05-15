@@ -14,7 +14,6 @@ class AppDelegate: FlutterAppDelegate, UNUserNotificationCenterDelegate {
   override func applicationDidFinishLaunching(_ notification: Notification) {
     UNUserNotificationCenter.current().delegate = self
     enqueueLaunchNotificationPayload(notification.userInfo)
-    super.applicationDidFinishLaunching(notification)
   }
 
   override func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

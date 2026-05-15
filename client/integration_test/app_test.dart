@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:client/core/ws_service.dart';
 import 'package:client/data/database/app_database.dart';
+import 'package:client/l10n/app_localizations.dart';
 import 'package:client/models/message_model.dart';
 import 'package:client/providers/chat_provider.dart';
 import 'package:client/screens/chat_screen.dart';
@@ -127,7 +128,7 @@ void main() {
       );
 
       // Status shows disconnected
-      expect(find.text('已断开 · 点击重连'), findsOneWidget);
+      expect(find.text('未连接'), findsOneWidget);
 
       // Send button is disabled
       final sendButton = tester.widget<IconButton>(
@@ -164,7 +165,11 @@ Future<void> _pumpIntegration(
   await tester.pumpWidget(
     ProviderScope(
       overrides: overrides,
-      child: const MaterialApp(home: ChatScreen()),
+      child: const MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: ChatScreen(),
+      ),
     ),
   );
   await tester.pumpAndSettle();

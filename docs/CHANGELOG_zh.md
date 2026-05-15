@@ -4,6 +4,70 @@
 
 <!-- CHANGELOG_START -->
 
+## v1.1.31 (2026-05-12)
+
+**[新功能]** Gateway 使用情况可视化与更新自动化。
+- 新增 Gateway 使用情况面板，便于查看已连接 Gateway 的活动状态。
+- 新增 Gateway 更新后的自动重启处理，并补充本地 Server 连接提示。
+
+**[问题修复]** OpenClaw Gateway 配置与运行指引。
+- 修复 OpenClaw Gateway 更新配置合并问题。
+- 优化 GatewayClient 错误指引和 Server PID 生命周期保护。
+- 让发布版本校验可配置，并改进安装脚本的 TTY 处理。
+
+## v1.1.30 (2026-05-11)
+
+**[问题修复]** OpenClaw Gateway 与 UI 回归稳定性。
+- 稳定 OpenClaw Gateway 集成路径，确保已准备的 Gateway 修改能可靠进入发布验证。
+- 加固 UI E2E 回归套件，减少发布前校验中的不稳定失败。
+
+**[功能优化]** Linux 桌面端安装与打包体验。
+- 新增 Linux 桌面端注册，并支持通过 `sh` 执行桌面安装脚本。
+- 修复 Linux 图标和字体 fallback 行为，并优化桌面端应用图标与标题元数据。
+- 改进 Gateway 安装流程，让安装后的下一步更清晰。
+
+## v1.1.29 (2026-05-10)
+
+**[问题修复]** macOS App Store 登录与审核准备。
+- App Store 版禁用应用内更新检查和更新弹窗，确保更新完全由 Mac App Store 管理。
+- 修复 macOS App Store 签名和 entitlement 校验，覆盖 Apple 登录、production APNs 和 Google 登录 Keychain 访问。
+- 加固 Mac App Store 包签名流程，上传前拦截 quarantine 扩展属性和审核不允许的 entitlements。
+
+**[功能优化]** 发布体验与运行路径安全。
+- 优化欢迎页布局，提升首次启动体验。
+- 移动端和无法定位仓库根目录时忽略 debug runtime directory 覆盖，避免错误路径影响运行。
+
+## v1.1.27 (2026-05-09)
+
+**[问题修复]** macOS release 登录与桌面端 OAuth 打包。
+- macOS release 版保持原生 GoogleSignIn 流程，并校验必需的 Keychain access groups。
+- macOS release 版默认隐藏 Apple 登录，直到 provisioning profile 真正启用 Sign in with Apple entitlement，避免显示不可用按钮。
+
+**[功能优化]** 桌面端发布覆盖与图标资源。
+- 优化桌面端 OAuth 回调流程，并刷新 Windows/Linux 桌面端图标。
+- 将 GitHub Actions 更新到当前 Node runtime，并新增内部桌面端发布构建覆盖。
+
+## v1.1.26 (2026-05-09)
+
+**[问题修复]** macOS release 签名与 Windows 桌面端 Google 登录。
+- macOS release 签名改为先显式签名嵌套 framework，再签名 app bundle，符合当前 Apple 签名建议和 macOS 26 验证规则。
+- macOS release 构建和发布后回验切换到 macOS 26 runner，确保发布 DMG 在用户报错的同一系统大版本上验证。
+- Windows/Linux 桌面端新增系统浏览器 loopback + PKCE 的 Google OAuth 流程，通过 `GOOGLE_DESKTOP_CLIENT_ID` 控制开启。
+- Windows release 构建在配置 `GOOGLE_DESKTOP_CLIENT_ID` 时启用桌面端 Google OAuth；未配置时仍可完成发布验证，登录入口保持禁用。
+
+## v1.1.23 (2026-05-09)
+
+**[问题修复]** Windows 发布包启动与桌面端登录体验。
+- Windows release zip 现在会随包携带 Visual C++ runtime DLL，即使系统 runtime 缺失或损坏也能启动 Clawke。
+- 新增发布流程校验，确保 Windows 包包含 `msvcp140.dll`、`vcruntime140.dll` 和 `vcruntime140_1.dll`。
+- Windows 和 Linux 桌面端会隐藏暂不支持的 Google 登录入口，避免触发桌面端 `MissingPluginException`。
+
+## v1.1.22 (2026-05-09)
+
+**[问题修复]** Android 发布签名与 Google 登录。
+- 恢复 GitHub 发布流程中的固定 Android release 签名，确保官方 APK 使用预期的 release 证书。
+- 新增证书指纹校验和已发布 APK 回验，防止再次发布 debug 签名的 Android release 包。
+
 ## v1.1.21 (2026-05-03)
 
 **[功能优化]** 发布与运行路径稳定性增强。

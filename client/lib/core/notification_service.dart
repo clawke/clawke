@@ -32,6 +32,12 @@ class NotificationService {
 
   static Future<void> init() async {
     if (_initialized) return;
+    if (!_supportsLocalNotificationPlugin()) {
+      debugPrint(
+        '[NotificationService] 🔕 local notifications unsupported on ${defaultTargetPlatform.name}',
+      );
+      return;
+    }
 
     // Do NOT request permissions here — requesting on macOS during init
     // can block the main thread before the window renders, causing a black screen.
@@ -63,6 +69,16 @@ class NotificationService {
       );
     }
     _initialized = true;
+  }
+
+  static bool _supportsLocalNotificationPlugin() {
+    if (kIsWeb) return false;
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.android ||
+      TargetPlatform.iOS ||
+      TargetPlatform.macOS => true,
+      _ => false,
+    };
   }
 
   static void setTapHandler(NotificationTapHandler? handler) {

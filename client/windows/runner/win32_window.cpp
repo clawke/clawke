@@ -31,6 +31,12 @@ static int g_active_window_count = 0;
 
 using EnableNonClientDpiScaling = BOOL __stdcall(HWND hwnd);
 
+HICON LoadAppIcon(int width, int height) {
+  return reinterpret_cast<HICON>(LoadImage(
+      GetModuleHandle(nullptr), MAKEINTRESOURCE(IDI_APP_ICON), IMAGE_ICON,
+      width, height, LR_DEFAULTCOLOR | LR_SHARED));
+}
+
 // Scale helper to convert logical scaler values to physical using passed in
 // scale factor
 int Scale(int source, double scale_factor) {
@@ -88,19 +94,22 @@ WindowClassRegistrar* WindowClassRegistrar::instance_ = nullptr;
 
 const wchar_t* WindowClassRegistrar::GetWindowClass() {
   if (!class_registered_) {
-    WNDCLASS window_class{};
+    WNDCLASSEX window_class{};
+    window_class.cbSize = sizeof(window_class);
     window_class.hCursor = LoadCursor(nullptr, IDC_ARROW);
     window_class.lpszClassName = kWindowClassName;
     window_class.style = CS_HREDRAW | CS_VREDRAW;
     window_class.cbClsExtra = 0;
     window_class.cbWndExtra = 0;
     window_class.hInstance = GetModuleHandle(nullptr);
-    window_class.hIcon =
-        LoadIcon(window_class.hInstance, MAKEINTRESOURCE(IDI_APP_ICON));
+    window_class.hIcon = LoadAppIcon(GetSystemMetrics(SM_CXICON),
+                                     GetSystemMetrics(SM_CYICON));
+    window_class.hIconSm = LoadAppIcon(GetSystemMetrics(SM_CXSMICON),
+                                       GetSystemMetrics(SM_CYSMICON));
     window_class.hbrBackground = 0;
     window_class.lpszMenuName = nullptr;
     window_class.lpfnWndProc = Win32Window::WndProc;
-    RegisterClass(&window_class);
+    RegisterClassEx(&window_class);
     class_registered_ = true;
   }
   return kWindowClassName;
@@ -143,6 +152,14 @@ bool Win32Window::Create(const std::wstring& title,
   if (!window) {
     return false;
   }
+
+  SendMessage(window, WM_SETICON, ICON_BIG,
+              reinterpret_cast<LPARAM>(LoadAppIcon(
+                  GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON))));
+  SendMessage(window, WM_SETICON, ICON_SMALL,
+              reinterpret_cast<LPARAM>(
+                  LoadAppIcon(GetSystemMetrics(SM_CXSMICON),
+                              GetSystemMetrics(SM_CYSMICON))));
 
   UpdateTheme(window);
 

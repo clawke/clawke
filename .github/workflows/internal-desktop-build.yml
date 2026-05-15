@@ -1,0 +1,461 @@
+name: Internal Desktop Builds
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Optional existing release tag to refresh Linux assets, e.g. v1.1.27'
+        required: false
+        default: ''
+      build_target:
+        description: 'Desktop target to build'
+        required: true
+        type: choice
+        default: 'all'
+        options:
+          - all
+          - macos
+          - windows
+          - linux
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: '3.41.4'
+
+jobs:
+  build-macos:
+    name: build-macos-universal
+    if: ${{ inputs.build_target == 'all' || inputs.build_target == 'macos' }}
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+
+      - name: Install dependencies
+        working-directory: client
+        run: flutter pub get
+
+      - name: Generate code (Drift ORM)
+        working-directory: client
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Verify macOS production APNs entitlement
+        run: |
+          APNS_ENV=$(/usr/libexec/PlistBuddy -c 'Print :com.apple.developer.aps-environment' client/macos/Runner/Release.entitlements)
+          echo "macOS Release APNs environment: ${APNS_ENV}"
+          test "$APNS_ENV" = "production"
+
+      - name: Import macOS signing assets
+        env:
+          MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_PROVISION_PROFILE_BASE64: ${{ secrets.MACOS_PROVISION_PROFILE_BASE64 }}
+        run: |
+          set -euo pipefail
+          test -n "$MACOS_CERTIFICATE_BASE64"
+          test -n "$MACOS_CERTIFICATE_PASSWORD"
+          test -n "$MACOS_PROVISION_PROFILE_BASE64"
+
+          CERT_PATH="$RUNNER_TEMP/macos-signing.p12"
+          PROFILE_PATH="$RUNNER_TEMP/macos.provisionprofile"
+          KEYCHAIN_PATH="$RUNNER_TEMP/clawke-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
+
+          echo "$MACOS_CERTIFICATE_BASE64" | base64 -D > "$CERT_PATH"
+          echo "$MACOS_PROVISION_PROFILE_BASE64" | base64 -D > "$PROFILE_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/clawke-macos.provisionprofile"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+
+          SIGN_IDENTITY_HASH="$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | awk '/[A-F0-9]{40}/ {print $2; exit}')"
+          test -n "$SIGN_IDENTITY_HASH"
+          echo "MACOS_SIGN_IDENTITY_HASH=$SIGN_IDENTITY_HASH" >> "$GITHUB_ENV"
+          echo "MACOS_SIGNING_KEYCHAIN=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+      - name: Prepare unsigned macOS build for manual signing
+        working-directory: client/macos
+        run: |
+          sed -i '' 's/CODE_SIGN_STYLE = Automatic/CODE_SIGN_STYLE = Manual/g' Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/"CODE_SIGN_IDENTITY\[sdk=macosx\*\]" = "Apple Development"/"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-"/g' Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/CODE_SIGN_IDENTITY = "Apple Development"/CODE_SIGN_IDENTITY = "-"/g' Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/DEVELOPMENT_TEAM = .*;/DEVELOPMENT_TEAM = "";/g' Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/CODE_SIGN_ENTITLEMENTS = .*;//g' Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/ONLY_ACTIVE_ARCH = YES/ONLY_ACTIVE_ARCH = NO/g' Runner.xcodeproj/project.pbxproj
+          echo 'CODE_SIGNING_REQUIRED = NO' >> Flutter/Release.xcconfig
+          echo 'CODE_SIGNING_ALLOWED = NO' >> Flutter/Release.xcconfig
+          echo 'ONLY_ACTIVE_ARCH = NO' >> Flutter/Release.xcconfig
+
+      - name: Build macOS
+        working-directory: client
+        run: flutter build macos --release --dart-define=CLAWKE_MACOS_APPLE_SIGN_IN_ENABLED=false
+
+      - name: Sign and verify macOS production app
+        run: |
+          set -euo pipefail
+          test -n "$MACOS_SIGN_IDENTITY_HASH"
+          test -n "$MACOS_SIGNING_KEYCHAIN"
+
+          assert_signature_has_certificate() {
+            local target="$1"
+            local prefix="$RUNNER_TEMP/codesign-cert-$(uuidgen)-"
+            codesign -d --extract-certificates="$prefix" "$target" >/dev/null 2>&1 || true
+            if [ ! -s "${prefix}0" ]; then
+              echo "::error::Code signature has no embedded signing certificate: $target"
+              exit 1
+            fi
+          }
+
+          APP_PATH="$(find client/build/macos/Build/Products/Release -maxdepth 1 -type d -name "*.app" | head -1)"
+          if [ -z "$APP_PATH" ]; then
+            echo "::error::macOS app bundle not found."
+            exit 1
+          fi
+          if [ "$(basename "$APP_PATH")" != "Clawke.app" ]; then
+            echo "::error::Unexpected macOS app bundle name: $(basename "$APP_PATH")"
+            exit 1
+          fi
+          echo "Using macOS app bundle: $APP_PATH"
+
+          cp "$RUNNER_TEMP/macos.provisionprofile" "$APP_PATH/Contents/embedded.provisionprofile"
+          security cms -D -i "$RUNNER_TEMP/macos.provisionprofile" > "$RUNNER_TEMP/macos-profile.plist"
+          APP_ID_PREFIX=$(/usr/libexec/PlistBuddy -c 'Print :ApplicationIdentifierPrefix:0' "$RUNNER_TEMP/macos-profile.plist")
+          PROFILE_APP_ID=$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.application-identifier' "$RUNNER_TEMP/macos-profile.plist")
+          PROFILE_TEAM_ID=$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.developer.team-identifier' "$RUNNER_TEMP/macos-profile.plist")
+          export APP_ID_PREFIX
+          export APP_ID_PREFIX_PLACEHOLDER='$(AppIdentifierPrefix)'
+          cp client/macos/Runner/Release.entitlements "$RUNNER_TEMP/macos-release.entitlements"
+          perl -0pi -e 's/\Q$ENV{APP_ID_PREFIX_PLACEHOLDER}\E/$ENV{APP_ID_PREFIX}./g' "$RUNNER_TEMP/macos-release.entitlements"
+          /usr/libexec/PlistBuddy -c 'Delete :com.apple.developer.applesignin' "$RUNNER_TEMP/macos-release.entitlements" >/dev/null 2>&1 || true
+          /usr/libexec/PlistBuddy -c 'Delete :com.apple.application-identifier' "$RUNNER_TEMP/macos-release.entitlements" >/dev/null 2>&1 || true
+          /usr/libexec/PlistBuddy -c "Add :com.apple.application-identifier string $PROFILE_APP_ID" "$RUNNER_TEMP/macos-release.entitlements"
+          /usr/libexec/PlistBuddy -c 'Delete :com.apple.developer.team-identifier' "$RUNNER_TEMP/macos-release.entitlements" >/dev/null 2>&1 || true
+          /usr/libexec/PlistBuddy -c "Add :com.apple.developer.team-identifier string $PROFILE_TEAM_ID" "$RUNNER_TEMP/macos-release.entitlements"
+
+          validate_profile_entitlement() {
+            local entitlement="$1"
+            if /usr/libexec/PlistBuddy -c "Print :${entitlement}" "$RUNNER_TEMP/macos-release.entitlements" >/dev/null 2>&1; then
+              if ! /usr/libexec/PlistBuddy -c "Print :Entitlements:${entitlement}" "$RUNNER_TEMP/macos-profile.plist" >/dev/null 2>&1; then
+                echo "::error::Missing macOS provisioning profile entitlement: ${entitlement}"
+                exit 1
+              fi
+            fi
+          }
+
+          validate_profile_entitlement "com.apple.application-identifier"
+          validate_profile_entitlement "com.apple.developer.team-identifier"
+          validate_profile_entitlement "com.apple.developer.aps-environment"
+          validate_profile_entitlement "keychain-access-groups"
+
+          find "$APP_PATH/Contents/Frameworks" -maxdepth 1 -name "*.framework" -type d -print0 | while IFS= read -r -d '' framework; do
+            codesign --force --options runtime --timestamp \
+              --keychain "$MACOS_SIGNING_KEYCHAIN" \
+              --sign "$MACOS_SIGN_IDENTITY_HASH" \
+              "$framework"
+          done
+
+          codesign --force --options runtime --timestamp \
+            --keychain "$MACOS_SIGNING_KEYCHAIN" \
+            --sign "$MACOS_SIGN_IDENTITY_HASH" \
+            --entitlements "$RUNNER_TEMP/macos-release.entitlements" \
+            "$APP_PATH"
+          security delete-keychain "$MACOS_SIGNING_KEYCHAIN"
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+          assert_signature_has_certificate "$APP_PATH"
+          find "$APP_PATH/Contents/Frameworks" -maxdepth 1 -name "*.framework" -type d -print0 | while IFS= read -r -d '' framework; do
+            assert_signature_has_certificate "$framework"
+          done
+
+          codesign -d --entitlements - "$APP_PATH" > "$RUNNER_TEMP/macos-entitlements.txt" 2>/dev/null
+          cat "$RUNNER_TEMP/macos-entitlements.txt"
+          grep -q "com.apple.developer.aps-environment" "$RUNNER_TEMP/macos-entitlements.txt"
+          grep -q "production" "$RUNNER_TEMP/macos-entitlements.txt"
+          grep -q "$PROFILE_APP_ID" "$RUNNER_TEMP/macos-entitlements.txt"
+          grep -q "$PROFILE_TEAM_ID" "$RUNNER_TEMP/macos-entitlements.txt"
+          grep -q "com.google.GIDSignIn" "$RUNNER_TEMP/macos-entitlements.txt"
+
+          MACOS_EXE_NAME=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_PATH/Contents/Info.plist")
+          MACOS_ARCHS="$(lipo -archs "$APP_PATH/Contents/MacOS/$MACOS_EXE_NAME")"
+          echo "Internal macOS binary architectures: $MACOS_ARCHS"
+          if ! printf '%s\n' "$MACOS_ARCHS" | grep -qw x86_64 || ! printf '%s\n' "$MACOS_ARCHS" | grep -qw arm64; then
+            echo "::error::Internal macOS binary is not universal: $MACOS_ARCHS"
+            exit 1
+          fi
+
+      - name: Create DMG
+        run: |
+          set -euo pipefail
+          APP_PATH="$(find client/build/macos/Build/Products/Release -maxdepth 1 -type d -name "*.app" | head -1)"
+          if [ -z "$APP_PATH" ]; then
+            echo "::error::macOS app bundle not found."
+            exit 1
+          fi
+          if [ "$(basename "$APP_PATH")" != "Clawke.app" ]; then
+            echo "::error::Unexpected macOS app bundle name: $(basename "$APP_PATH")"
+            exit 1
+          fi
+          echo "Using macOS app bundle for DMG: $APP_PATH"
+          bash scripts/create_macos_dmg.sh "$APP_PATH" Clawke-internal-macOS.dmg Clawke
+
+      - name: Notarize and staple DMG
+        env:
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+          APPLE_NOTARY_KEY_BASE64: ${{ secrets.APPLE_NOTARY_KEY_BASE64 }}
+        run: |
+          set -euo pipefail
+          test -n "$APPLE_NOTARY_KEY_ID"
+          test -n "$APPLE_NOTARY_ISSUER_ID"
+          test -n "$APPLE_NOTARY_KEY_BASE64"
+
+          assert_signature_has_certificate() {
+            local target="$1"
+            local prefix="$RUNNER_TEMP/codesign-cert-$(uuidgen)-"
+            codesign -d --extract-certificates="$prefix" "$target" >/dev/null 2>&1 || true
+            if [ ! -s "${prefix}0" ]; then
+              echo "::error::Code signature has no embedded signing certificate: $target"
+              exit 1
+            fi
+          }
+
+          hdiutil verify Clawke-internal-macOS.dmg
+          NOTARY_KEY="$RUNNER_TEMP/AuthKey_${APPLE_NOTARY_KEY_ID}.p8"
+          echo "$APPLE_NOTARY_KEY_BASE64" | base64 -D > "$NOTARY_KEY"
+          chmod 600 "$NOTARY_KEY"
+
+          xcrun notarytool submit Clawke-internal-macOS.dmg \
+            --key "$NOTARY_KEY" \
+            --key-id "$APPLE_NOTARY_KEY_ID" \
+            --issuer "$APPLE_NOTARY_ISSUER_ID" \
+            --wait
+
+          xcrun stapler staple Clawke-internal-macOS.dmg
+          hdiutil verify Clawke-internal-macOS.dmg
+
+          VERIFY_MOUNT="$RUNNER_TEMP/clawke-internal-dmg-verify"
+          mkdir -p "$VERIFY_MOUNT"
+          hdiutil attach Clawke-internal-macOS.dmg -readonly -nobrowse -mountpoint "$VERIFY_MOUNT" >/dev/null
+          trap 'hdiutil detach "$VERIFY_MOUNT" >/dev/null 2>&1 || true' EXIT
+          DMG_APP_PATH="$(find "$VERIFY_MOUNT" -maxdepth 1 -name "*.app" -type d | head -1)"
+          test -n "$DMG_APP_PATH"
+          test "$(basename "$DMG_APP_PATH")" = "Clawke.app"
+          codesign --verify --deep --strict --verbose=2 "$DMG_APP_PATH"
+          assert_signature_has_certificate "$DMG_APP_PATH"
+          find "$DMG_APP_PATH/Contents/Frameworks" -maxdepth 1 -name "*.framework" -type d -print0 | while IFS= read -r -d '' framework; do
+            assert_signature_has_certificate "$framework"
+          done
+          codesign -d --entitlements - "$DMG_APP_PATH" > "$RUNNER_TEMP/macos-internal-dmg-entitlements.txt" 2>/dev/null
+          cat "$RUNNER_TEMP/macos-internal-dmg-entitlements.txt"
+          grep -q "com.apple.developer.aps-environment" "$RUNNER_TEMP/macos-internal-dmg-entitlements.txt"
+          grep -q "production" "$RUNNER_TEMP/macos-internal-dmg-entitlements.txt"
+          grep -q "com.google.GIDSignIn" "$RUNNER_TEMP/macos-internal-dmg-entitlements.txt"
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: internal-macos-dmg
+          path: Clawke-internal-macOS.dmg
+          retention-days: 7
+
+  build-windows:
+    name: build-windows-x64
+    if: ${{ inputs.build_target == 'all' || inputs.build_target == 'windows' }}
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+
+      - name: Install dependencies
+        working-directory: client
+        run: flutter pub get
+
+      - name: Generate code (Drift ORM)
+        working-directory: client
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Build Windows
+        working-directory: client
+        shell: pwsh
+        env:
+          GOOGLE_DESKTOP_CLIENT_ID: ${{ secrets.GOOGLE_DESKTOP_CLIENT_ID }}
+          GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.GOOGLE_DESKTOP_CLIENT_SECRET }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not $env:GOOGLE_DESKTOP_CLIENT_ID) {
+            throw "GOOGLE_DESKTOP_CLIENT_ID secret is required for internal Windows Google login builds."
+          }
+          if (-not $env:GOOGLE_DESKTOP_CLIENT_SECRET) {
+            throw "GOOGLE_DESKTOP_CLIENT_SECRET secret is required for internal Windows Google login builds."
+          }
+          flutter build windows --release `
+            "--dart-define=GOOGLE_DESKTOP_CLIENT_ID=$env:GOOGLE_DESKTOP_CLIENT_ID" `
+            "--dart-define=GOOGLE_DESKTOP_CLIENT_SECRET=$env:GOOGLE_DESKTOP_CLIENT_SECRET"
+
+      - name: Bundle Visual C++ runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $releaseDir = "client\build\windows\x64\runner\Release"
+          $clawkeExe = Join-Path $releaseDir "Clawke.exe"
+          if (-not (Test-Path $clawkeExe)) {
+            throw "Windows release output is missing Clawke.exe."
+          }
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsInstall = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vsInstall) {
+            throw "Unable to locate Visual Studio with VC tools."
+          }
+          $redistRoot = Join-Path $vsInstall "VC\Redist\MSVC"
+          $crtDir = Get-ChildItem -Path $redistRoot -Directory |
+            Sort-Object Name -Descending |
+            ForEach-Object { Join-Path $_.FullName "x64\Microsoft.VC143.CRT" } |
+            Where-Object { Test-Path (Join-Path $_ "vcruntime140_1.dll") } |
+            Select-Object -First 1
+          if (-not $crtDir) {
+            throw "Unable to locate x64 Visual C++ runtime under $redistRoot."
+          }
+          foreach ($dll in @("msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll")) {
+            Copy-Item -Path (Join-Path $crtDir $dll) -Destination $releaseDir -Force
+          }
+
+      - name: Create ZIP
+        run: Compress-Archive -Path "client\build\windows\x64\runner\Release\*" -DestinationPath "Clawke-internal-windows-x64.zip"
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: internal-windows-x64
+          path: Clawke-internal-windows-x64.zip
+          retention-days: 7
+
+  build-linux:
+    name: build-linux-${{ matrix.arch }}
+    if: ${{ inputs.build_target == 'all' || inputs.build_target == 'linux' }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-latest
+            container_platform: linux/amd64
+            archive_name: Clawke-internal-linux-x64.tar.gz
+            artifact_name: internal-linux-x64
+            bundle_path: client/build/linux/x64/release/bundle
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            container_platform: linux/arm64
+            archive_name: Clawke-internal-linux-arm64.tar.gz
+            artifact_name: internal-linux-arm64
+            bundle_path: client/build/linux/arm64/release/bundle
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Build Linux in Ubuntu 20.04 container
+        env:
+          GOOGLE_DESKTOP_CLIENT_ID: ${{ secrets.GOOGLE_DESKTOP_CLIENT_ID }}
+          GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.GOOGLE_DESKTOP_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "${GOOGLE_DESKTOP_CLIENT_ID:-}"
+          test -n "${GOOGLE_DESKTOP_CLIENT_SECRET:-}"
+          docker run --rm \
+            --platform "${{ matrix.container_platform }}" \
+            -e DEBIAN_FRONTEND=noninteractive \
+            -e FLUTTER_VERSION="${FLUTTER_VERSION}" \
+            -e GOOGLE_DESKTOP_CLIENT_ID="${GOOGLE_DESKTOP_CLIENT_ID}" \
+            -e GOOGLE_DESKTOP_CLIENT_SECRET="${GOOGLE_DESKTOP_CLIENT_SECRET}" \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            -w /workspace \
+            ubuntu:20.04 bash -euxo pipefail -c '
+              apt-get update -y
+              apt-get install -y ca-certificates curl git unzip xz-utils zip clang lld cmake ninja-build pkg-config libgtk-3-dev liblzma-dev binutils file
+              git clone --branch "$FLUTTER_VERSION" --depth 1 https://github.com/flutter/flutter.git /opt/flutter
+              export PATH="/opt/flutter/bin:/opt/flutter/bin/cache/dart-sdk/bin:$PATH"
+              git config --global --add safe.directory /opt/flutter
+              git config --global --add safe.directory /workspace
+              flutter --version
+              flutter config --enable-linux-desktop
+              cd /workspace/client
+              flutter pub get
+              dart run build_runner build --delete-conflicting-outputs
+              flutter build linux --release \
+                "--dart-define=GOOGLE_DESKTOP_CLIENT_ID=${GOOGLE_DESKTOP_CLIENT_ID}" \
+                "--dart-define=GOOGLE_DESKTOP_CLIENT_SECRET=${GOOGLE_DESKTOP_CLIENT_SECRET}"
+            '
+
+      - name: Verify Linux binary architecture
+        run: |
+          set -euo pipefail
+          EXE_PATH="${{ matrix.bundle_path }}/Clawke"
+          test -x "$EXE_PATH"
+          file "$EXE_PATH"
+          command -v readelf
+          while IFS= read -r -d '' binary; do
+            if readelf --version-info "$binary" 2>/dev/null | grep -Eq 'GLIBC_2\.(3[2-9]|[4-9][0-9])'; then
+              echo "::error::$binary requires glibc newer than 2.31."
+              readelf --version-info "$binary" | grep -E 'GLIBC_2\.(3[2-9]|[4-9][0-9])' || true
+              exit 1
+            fi
+          done < <(find "${{ matrix.bundle_path }}" -type f \( -name Clawke -o -name "*.so" \) -print0)
+
+      - name: Create TAR
+        run: |
+          set -euo pipefail
+          test -x "${{ matrix.bundle_path }}/Clawke"
+          tar -C "${{ matrix.bundle_path }}" -czf "${{ matrix.archive_name }}" .
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.archive_name }}
+          retention-days: 7
+
+  refresh-linux-release-assets:
+    name: refresh-linux-release-assets
+    needs: build-linux
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag != '' && (inputs.build_target == 'all' || inputs.build_target == 'linux') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v7
+        with:
+          pattern: internal-linux-*
+          path: artifacts
+
+      - name: Upload Linux assets to existing release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          cp artifacts/internal-linux-x64/Clawke-internal-linux-x64.tar.gz "release/Clawke-${RELEASE_TAG}-linux-x64.tar.gz"
+          cp artifacts/internal-linux-arm64/Clawke-internal-linux-arm64.tar.gz "release/Clawke-${RELEASE_TAG}-linux-arm64.tar.gz"
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY"
+          gh release upload "$RELEASE_TAG" \
+            "release/Clawke-${RELEASE_TAG}-linux-x64.tar.gz" \
+            "release/Clawke-${RELEASE_TAG}-linux-arm64.tar.gz" \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber

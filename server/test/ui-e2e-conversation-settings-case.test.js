@@ -24,6 +24,12 @@ const runner = readFileSync(
   'utf8',
 );
 
+function extractHarnessHelper(name) {
+  const match = harness.match(new RegExp(`Future<void> ${name}[\\s\\S]*?\\n}\\n`));
+  assert.ok(match, `${name} helper should exist`);
+  return match[0];
+}
+
 test('conversation settings case covers model, skill, chat, and delete lifecycle', () => {
   const testCase = JSON.parse(readFileSync(casePath, 'utf8'));
 
@@ -46,11 +52,18 @@ test('conversation settings case covers model, skill, chat, and delete lifecycle
 });
 
 test('UI E2E harness supports configuring and deleting conversations without injected keys', () => {
+  const conversationSettingsHelpers = [
+    extractHarnessHelper('_createConversation'),
+    extractHarnessHelper('_selectConversationModel'),
+    extractHarnessHelper('_selectConversationSkills'),
+    extractHarnessHelper('_deleteConversation'),
+  ].join('\n');
+
   assert.match(harness, /case 'delete_conversation':/);
   assert.match(harness, /Future<void> _deleteConversation/);
   assert.match(harness, /Future<void> _selectConversationModel/);
   assert.match(harness, /Future<void> _selectConversationSkills/);
-  assert.doesNotMatch(harness, /ui_e2e_/);
+  assert.doesNotMatch(conversationSettingsHelpers, /ui_e2e_/);
 });
 
 test('mock gateway supports configured model list and config-aware chat matching', () => {

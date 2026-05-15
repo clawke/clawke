@@ -48,29 +48,26 @@ class _DashboardViewState extends State<DashboardView> {
   /// 桌面端：无外框，简洁标题，保留完整数据展示
   Widget _buildDesktopLayout(BuildContext context, List<dynamic> sections) {
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 800),
+      constraints: const BoxConstraints(maxWidth: 1180),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 10, 20, 6),
+            padding: const EdgeInsets.fromLTRB(0, 0, 0, 22),
             child: Text(
               context.l10n.navDashboard,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+              textAlign: TextAlign.left,
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: sections.map<Widget>((section) {
-                return _buildSection(context, section as Map<String, dynamic>);
-              }).toList(),
-            ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: sections.map<Widget>((section) {
+              return _buildSection(context, section as Map<String, dynamic>);
+            }).toList(),
           ),
         ],
       ),
@@ -90,14 +87,13 @@ class _DashboardViewState extends State<DashboardView> {
             Padding(
               padding: const EdgeInsets.only(bottom: 10.0),
               child: Text(
-                title.toUpperCase(),
-                style: TextStyle(
-                  fontSize: Theme.of(context).textTheme.labelMedium!.fontSize,
+                title,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w600,
                   color: Theme.of(
                     context,
                   ).colorScheme.onSurfaceVariant.withOpacity(0.5),
-                  letterSpacing: 1.5,
+                  letterSpacing: 0,
                 ),
               ),
             ),
@@ -162,10 +158,7 @@ class _DashboardViewState extends State<DashboardView> {
 
     return _glassCard(
       context,
-      padding: EdgeInsets.symmetric(
-        horizontal: mobile ? 10 : 14,
-        vertical: 10,
-      ),
+      padding: EdgeInsets.symmetric(horizontal: mobile ? 10 : 14, vertical: 10),
       child: Row(
         mainAxisAlignment: mobile
             ? MainAxisAlignment.start
@@ -188,14 +181,16 @@ class _DashboardViewState extends State<DashboardView> {
                   height: 6,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color:
-                        isError ? colorScheme.error : const Color(0xFF22C55E),
+                    color: isError
+                        ? colorScheme.error
+                        : const Color(0xFF22C55E),
                     boxShadow: [
                       BoxShadow(
-                        color: (isError
-                                ? colorScheme.error
-                                : const Color(0xFF22C55E))
-                            .withOpacity(0.6),
+                        color:
+                            (isError
+                                    ? colorScheme.error
+                                    : const Color(0xFF22C55E))
+                                .withOpacity(0.6),
                         blurRadius: 6,
                       ),
                     ],
@@ -206,7 +201,9 @@ class _DashboardViewState extends State<DashboardView> {
                   child: Text(
                     displayText,
                     style: TextStyle(
-                      fontSize: Theme.of(context).textTheme.labelSmall!.fontSize,
+                      fontSize: Theme.of(
+                        context,
+                      ).textTheme.labelSmall!.fontSize,
                       fontWeight: FontWeight.w500,
                       color: isError
                           ? colorScheme.error
@@ -264,7 +261,9 @@ class _DashboardViewState extends State<DashboardView> {
                         Text(
                           value,
                           style: TextStyle(
-                            fontSize: Theme.of(context).textTheme.headlineSmall!.fontSize,
+                            fontSize: Theme.of(
+                              context,
+                            ).textTheme.headlineSmall!.fontSize,
                             fontWeight: FontWeight.w700,
                             fontFamily: 'monospace',
                             color: colorScheme.onSurface,
@@ -274,7 +273,9 @@ class _DashboardViewState extends State<DashboardView> {
                         Text(
                           label,
                           style: TextStyle(
-                            fontSize: Theme.of(context).textTheme.labelSmall!.fontSize,
+                            fontSize: Theme.of(
+                              context,
+                            ).textTheme.labelSmall!.fontSize,
                             color: colorScheme.onSurfaceVariant.withOpacity(
                               0.6,
                             ),
@@ -304,7 +305,9 @@ class _DashboardViewState extends State<DashboardView> {
                                     Text(
                                       e.key,
                                       style: TextStyle(
-                                        fontSize: Theme.of(context).textTheme.labelSmall!.fontSize,
+                                        fontSize: Theme.of(
+                                          context,
+                                        ).textTheme.labelSmall!.fontSize,
                                         color: colorScheme.onSurfaceVariant
                                             .withOpacity(0.4),
                                         fontWeight: FontWeight.w500,
@@ -314,7 +317,9 @@ class _DashboardViewState extends State<DashboardView> {
                                     Text(
                                       e.value,
                                       style: TextStyle(
-                                        fontSize: Theme.of(context).textTheme.labelSmall!.fontSize,
+                                        fontSize: Theme.of(
+                                          context,
+                                        ).textTheme.labelSmall!.fontSize,
                                         fontFamily: 'monospace',
                                         fontWeight: FontWeight.w500,
                                         color: colorScheme.primary,
@@ -357,7 +362,9 @@ class _DashboardViewState extends State<DashboardView> {
                         Text(
                           value,
                           style: TextStyle(
-                            fontSize: Theme.of(context).textTheme.headlineSmall!.fontSize,
+                            fontSize: Theme.of(
+                              context,
+                            ).textTheme.headlineSmall!.fontSize,
                             fontWeight: FontWeight.w700,
                             fontFamily: 'monospace',
                             color: colorScheme.onSurface,
@@ -367,7 +374,9 @@ class _DashboardViewState extends State<DashboardView> {
                         Text(
                           label,
                           style: TextStyle(
-                            fontSize: Theme.of(context).textTheme.labelSmall!.fontSize,
+                            fontSize: Theme.of(
+                              context,
+                            ).textTheme.labelSmall!.fontSize,
                             color: colorScheme.onSurfaceVariant.withOpacity(
                               0.6,
                             ),
@@ -480,7 +489,9 @@ class _DashboardViewState extends State<DashboardView> {
                     return Text(
                       text,
                       style: TextStyle(
-                        fontSize: Theme.of(context).textTheme.labelSmall!.fontSize,
+                        fontSize: Theme.of(
+                          context,
+                        ).textTheme.labelSmall!.fontSize,
                         color: colorScheme.onSurfaceVariant.withOpacity(0.4),
                         fontFamily: 'monospace',
                       ),
@@ -503,7 +514,9 @@ class _DashboardViewState extends State<DashboardView> {
                       child: Text(
                         labels[idx],
                         style: TextStyle(
-                          fontSize: Theme.of(context).textTheme.labelSmall!.fontSize,
+                          fontSize: Theme.of(
+                            context,
+                          ).textTheme.labelSmall!.fontSize,
                           color: colorScheme.onSurfaceVariant.withOpacity(0.5),
                           fontFamily: 'monospace',
                         ),
@@ -528,7 +541,9 @@ class _DashboardViewState extends State<DashboardView> {
                       '$hour\n${spot.y.toInt()} tokens',
                       TextStyle(
                         color: colorScheme.onSurface,
-                        fontSize: Theme.of(context).textTheme.labelSmall!.fontSize,
+                        fontSize: Theme.of(
+                          context,
+                        ).textTheme.labelSmall!.fontSize,
                         fontFamily: 'monospace',
                       ),
                     );
@@ -709,7 +724,9 @@ class _DashboardViewState extends State<DashboardView> {
                         return Text(
                           fmtY(value),
                           style: TextStyle(
-                            fontSize: Theme.of(context).textTheme.labelSmall!.fontSize,
+                            fontSize: Theme.of(
+                              context,
+                            ).textTheme.labelSmall!.fontSize,
                             color: colorScheme.onSurfaceVariant.withOpacity(
                               0.4,
                             ),
@@ -736,7 +753,9 @@ class _DashboardViewState extends State<DashboardView> {
                           child: Text(
                             short,
                             style: TextStyle(
-                              fontSize: Theme.of(context).textTheme.labelSmall!.fontSize,
+                              fontSize: Theme.of(
+                                context,
+                              ).textTheme.labelSmall!.fontSize,
                               color: colorScheme.onSurfaceVariant.withOpacity(
                                 0.5,
                               ),
@@ -764,13 +783,20 @@ class _DashboardViewState extends State<DashboardView> {
                           : '';
                       return BarTooltipItem(
                         rodIndex == 0 ? '$date\n' : '',
-                        TextStyle(color: colorScheme.onSurface, fontSize: Theme.of(context).textTheme.labelMedium!.fontSize),
+                        TextStyle(
+                          color: colorScheme.onSurface,
+                          fontSize: Theme.of(
+                            context,
+                          ).textTheme.labelMedium!.fontSize,
+                        ),
                         children: [
                           TextSpan(
                             text: '${labels[rodIndex]}: ${fmtY(rod.toY)}',
                             style: TextStyle(
                               color: colors[rodIndex],
-                              fontSize: Theme.of(context).textTheme.labelSmall!.fontSize,
+                              fontSize: Theme.of(
+                                context,
+                              ).textTheme.labelSmall!.fontSize,
                               fontFamily: 'monospace',
                               fontWeight: FontWeight.w600,
                             ),
@@ -860,7 +886,9 @@ class _DashboardViewState extends State<DashboardView> {
                   child: Text(
                     cells[0].toString(),
                     style: TextStyle(
-                      fontSize: Theme.of(context).textTheme.bodyMedium!.fontSize,
+                      fontSize: Theme.of(
+                        context,
+                      ).textTheme.bodyMedium!.fontSize,
                       color: colorScheme.onSurface,
                     ),
                   ),
@@ -879,7 +907,9 @@ class _DashboardViewState extends State<DashboardView> {
                   Text(
                     cells[2].toString(),
                     style: TextStyle(
-                      fontSize: Theme.of(context).textTheme.labelSmall!.fontSize,
+                      fontSize: Theme.of(
+                        context,
+                      ).textTheme.labelSmall!.fontSize,
                       color: colorScheme.onSurfaceVariant.withOpacity(0.5),
                       fontFamily: 'monospace',
                     ),

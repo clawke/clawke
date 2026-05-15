@@ -13,7 +13,19 @@ import { buildPushAlert } from '../services/push-service.js';
 
 /** 统计收集器接口（解耦具体实现） */
 export interface StatsCollectorLike {
-  recordTokens(input: number, output: number, cache: number): void;
+  recordTokens(
+    input: number,
+    output: number,
+    cache: number,
+    options?: {
+      gatewayId?: string;
+      conversationId?: string;
+      model?: string;
+      provider?: string;
+      cacheWrite?: number;
+      reasoning?: number;
+    },
+  ): void;
   recordToolCall(name: string, durationMs: number): void;
   recordMessage(): void;
   recordConversation(): void;
@@ -180,10 +192,19 @@ export class MessageRouter {
     // 统计
     if (metadata.usage) {
       const u = metadata.usage as Record<string, number>;
+      const rawMsg = msg as unknown as Record<string, unknown>;
       this.stats.recordTokens(
         u.input_tokens || u.input || 0,
         u.output_tokens || u.output || 0,
         u.cache_read_input_tokens || u.cacheRead || 0,
+        {
+          gatewayId,
+          conversationId,
+          model: rawMsg.model as string || '',
+          provider: rawMsg.provider as string || '',
+          cacheWrite: u.cache_write_input_tokens || u.cacheWrite || 0,
+          reasoning: u.reasoning_tokens || u.reasoning || 0,
+        },
       );
     }
     if (metadata.toolCall) {

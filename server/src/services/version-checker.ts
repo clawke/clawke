@@ -37,7 +37,7 @@ export class VersionChecker {
   private checkIntervalMs: number;
 
   constructor(configDir?: string, checkIntervalMs = 30 * 60 * 1000) {
-    this.owner = process.env.GITHUB_OWNER || 'user';
+    this.owner = process.env.GITHUB_OWNER || 'clawke';
     this.repo = process.env.GITHUB_REPO || 'clawke';
     this.checkIntervalMs = checkIntervalMs;
 
@@ -87,11 +87,11 @@ export class VersionChecker {
 
   /** 从 GitHub 获取最新 release */
   async fetchLatestRelease(): Promise<CachedRelease | null> {
+    const url = `https://api.github.com/repos/${this.owner}/${this.repo}/releases/latest`;
     try {
-      const url = `https://api.github.com/repos/${this.owner}/${this.repo}/releases/latest`;
       const resp = await fetch(url, { headers: { Accept: 'application/vnd.github+json' } });
       if (!resp.ok) {
-        console.warn(`[VersionChecker] GitHub API returned ${resp.status}`);
+        console.warn(`[VersionChecker] GitHub API returned ${resp.status} for ${url}`);
         return null;
       }
       const data = await resp.json() as Record<string, unknown>;
@@ -109,7 +109,7 @@ export class VersionChecker {
       console.log(`[VersionChecker] Latest release: v${this.cachedRelease.version}`);
       return this.cachedRelease;
     } catch (err) {
-      console.error(`[VersionChecker] Failed to fetch: ${(err as Error).message}`);
+      console.error(`[VersionChecker] Failed to fetch ${url}: ${(err as Error).message}`);
       return null;
     }
   }
@@ -142,6 +142,11 @@ export class VersionChecker {
 
   /** 启动定时轮询 */
   startPeriodicCheck(): void {
+    if (process.env.DISABLE_AUTO_UPDATE === 'true') {
+      console.log('[VersionChecker] Auto update check disabled');
+      return;
+    }
+
     this.fetchLatestRelease();
     this.checkTimer = setInterval(() => this.fetchLatestRelease(), this.checkIntervalMs);
     if (this.checkTimer.unref) this.checkTimer.unref();

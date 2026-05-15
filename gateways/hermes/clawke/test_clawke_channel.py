@@ -33,6 +33,7 @@ from clawke_channel import (
     _configured_default_model,
     _websocket_connect_kwargs,
     _sanitize_messages,
+    _usage_from_result,
 )
 
 
@@ -217,6 +218,33 @@ class TestBackoff:
         """Multiple calls produce different values (non-deterministic)."""
         delays = {_backoff_delay(3) for _ in range(20)}
         assert len(delays) > 1, "Jitter should produce varying delays"
+
+
+class TestUsageMapping:
+    """验证 Hermes 结果 token usage 映射 — Verify Hermes result token usage mapping."""
+
+    def test_usage_from_result_maps_hermes_fields(self):
+        usage = _usage_from_result({
+            "input_tokens": 10,
+            "output_tokens": 5,
+            "cache_read_tokens": 3,
+            "cache_write_tokens": 2,
+            "reasoning_tokens": 7,
+            "total_tokens": 15,
+        })
+
+        assert usage == {
+            "input": 10,
+            "output": 5,
+            "cacheRead": 3,
+            "cacheWrite": 2,
+            "reasoning": 7,
+            "total": 15,
+        }
+
+    def test_usage_from_result_skips_empty_usage(self):
+        assert _usage_from_result({"final_response": "ok"}) is None
+        assert _usage_from_result(None) is None
 
 
 class TestMessageSanitization:
@@ -1033,6 +1061,99 @@ class TestCallbackMapping:
         dones = [m for m in sent_messages if m["type"] == GatewayMessageType.AgentTextDone]
         assert len(dones) == 1
         assert dones[0]["fullText"] == "Hello world!"
+        assert "usage" not in dones[0]
+
+    @pytest.mark.asyncio
+    async def test_stream_done_includes_usage_from_agent_result(self, gateway, sent_messages):
+        """流式完成应包含映射后的 token usage — Streaming completion should include mapped token usage."""
+        captured_callbacks = {}
+
+        class MockAIAgent:
+            def __init__(self, **kwargs):
+                captured_callbacks["on_token"] = kwargs.get("stream_delta_callback")
+
+            def run_conversation(self, **kwargs):
+                captured_callbacks["on_token"]("Hello usage")
+                return {
+                    "final_response": "Hello usage",
+                    "input_tokens": 42,
+                    "output_tokens": 8,
+                    "cache_read_tokens": 5,
+                    "cache_write_tokens": 2,
+                    "reasoning_tokens": 3,
+                    "total_tokens": 50,
+                }
+
+        with patch("clawke_channel._get_ai_agent", return_value=MockAIAgent), \
+             patch("clawke_channel._get_session_db", return_value=None), \
+             patch.dict("sys.modules", {
+                 "hermes_cli": MagicMock(),
+                 "hermes_cli.runtime_provider": MagicMock(),
+             }):
+            import sys
+            sys.modules["hermes_cli.runtime_provider"].resolve_runtime_provider = (
+                lambda requested=None, target_model=None: {"api_key": "k", "provider": "test", "model": "m", "base_url": ""}
+            )
+            await gateway._handle_chat({
+                "conversation_id": "conv_usage_stream",
+                "text": "hello",
+            })
+
+        dones = [m for m in sent_messages if m["type"] == GatewayMessageType.AgentTextDone]
+        assert len(dones) == 1
+        assert dones[0]["usage"] == {
+            "input": 42,
+            "output": 8,
+            "cacheRead": 5,
+            "cacheWrite": 2,
+            "reasoning": 3,
+            "total": 50,
+        }
+
+    @pytest.mark.asyncio
+    async def test_non_stream_text_includes_usage_from_agent_result(self, gateway, sent_messages):
+        """非流式完成应包含映射后的 token usage — Non-streaming completion should include mapped token usage."""
+
+        class MockAIAgent:
+            def __init__(self, **kwargs):
+                pass
+
+            def run_conversation(self, **kwargs):
+                return {
+                    "final_response": "Full response",
+                    "input_tokens": 9,
+                    "output_tokens": 4,
+                    "cache_read_tokens": 1,
+                    "cache_write_tokens": 0,
+                    "reasoning_tokens": 0,
+                    "total_tokens": 13,
+                }
+
+        with patch("clawke_channel._get_ai_agent", return_value=MockAIAgent), \
+             patch("clawke_channel._get_session_db", return_value=None), \
+             patch.dict("sys.modules", {
+                 "hermes_cli": MagicMock(),
+                 "hermes_cli.runtime_provider": MagicMock(),
+             }):
+            import sys
+            sys.modules["hermes_cli.runtime_provider"].resolve_runtime_provider = (
+                lambda requested=None, target_model=None: {"api_key": "k", "provider": "test", "model": "m", "base_url": ""}
+            )
+            await gateway._handle_chat({
+                "conversation_id": "conv_usage_full",
+                "text": "hello",
+            })
+
+        texts = [m for m in sent_messages if m["type"] == GatewayMessageType.AgentText]
+        assert len(texts) == 1
+        assert texts[0]["usage"] == {
+            "input": 9,
+            "output": 4,
+            "cacheRead": 1,
+            "cacheWrite": 0,
+            "reasoning": 0,
+            "total": 13,
+        }
 
     @pytest.mark.asyncio
     async def test_reasoning_generates_thinking_delta(self, gateway, sent_messages):

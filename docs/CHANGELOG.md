@@ -4,6 +4,70 @@
 
 <!-- CHANGELOG_START -->
 
+## v1.1.31 (2026-05-12)
+
+**[New Feature]** Gateway usage visibility and update automation.
+- Added a gateway usage dashboard so connected gateway activity is easier to inspect.
+- Added automatic restart handling for updated gateways and clearer local server connection hints.
+
+**[Bug Fix]** OpenClaw gateway configuration and runtime guidance.
+- Fixed OpenClaw gateway update configuration merging.
+- Improved GatewayClient error guidance and server PID lifecycle safeguards.
+- Made release version checks configurable and improved install script TTY handling.
+
+## v1.1.30 (2026-05-11)
+
+**[Bug Fix]** OpenClaw gateway and UI regression stability.
+- Stabilized the OpenClaw gateway integration path so prepared gateway changes are reflected reliably in release validation.
+- Hardened the UI E2E regression suite to reduce flaky release checks before publishing.
+
+**[Enhancement]** Linux desktop setup and packaging polish.
+- Added Linux desktop registration and shell-friendly setup support for packaged desktop installs.
+- Repaired Linux icon and font fallback behavior, and polished desktop app icon/title metadata.
+- Improved the gateway install flow so post-install next steps are clearer.
+
+## v1.1.29 (2026-05-10)
+
+**[Bug Fix]** macOS App Store login and review readiness.
+- Disabled in-app update checks and update prompts for Mac App Store builds so updates stay under App Store control.
+- Fixed macOS App Store signing and entitlement validation for Apple Sign-In, production APNs, and Google Sign-In keychain access.
+- Added safeguards for Mac App Store package signing so quarantine attributes and disallowed entitlements are caught before upload.
+
+**[Enhancement]** Release polish and runtime path safety.
+- Refined the welcome screen layout for a cleaner first-run experience.
+- Ignored debug runtime directory overrides on mobile platforms and when the repo root cannot be resolved.
+
+## v1.1.27 (2026-05-09)
+
+**[Bug Fix]** macOS release sign-in and desktop OAuth packaging.
+- Keeps macOS release Google sign-in on the native GoogleSignIn flow and validates the required keychain access groups.
+- Keeps macOS release Apple sign-in hidden unless the provisioning profile enables the Sign in with Apple entitlement, avoiding a broken login button.
+
+**[Enhancement]** Desktop release coverage and assets.
+- Polished the desktop OAuth callback flow and refreshed Windows/Linux desktop icons.
+- Updated GitHub Actions to the current Node runtime and added internal desktop build coverage for release workflows.
+
+## v1.1.26 (2026-05-09)
+
+**[Bug Fix]** macOS release signing and Windows desktop Google login.
+- Reworked macOS release signing to sign nested frameworks explicitly before signing the app bundle, matching current Apple signing guidance and macOS 26 validation.
+- Switched macOS release build and post-publish verification to macOS 26 runners so published DMGs are validated on the same OS family users reported failures on.
+- Added Windows/Linux desktop Google OAuth through system browser loopback flow with PKCE, gated by `GOOGLE_DESKTOP_CLIENT_ID`.
+- Updated Windows release builds to enable desktop Google OAuth when `GOOGLE_DESKTOP_CLIENT_ID` is configured, while keeping release validation runnable when the secret is absent.
+
+## v1.1.23 (2026-05-09)
+
+**[Bug Fix]** Windows release startup and desktop login behavior.
+- Bundled the Visual C++ runtime DLLs into the Windows release zip so Clawke can start even when the system runtime is missing or corrupted.
+- Added release workflow validation to ensure Windows packages include `msvcp140.dll`, `vcruntime140.dll`, and `vcruntime140_1.dll`.
+- Hid Google sign-in on Windows and Linux desktop builds where the native plugin is unavailable, avoiding the desktop `MissingPluginException` path.
+
+## v1.1.22 (2026-05-09)
+
+**[Bug Fix]** Android release signing and Google login.
+- Restored fixed Android release signing in the GitHub release workflow so official APKs use the expected release certificate.
+- Added certificate fingerprint checks and published APK verification to prevent debug-signed Android release artifacts.
+
 ## v1.1.21 (2026-05-03)
 
 **[Enhancement]** Release and runtime path stability.

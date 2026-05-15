@@ -15,9 +15,11 @@ import 'package:client/providers/chat_provider.dart';
 import 'package:client/providers/mermaid_provider.dart';
 import 'package:client/providers/server_host_provider.dart';
 import 'package:client/providers/font_scale_provider.dart';
+import 'package:client/providers/app_version_provider.dart';
 import 'package:client/models/user_model.dart';
 import 'package:client/services/media_resolver.dart';
 import 'package:client/l10n/l10n.dart';
+import 'package:client/upgrade/update_policy.dart';
 import 'package:client/widgets/app_snack_bar.dart';
 
 /// 设置主页 — 用户卡片 + 分组菜单布局。
@@ -29,6 +31,9 @@ class SettingsScreen extends ConsumerWidget {
     final user = ref.watch(authUserProvider);
     final colorScheme = Theme.of(context).colorScheme;
     final t = context.l10n;
+    final appVersion = ref
+        .watch(appVersionProvider)
+        .maybeWhen(data: (info) => info.fullVersion, orElse: () => '...');
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
@@ -47,9 +52,7 @@ class SettingsScreen extends ConsumerWidget {
           // ── 通用 ──
           _buildSectionTitle(context, t.general),
           _MenuCard(
-            children: [
-              _buildAppearanceRow(context, ref, colorScheme, t),
-            ],
+            children: [_buildAppearanceRow(context, ref, colorScheme, t)],
           ),
           const SizedBox(height: 20),
 
@@ -65,7 +68,8 @@ class SettingsScreen extends ConsumerWidget {
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                      builder: (_) => const ModifyPasswordScreen()),
+                    builder: (_) => const ModifyPasswordScreen(),
+                  ),
                 ),
               ),
             ],
@@ -93,7 +97,8 @@ class SettingsScreen extends ConsumerWidget {
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                      builder: (_) => const AccountSwitcherScreen()),
+                    builder: (_) => const AccountSwitcherScreen(),
+                  ),
                 ),
               ),
               _MenuRow(
@@ -123,7 +128,7 @@ class SettingsScreen extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(vertical: 24),
             child: Center(
               child: Text(
-                'Clawke v1.0.38',
+                'Clawke v$appVersion',
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
                   letterSpacing: 0.3,
@@ -153,7 +158,11 @@ class SettingsScreen extends ConsumerWidget {
 
   /// 外观与主题 — 聚合显示当前状态，点击进入子页面。
   Widget _buildAppearanceRow(
-      BuildContext context, WidgetRef ref, ColorScheme colorScheme, dynamic t) {
+    BuildContext context,
+    WidgetRef ref,
+    ColorScheme colorScheme,
+    dynamic t,
+  ) {
     final themeMode = ref.watch(themeModeProvider);
     final locale = ref.watch(localeProvider);
     final fontScale = ref.watch(fontScaleProvider);
@@ -190,10 +199,15 @@ class SettingsScreen extends ConsumerWidget {
 
   /// 开发者区域。
   Widget _buildDeveloperSection(
-      BuildContext context, WidgetRef ref, ColorScheme colorScheme, dynamic t) {
+    BuildContext context,
+    WidgetRef ref,
+    ColorScheme colorScheme,
+    dynamic t,
+  ) {
     final mermaidEnabled = ref.watch(mermaidEnabledProvider);
     final debugLogEnabled = ref.watch(debugLogEnabledProvider);
     final serverConfig = ref.watch(serverConfigProvider);
+    final inAppUpdatesEnabled = AppUpdatePolicy.inAppUpdatesEnabled;
 
     return _MenuCard(
       children: [
@@ -238,24 +252,37 @@ class SettingsScreen extends ConsumerWidget {
             },
           ),
           showChevron: false,
+          isLast: !inAppUpdatesEnabled,
           onTap: () {
             ref
                 .read(debugLogEnabledProvider.notifier)
                 .setEnabled(!debugLogEnabled);
           },
         ),
-        _MenuRow(
-          icon: Icons.system_update_outlined,
-          iconColor: const Color(0xFFfb923c),
-          iconBg: const Color(0xFFfb923c).withValues(alpha: 0.12),
-          label: t.checkUpdate,
-          subtitle: t.currentVersion('1.0.36'),
-          isLast: true,
-          onTap: () {
-            ref.read(wsMessageHandlerProvider).sendCheckUpdate();
-            showAppSnackBar(context, t.checkingUpdate, duration: const Duration(seconds: 2));
-          },
-        ),
+        if (inAppUpdatesEnabled)
+          _MenuRow(
+            icon: Icons.system_update_outlined,
+            iconColor: const Color(0xFFfb923c),
+            iconBg: const Color(0xFFfb923c).withValues(alpha: 0.12),
+            label: t.checkUpdate,
+            subtitle: t.currentVersion(
+              ref
+                  .watch(appVersionProvider)
+                  .maybeWhen(
+                    data: (info) => info.fullVersion,
+                    orElse: () => '...',
+                  ),
+            ),
+            isLast: true,
+            onTap: () {
+              ref.read(wsMessageHandlerProvider).sendCheckUpdate();
+              showAppSnackBar(
+                context,
+                t.checkingUpdate,
+                duration: const Duration(seconds: 2),
+              );
+            },
+          ),
       ],
     );
   }
@@ -299,8 +326,7 @@ class SettingsScreen extends ConsumerWidget {
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child:
-                Text(t.logout, style: TextStyle(color: colorScheme.error)),
+            child: Text(t.logout, style: TextStyle(color: colorScheme.error)),
           ),
         ],
       ),
@@ -317,8 +343,7 @@ class SettingsScreen extends ConsumerWidget {
   }
 
   /// 注销账户确认。
-  Future<void> _handleDeleteAccount(
-      BuildContext context, WidgetRef ref) async {
+  Future<void> _handleDeleteAccount(BuildContext context, WidgetRef ref) async {
     final t = context.l10n;
     final colorScheme = Theme.of(context).colorScheme;
     final confirmed = await showDialog<bool>(
@@ -458,7 +483,8 @@ class _ProfileCard extends StatelessWidget {
         child: Image.network(
           photoUrl,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _buildInitialAvatar(initial, colorScheme),
+          errorBuilder: (_, __, ___) =>
+              _buildInitialAvatar(initial, colorScheme),
         ),
       );
     }
@@ -543,8 +569,7 @@ class _MenuRow extends StatelessWidget {
         InkWell(
           onTap: onTap,
           child: Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             child: Row(
               children: [
                 // Icon
@@ -575,10 +600,8 @@ class _MenuRow extends StatelessWidget {
                         const SizedBox(height: 2),
                         Text(
                           subtitle!,
-                          style:
-                              Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(color: colorScheme.onSurfaceVariant),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -597,7 +620,9 @@ class _MenuRow extends StatelessWidget {
                     child: Icon(
                       Icons.chevron_right,
                       size: 18,
-                      color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                      color: colorScheme.onSurfaceVariant.withValues(
+                        alpha: 0.5,
+                      ),
                     ),
                   ),
               ],

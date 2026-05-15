@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "ai.clawke" "\0"
-            VALUE "FileDescription", "client" "\0"
+            VALUE "FileDescription", "Clawke" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "client" "\0"
+            VALUE "InternalName", "Clawke" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 ai.clawke. All rights reserved." "\0"
-            VALUE "OriginalFilename", "client.exe" "\0"
-            VALUE "ProductName", "client" "\0"
+            VALUE "OriginalFilename", "Clawke.exe" "\0"
+            VALUE "ProductName", "Clawke" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

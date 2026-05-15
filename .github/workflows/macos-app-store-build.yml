@@ -1,0 +1,259 @@
+name: Internal macOS App Store Build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: '3.41.4'
+
+jobs:
+  build-macos-app-store:
+    name: build-macos-app-store-pkg
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+
+      - name: Install dependencies
+        working-directory: client
+        run: flutter pub get
+
+      - name: Generate code (Drift ORM)
+        working-directory: client
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Verify macOS App Store entitlements source
+        run: |
+          set -euo pipefail
+          APNS_ENV=$(/usr/libexec/PlistBuddy -c 'Print :com.apple.developer.aps-environment' client/macos/Runner/Release.entitlements)
+          APPLE_SIGN_IN=$(/usr/libexec/PlistBuddy -c 'Print :com.apple.developer.applesignin:0' client/macos/Runner/Release.entitlements)
+          SANDBOX=$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.app-sandbox' client/macos/Runner/Release.entitlements)
+          echo "macOS App Store Release APNs environment: ${APNS_ENV}"
+          echo "macOS App Store Sign in with Apple: ${APPLE_SIGN_IN}"
+          echo "macOS App Store sandbox: ${SANDBOX}"
+          test "$APNS_ENV" = "production"
+          test "$APPLE_SIGN_IN" = "Default"
+          test "$SANDBOX" = "true"
+
+      - name: Import macOS App Store signing assets
+        env:
+          MACOS_APP_STORE_CERTIFICATE_BASE64: ${{ secrets.MACOS_APP_STORE_CERTIFICATE_BASE64 }}
+          MACOS_APP_STORE_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_APP_STORE_CERTIFICATE_PASSWORD }}
+          MACOS_APP_STORE_INSTALLER_CERTIFICATE_BASE64: ${{ secrets.MACOS_APP_STORE_INSTALLER_CERTIFICATE_BASE64 }}
+          MACOS_APP_STORE_INSTALLER_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_APP_STORE_INSTALLER_CERTIFICATE_PASSWORD }}
+          MACOS_APP_STORE_PROVISION_PROFILE_BASE64: ${{ secrets.MACOS_APP_STORE_PROVISION_PROFILE_BASE64 }}
+        run: |
+          set -euo pipefail
+          test -n "$MACOS_APP_STORE_CERTIFICATE_BASE64"
+          test -n "$MACOS_APP_STORE_CERTIFICATE_PASSWORD"
+          test -n "$MACOS_APP_STORE_INSTALLER_CERTIFICATE_BASE64"
+          test -n "$MACOS_APP_STORE_INSTALLER_CERTIFICATE_PASSWORD"
+          test -n "$MACOS_APP_STORE_PROVISION_PROFILE_BASE64"
+
+          APP_CERT_PATH="$RUNNER_TEMP/macos-app-store-application.p12"
+          INSTALLER_CERT_PATH="$RUNNER_TEMP/macos-app-store-installer.p12"
+          APPLE_WWDR_G3_CERT_PATH="$RUNNER_TEMP/AppleWWDRCAG3.cer"
+          PROFILE_PATH="$RUNNER_TEMP/macos-app-store.provisionprofile"
+          KEYCHAIN_PATH="$RUNNER_TEMP/clawke-macos-app-store.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
+
+          echo "$MACOS_APP_STORE_CERTIFICATE_BASE64" | base64 -D > "$APP_CERT_PATH"
+          echo "$MACOS_APP_STORE_INSTALLER_CERTIFICATE_BASE64" | base64 -D > "$INSTALLER_CERT_PATH"
+          echo "$MACOS_APP_STORE_PROVISION_PROFILE_BASE64" | base64 -D > "$PROFILE_PATH"
+          curl -fsSL https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer -o "$APPLE_WWDR_G3_CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$APPLE_WWDR_G3_CERT_PATH" -k "$KEYCHAIN_PATH"
+          security import "$APP_CERT_PATH" -P "$MACOS_APP_STORE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security import "$INSTALLER_CERT_PATH" -P "$MACOS_APP_STORE_INSTALLER_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+          security find-identity -v "$KEYCHAIN_PATH"
+
+          APP_SIGN_IDENTITY_HASH="$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | awk '/3rd Party Mac Developer Application:/ {print $2; exit}')"
+          INSTALLER_SIGN_IDENTITY_HASH="$(security find-identity -v "$KEYCHAIN_PATH" | awk '/3rd Party Mac Developer Installer:/ {print $2; exit}')"
+          INSTALLER_SIGN_IDENTITY_NAME="$(security find-identity -v "$KEYCHAIN_PATH" | sed -n 's/.*"\(3rd Party Mac Developer Installer:.*\)"/\1/p' | head -1)"
+          test -n "$APP_SIGN_IDENTITY_HASH"
+          if [ -z "$INSTALLER_SIGN_IDENTITY_HASH" ] || [ -z "$INSTALLER_SIGN_IDENTITY_NAME" ]; then
+            echo "::error::Mac App Store installer identity was not found after import. Re-export MACOS_APP_STORE_INSTALLER_CERTIFICATE_BASE64 from the '3rd Party Mac Developer Installer' certificate row, not from the private-key row."
+            exit 1
+          fi
+
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/clawke-macos-app-store.provisionprofile"
+
+          echo "MACOS_APP_STORE_SIGN_IDENTITY_HASH=$APP_SIGN_IDENTITY_HASH" >> "$GITHUB_ENV"
+          echo "MACOS_APP_STORE_INSTALLER_SIGN_IDENTITY_HASH=$INSTALLER_SIGN_IDENTITY_HASH" >> "$GITHUB_ENV"
+          echo "MACOS_APP_STORE_INSTALLER_SIGN_IDENTITY_NAME=$INSTALLER_SIGN_IDENTITY_NAME" >> "$GITHUB_ENV"
+          echo "MACOS_APP_STORE_SIGNING_KEYCHAIN=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+          echo "MACOS_APP_STORE_PROFILE_PATH=$PROFILE_PATH" >> "$GITHUB_ENV"
+
+      - name: Prepare unsigned macOS build for manual App Store signing
+        working-directory: client/macos
+        run: |
+          set -euo pipefail
+          sed -i '' 's/CODE_SIGN_STYLE = Automatic/CODE_SIGN_STYLE = Manual/g' Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/"CODE_SIGN_IDENTITY\[sdk=macosx\*\]" = "Apple Development"/"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-"/g' Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/CODE_SIGN_IDENTITY = "Apple Development"/CODE_SIGN_IDENTITY = "-"/g' Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/DEVELOPMENT_TEAM = .*;/DEVELOPMENT_TEAM = "";/g' Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/CODE_SIGN_ENTITLEMENTS = .*;//g' Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/ONLY_ACTIVE_ARCH = YES/ONLY_ACTIVE_ARCH = NO/g' Runner.xcodeproj/project.pbxproj
+          echo 'CODE_SIGNING_REQUIRED = NO' >> Flutter/Release.xcconfig
+          echo 'CODE_SIGNING_ALLOWED = NO' >> Flutter/Release.xcconfig
+          echo 'ONLY_ACTIVE_ARCH = NO' >> Flutter/Release.xcconfig
+
+      - name: Build macOS App Store app
+        working-directory: client
+        run: flutter build macos --release --dart-define=CLAWKE_MACOS_APPLE_SIGN_IN_ENABLED=true --dart-define=CLAWKE_MACOS_APP_STORE_BUILD=true
+
+      - name: Sign and verify macOS App Store app
+        run: |
+          set -euo pipefail
+          test -n "$MACOS_APP_STORE_SIGN_IDENTITY_HASH"
+          test -n "$MACOS_APP_STORE_SIGNING_KEYCHAIN"
+          test -n "$MACOS_APP_STORE_PROFILE_PATH"
+
+          decode_profile() {
+            local profile_path="$1"
+            local plist_path="$2"
+            security cms -D -i "$profile_path" > "$plist_path" 2>/dev/null || \
+              openssl smime -inform der -verify -noverify -in "$profile_path" -out "$plist_path"
+          }
+
+          assert_signature_has_certificate() {
+            local target="$1"
+            local prefix="$RUNNER_TEMP/codesign-cert-$(uuidgen)-"
+            codesign -d --extract-certificates="$prefix" "$target" >/dev/null 2>&1 || true
+            if [ ! -s "${prefix}0" ]; then
+              echo "::error::Code signature has no embedded signing certificate: $target"
+              exit 1
+            fi
+          }
+
+          APP_PATH="$(find client/build/macos/Build/Products/Release -maxdepth 1 -type d -name "*.app" | head -1)"
+          if [ -z "$APP_PATH" ]; then
+            echo "::error::macOS app bundle not found."
+            exit 1
+          fi
+          if [ "$(basename "$APP_PATH")" != "Clawke.app" ]; then
+            echo "::error::Unexpected macOS app bundle name: $(basename "$APP_PATH")"
+            exit 1
+          fi
+          echo "Using macOS App Store app bundle: $APP_PATH"
+
+          cp "$MACOS_APP_STORE_PROFILE_PATH" "$APP_PATH/Contents/embedded.provisionprofile"
+          decode_profile "$MACOS_APP_STORE_PROFILE_PATH" "$RUNNER_TEMP/macos-app-store-profile.plist"
+          APP_ID_PREFIX=$(/usr/libexec/PlistBuddy -c 'Print :ApplicationIdentifierPrefix:0' "$RUNNER_TEMP/macos-app-store-profile.plist")
+          PROFILE_APP_ID=$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.application-identifier' "$RUNNER_TEMP/macos-app-store-profile.plist")
+          PROFILE_TEAM_ID=$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.developer.team-identifier' "$RUNNER_TEMP/macos-app-store-profile.plist")
+          PROFILE_APPLE_SIGN_IN=$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.developer.applesignin:0' "$RUNNER_TEMP/macos-app-store-profile.plist")
+          PROFILE_PLATFORM=$(/usr/libexec/PlistBuddy -c 'Print :Platform:0' "$RUNNER_TEMP/macos-app-store-profile.plist")
+          test "$PROFILE_APP_ID" = "CBGN3JTHC4.ai.clawke.app"
+          test "$PROFILE_TEAM_ID" = "CBGN3JTHC4"
+          test "$PROFILE_APPLE_SIGN_IN" = "Default"
+          test "$PROFILE_PLATFORM" = "OSX"
+
+          export APP_ID_PREFIX
+          export APP_ID_PREFIX_PLACEHOLDER='$(AppIdentifierPrefix)'
+          cp client/macos/Runner/Release.entitlements "$RUNNER_TEMP/macos-app-store-entitlements.plist"
+          perl -0pi -e 's/\Q$ENV{APP_ID_PREFIX_PLACEHOLDER}\E/$ENV{APP_ID_PREFIX}./g' "$RUNNER_TEMP/macos-app-store-entitlements.plist"
+          /usr/libexec/PlistBuddy -c 'Delete :com.apple.application-identifier' "$RUNNER_TEMP/macos-app-store-entitlements.plist" >/dev/null 2>&1 || true
+          /usr/libexec/PlistBuddy -c "Add :com.apple.application-identifier string $PROFILE_APP_ID" "$RUNNER_TEMP/macos-app-store-entitlements.plist"
+          /usr/libexec/PlistBuddy -c 'Delete :com.apple.developer.team-identifier' "$RUNNER_TEMP/macos-app-store-entitlements.plist" >/dev/null 2>&1 || true
+          /usr/libexec/PlistBuddy -c "Add :com.apple.developer.team-identifier string $PROFILE_TEAM_ID" "$RUNNER_TEMP/macos-app-store-entitlements.plist"
+
+          validate_profile_entitlement() {
+            local entitlement="$1"
+            if /usr/libexec/PlistBuddy -c "Print :${entitlement}" "$RUNNER_TEMP/macos-app-store-entitlements.plist" >/dev/null 2>&1; then
+              if ! /usr/libexec/PlistBuddy -c "Print :Entitlements:${entitlement}" "$RUNNER_TEMP/macos-app-store-profile.plist" >/dev/null 2>&1; then
+                echo "::error::Missing macOS App Store provisioning profile entitlement: ${entitlement}"
+                exit 1
+              fi
+            fi
+          }
+
+          validate_profile_entitlement "com.apple.application-identifier"
+          validate_profile_entitlement "com.apple.developer.team-identifier"
+          validate_profile_entitlement "com.apple.developer.aps-environment"
+          validate_profile_entitlement "keychain-access-groups"
+          validate_profile_entitlement "com.apple.developer.applesignin"
+
+          find "$APP_PATH/Contents/Frameworks" -maxdepth 1 -name "*.framework" -type d -print0 | while IFS= read -r -d '' framework; do
+            codesign --force --options runtime --timestamp \
+              --keychain "$MACOS_APP_STORE_SIGNING_KEYCHAIN" \
+              --sign "$MACOS_APP_STORE_SIGN_IDENTITY_HASH" \
+              "$framework"
+          done
+
+          codesign --force --options runtime --timestamp \
+            --keychain "$MACOS_APP_STORE_SIGNING_KEYCHAIN" \
+            --sign "$MACOS_APP_STORE_SIGN_IDENTITY_HASH" \
+            --entitlements "$RUNNER_TEMP/macos-app-store-entitlements.plist" \
+            "$APP_PATH"
+
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+          assert_signature_has_certificate "$APP_PATH"
+          find "$APP_PATH/Contents/Frameworks" -maxdepth 1 -name "*.framework" -type d -print0 | while IFS= read -r -d '' framework; do
+            assert_signature_has_certificate "$framework"
+          done
+
+          codesign -d --entitlements - "$APP_PATH" > "$RUNNER_TEMP/macos-app-store-signed-entitlements.txt" 2>/dev/null
+          cat "$RUNNER_TEMP/macos-app-store-signed-entitlements.txt"
+          grep -q "com.apple.application-identifier" "$RUNNER_TEMP/macos-app-store-signed-entitlements.txt"
+          grep -q "$PROFILE_APP_ID" "$RUNNER_TEMP/macos-app-store-signed-entitlements.txt"
+          grep -q "com.apple.developer.team-identifier" "$RUNNER_TEMP/macos-app-store-signed-entitlements.txt"
+          grep -q "com.apple.developer.applesignin" "$RUNNER_TEMP/macos-app-store-signed-entitlements.txt"
+          grep -q "com.apple.developer.aps-environment" "$RUNNER_TEMP/macos-app-store-signed-entitlements.txt"
+          grep -q "production" "$RUNNER_TEMP/macos-app-store-signed-entitlements.txt"
+          grep -q "com.apple.security.app-sandbox" "$RUNNER_TEMP/macos-app-store-signed-entitlements.txt"
+          grep -q "com.google.GIDSignIn" "$RUNNER_TEMP/macos-app-store-signed-entitlements.txt"
+
+          MACOS_EXE_NAME=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_PATH/Contents/Info.plist")
+          MACOS_ARCHS="$(lipo -archs "$APP_PATH/Contents/MacOS/$MACOS_EXE_NAME")"
+          echo "macOS App Store binary architectures: $MACOS_ARCHS"
+          if ! printf '%s\n' "$MACOS_ARCHS" | grep -qw x86_64 || ! printf '%s\n' "$MACOS_ARCHS" | grep -qw arm64; then
+            echo "::error::macOS App Store binary is not universal: $MACOS_ARCHS"
+            exit 1
+          fi
+
+      - name: Create signed Mac App Store package
+        run: |
+          set -euo pipefail
+          test -n "$MACOS_APP_STORE_INSTALLER_SIGN_IDENTITY_HASH"
+          test -n "$MACOS_APP_STORE_INSTALLER_SIGN_IDENTITY_NAME"
+          test -n "$MACOS_APP_STORE_SIGNING_KEYCHAIN"
+          APP_PATH="$(find client/build/macos/Build/Products/Release -maxdepth 1 -type d -name "*.app" | head -1)"
+          test -d "$APP_PATH"
+          productbuild \
+            --sign "$MACOS_APP_STORE_INSTALLER_SIGN_IDENTITY_NAME" \
+            --keychain "$MACOS_APP_STORE_SIGNING_KEYCHAIN" \
+            --component "$APP_PATH" \
+            /Applications \
+            Clawke-macOS-AppStore.pkg
+          security delete-keychain "$MACOS_APP_STORE_SIGNING_KEYCHAIN"
+          pkgutil --check-signature Clawke-macOS-AppStore.pkg | tee "$RUNNER_TEMP/macos-app-store-pkg-signature.txt"
+          grep -q "3rd Party Mac Developer Installer" "$RUNNER_TEMP/macos-app-store-pkg-signature.txt"
+          grep -q "Apple Worldwide Developer Relations Certification Authority" "$RUNNER_TEMP/macos-app-store-pkg-signature.txt"
+          grep -q "Apple Root CA" "$RUNNER_TEMP/macos-app-store-pkg-signature.txt"
+          if grep -q "signed by untrusted certificate" "$RUNNER_TEMP/macos-app-store-pkg-signature.txt"; then
+            echo "::error::Mac App Store package signature chain is incomplete. The Apple WWDR G3 intermediate certificate must be embedded in the package signature."
+            exit 1
+          fi
+          pkgutil --check-signature Clawke-macOS-AppStore.pkg
+
+      - name: Upload Mac App Store package
+        uses: actions/upload-artifact@v7
+        with:
+          name: macos-app-store-pkg
+          path: Clawke-macOS-AppStore.pkg

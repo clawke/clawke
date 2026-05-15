@@ -4,6 +4,7 @@
  *
  * 用法：
  *   clawke gateway install                — 自动检测并安装 Gateway 插件
+ *   clawke gateway update                 — 更新已配置 Gateway 插件代码 / Update configured Gateway plugin code
  *   clawke openclaw-gateway install       — 安装 Gateway 插件到本机 OpenClaw（别名）
  *   clawke server start                   — 启动 Clawke Server
  *   clawke doctor                         — 检查本机 Clawke 配置和运行状态
@@ -82,25 +83,28 @@ function detectAvailableGateways(): GatewayInfo[] {
 /**
  * 交互式选择 Gateway — Interactive gateway selection
  */
-async function promptGatewaySelection(gateways: GatewayInfo[]): Promise<number> {
+async function promptGatewaySelection(gateways: GatewayInfo[]): Promise<number | null> {
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
   });
 
-  return new Promise<number>((resolve) => {
+  return new Promise<number | null>((resolve) => {
     console.log('\n  Available gateways:\n');
     gateways.forEach((gw, i) => {
       const detected = fs.existsSync(gw.configPath) ? '(detected ✓)' : '(not detected)';
       console.log(`    ${i + 1}. ${gw.displayName}  ${detected}`);
     });
+    console.log(`    0. Skip gateway installation`);
     console.log('');
 
-    rl.question('  Select gateway to install [1]: ', (answer) => {
+    rl.question('  Select gateway to install [1, 0 to skip]: ', (answer) => {
       rl.close();
       const trimmed = answer.trim();
       if (trimmed === '') {
         resolve(0); // default: first
+      } else if (trimmed === '0' || trimmed.toLowerCase() === 'q') {
+        resolve(null);
       } else {
         const idx = parseInt(trimmed, 10) - 1;
         if (isNaN(idx) || idx < 0 || idx >= gateways.length) {
@@ -123,23 +127,21 @@ async function installGateway(): Promise<void> {
   const detected = gateways.filter(gw => fs.existsSync(gw.configPath));
 
   if (detected.length === 1) {
-    // 只有一个平台检测到，直接安装 — Only one platform detected, install directly
     console.log(`[clawke] 🔍 Auto-detected: ${detected[0].displayName}`);
-    await detected[0].installFn();
-
   } else if (detected.length > 1) {
-    // 多个平台检测到，让用户选择 — Multiple platforms detected, let user choose
     console.log(`[clawke] 🔍 Multiple agent platforms detected.`);
-    const idx = await promptGatewaySelection(detected);
-    await detected[idx].installFn();
-
   } else {
-    // 没有检测到任何平台，展示所有选项让用户选 — None detected, show all options
     console.log(`[clawke] ⚠️  No agent platform detected locally.`);
     console.log(`[clawke] Select which gateway to install (you may need to install the agent platform first):`);
-    const idx = await promptGatewaySelection(gateways);
-    await gateways[idx].installFn();
   }
+
+  const idx = await promptGatewaySelection(gateways);
+  if (idx === null) {
+    console.log('[clawke] Gateway installation skipped.');
+    return;
+  }
+
+  await gateways[idx].installFn();
 }
 
 // ────────────── PID 管理 ──────────────
@@ -387,12 +389,17 @@ function isProcessAlive(pid: number): boolean {
   try {
     process.kill(pid, 0); // signal 0 = check existence
     return true;
-  } catch {
-    return false;
+  } catch (err: any) {
+    // EPERM 说明进程存在但当前上下文无权发送信号 — EPERM means the process exists but cannot be signalled here.
+    return err?.code === 'EPERM';
   }
 }
 
-function removePidFile(): void {
+function removePidFile(expectedPid?: number): void {
+  if (expectedPid !== undefined) {
+    const currentPid = readPid();
+    if (currentPid !== expectedPid) return;
+  }
   try { fs.unlinkSync(PID_FILE); } catch {}
 }
 
@@ -407,6 +414,8 @@ async function serverStart(): Promise<void> {
     console.error(`[clawke] ⚠️  Server already running (PID ${existingPid})`);
     console.error('[clawke] Use "clawke server stop" to stop it first, or "clawke server restart".');
     process.exit(1);
+  } else if (existingPid) {
+    removePidFile(existingPid);
   }
 
   // 自动编译 TypeScript（增量模式，没改动时秒完成）— Auto-build before start
@@ -425,7 +434,7 @@ async function serverStart(): Promise<void> {
   writePid();
 
   // 进程退出时清理 PID 文件 + Gateway 子进程 — Cleanup on exit
-  const cleanup = () => { stopAllGateways(); stopFrpcFromPidFile(); removePidFile(); };
+  const cleanup = () => { stopAllGateways(); stopFrpcFromPidFile(); removePidFile(process.pid); };
   process.on('exit', cleanup);
   process.on('SIGINT', () => { cleanup(); if (!serverStartupStarted) process.exit(0); });
   process.on('SIGTERM', () => { cleanup(); if (!serverStartupStarted) process.exit(0); });
@@ -540,6 +549,11 @@ async function main(): Promise<void> {
   } else if (command === 'gateway' && subCommand === 'install') {
     await installGateway();
 
+  } else if (command === 'gateway' && subCommand === 'update') {
+    const { runGatewayUpdate } = await import('./gateway-updater.js');
+    const result = runGatewayUpdate({ localOnly: args.includes('--local-only') });
+    if (result !== 0) process.exit(result);
+
   // 旧命令别名兼容 — Legacy command aliases
   } else if (command === 'openclaw-gateway' && subCommand === 'install') {
     const { installOpenClawGateway } = await import('./openclaw-gateway-installer.js');
@@ -588,6 +602,7 @@ function printHelp(): void {
     server restart             Restart Clawke Server
     server status              Check if server is running
     gateway install            Auto-detect and install gateway plugin
+    gateway update             Update configured gateway plugin code (no restart)
 
   Legacy Commands:
     openclaw-gateway install   Install OpenClaw gateway (same as gateway install)
@@ -599,6 +614,7 @@ function printHelp(): void {
 
   Quick Start:
     clawke gateway install     # Connect to your AI agent
+    clawke gateway update      # Update installed gateway code, no restart
     clawke server start        # Start the server
 `);
 }

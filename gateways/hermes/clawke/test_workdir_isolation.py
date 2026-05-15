@@ -11,6 +11,7 @@ import asyncio
 import importlib
 import os
 import sys
+import tempfile
 import types
 import unittest
 from pathlib import Path
@@ -22,14 +23,20 @@ def _hermes_terminal_tool_path() -> Path:
     """定位官方 Hermes 源码 — Locate the official Hermes source checkout."""
     override = os.getenv("HERMES_AGENT_SOURCE")
     if override:
-        return Path(override).expanduser() / "tools" / "terminal_tool.py"
-    return (
-        Path(__file__).resolve().parents[4]
-        / "clawke_extends"
-        / "hermes-agent"
-        / "tools"
-        / "terminal_tool.py"
-    )
+        candidate = Path(override).expanduser()
+        if candidate.name == "terminal_tool.py":
+            return candidate
+        return candidate / "tools" / "terminal_tool.py"
+
+    candidates = [
+        Path.home() / ".hermes" / "hermes-agent" / "tools" / "terminal_tool.py",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+
+    checked = ", ".join(str(candidate) for candidate in candidates)
+    raise FileNotFoundError(f"Hermes terminal_tool.py not found. Checked: {checked}")
 
 
 def _load_official_task_override_primitives():
@@ -68,6 +75,15 @@ def _load_official_task_override_primitives():
 
 
 class HermesTaskWorkdirIsolationTest(unittest.TestCase):
+    def test_terminal_tool_path_does_not_fallback_to_clawke_extends(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict(os.environ, {}, clear=True), \
+                 patch.object(Path, "home", return_value=Path(tmp)):
+                with self.assertRaises(FileNotFoundError) as context:
+                    _hermes_terminal_tool_path()
+
+        self.assertNotIn("clawke_extends", str(context.exception))
+
     def test_task_cwd_overrides_are_per_session_and_do_not_mutate_terminal_cwd(self):
         primitives = _load_official_task_override_primitives()
         old_terminal_cwd = os.environ.get("TERMINAL_CWD")

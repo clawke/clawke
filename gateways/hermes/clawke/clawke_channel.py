@@ -41,6 +41,33 @@ logger = logging.getLogger("clawke.hermes")
 _DEFAULT_MODEL_CACHE: dict[str, Any] = {}
 _IMAGE_SUFFIXES = frozenset({".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg"})
 
+
+def _usage_from_result(result: Any) -> dict[str, int] | None:
+    if not isinstance(result, dict):
+        return None
+
+    def _token_count(key: str) -> int:
+        value = result.get(key) or 0
+        if isinstance(value, bool):
+            return 0
+        if isinstance(value, (int, float)):
+            return max(0, int(value))
+        return 0
+
+    input_tokens = _token_count("input_tokens")
+    output_tokens = _token_count("output_tokens")
+    usage = {
+        "input": input_tokens,
+        "output": output_tokens,
+        "cacheRead": _token_count("cache_read_tokens"),
+        "cacheWrite": _token_count("cache_write_tokens"),
+        "reasoning": _token_count("reasoning_tokens"),
+        "total": _token_count("total_tokens") or input_tokens + output_tokens,
+    }
+    if not any(usage.values()):
+        return None
+    return usage
+
 # ─── CUP Protocol Message Types (mirror of protocol.ts) ─────────────────────
 
 class GatewayMessageType:
@@ -1323,10 +1350,11 @@ class ClawkeHermesGateway:
             final_text = result.get("final_response", full_text) or full_text
 
         error = result.get("error") if isinstance(result, dict) else None
+        usage = _usage_from_result(result)
 
         if has_streamed_text:
             # Send remaining delta (if any) + done signal
-            await self._send({
+            response = {
                 "type": GatewayMessageType.AgentTextDone,
                 "message_id": msg_id,
                 "fullText": final_text,
@@ -1334,12 +1362,15 @@ class ClawkeHermesGateway:
                 "conversation_id": sender_id,
                 "model": resolved_model,
                 "provider": resolved_provider,
-            })
+            }
+            if usage:
+                response["usage"] = usage
+            await self._send(response)
             logger.info("📤 Reply done (stream): %s", final_text[:80])
 
         elif final_text.strip():
             # Non-streaming fallback
-            await self._send({
+            response = {
                 "type": GatewayMessageType.AgentText,
                 "message_id": msg_id,
                 "text": final_text,
@@ -1347,7 +1378,10 @@ class ClawkeHermesGateway:
                 "conversation_id": sender_id,
                 "model": resolved_model,
                 "provider": resolved_provider,
-            })
+            }
+            if usage:
+                response["usage"] = usage
+            await self._send(response)
             logger.info("📤 Reply done (full): %s", final_text[:80])
 
         else:

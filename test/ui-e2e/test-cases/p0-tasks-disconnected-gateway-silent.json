@@ -2,11 +2,11 @@
   "id": "p0-tasks-disconnected-gateway-silent",
   "title": "任务管理点击断开 Gateway 时只显示角标和页面内状态",
   "module": "任务管理",
-  "objective": "验证任务管理页面中断开的 nanobot Gateway 不会自动弹出顶部错误横幅，用户点击后只显示页面内未连接状态。",
+  "objective": "验证任务管理页面中断开的 OpenClaw Gateway 不会自动弹出顶部错误横幅，用户点击后只显示页面内未连接状态。",
   "coverage": [
     "进入任务管理页面并默认选择在线 Hermes Gateway",
-    "左侧显示断开的 nanobot Gateway",
-    "点击 nanobot 后显示页面内未连接状态",
+    "左侧显示断开的 OpenClaw Gateway",
+    "点击 OpenClaw 后显示页面内未连接状态",
     "断开 Gateway 不显示顶部 AppNoticeBar 错误横幅"
   ],
   "tags": ["p0", "tasks", "gateway", "disconnected", "ui"],
@@ -21,17 +21,17 @@
     "mediaPort": 18781,
     "gateways": {
       "hermes": [{ "id": "hermes" }],
-      "nanobot": [{ "id": "nanobot" }]
+      "openclaw": [{ "id": "OpenClaw" }]
     }
   },
   "steps": [
     { "action": "launch_app" },
     { "action": "tap_icon", "icon": "task_alt" },
     { "action": "wait_for_text", "text": "seed-task" },
-    { "action": "wait_for_text", "text": "nanobot" },
+    { "action": "wait_for_text", "text": "OpenClaw" },
     { "action": "wait_for_absent_text", "text": "Gateway 未连接，无法显示相关信息。", "durationMs": 1000 },
-    { "action": "tap_text", "text": "nanobot", "exact": true },
-    { "action": "wait_for_text", "text": "nanobot Gateway 未连接" },
+    { "action": "tap_text", "text": "OpenClaw", "exact": true },
+    { "action": "wait_for_text", "text": "OpenClaw Gateway 未连接" },
     { "action": "wait_for_text", "text": "当前不会发起任务请求" },
     { "action": "wait_for_absent_text", "text": "Gateway 未连接，无法显示相关信息。", "durationMs": 1500 }
   ],
@@ -50,7 +50,7 @@
     ]
   },
   "assert": [
-    { "uiTextVisible": "nanobot Gateway 未连接" },
+    { "uiTextVisible": "OpenClaw Gateway 未连接" },
     { "uiTextAbsent": "Gateway 未连接，无法显示相关信息。" }
   ]
 }

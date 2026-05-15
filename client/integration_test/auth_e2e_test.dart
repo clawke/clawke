@@ -16,18 +16,29 @@ void main() {
       await prefs.clear();
     });
 
-    testWidgets('Case 1: Invalid login shows error from real backend', (tester) async {
+    testWidgets('Case 1: Invalid login shows error from real backend', (
+      tester,
+    ) async {
       await tester.pumpWidget(const ProviderScope(child: ClawkeApp()));
       await tester.pumpAndSettle(const Duration(seconds: 2));
 
-      final welcomeLoginButton = find.widgetWithText(FilledButton, '登录 Clawke 账号');
+      final welcomeLoginButton = find.widgetWithText(
+        FilledButton,
+        '登录 Clawke 账号',
+      );
       if (welcomeLoginButton.evaluate().isNotEmpty) {
         await tester.tap(welcomeLoginButton);
         await tester.pumpAndSettle(const Duration(seconds: 1));
       }
 
-      await tester.enterText(find.widgetWithText(TextField, '邮箱地址').first, 'test_invalid@example.com');
-      await tester.enterText(find.widgetWithText(TextField, '密码'), 'wrong_password');
+      await tester.enterText(
+        find.widgetWithText(TextField, '邮箱地址').first,
+        'test_invalid@example.com',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextField, '密码'),
+        'wrong_password',
+      );
 
       await tester.tap(find.widgetWithText(FilledButton, '登录'));
       await tester.pumpAndSettle(const Duration(seconds: 3));
@@ -35,11 +46,16 @@ void main() {
       expect(find.byIcon(Icons.error_outline), findsOneWidget);
     });
 
-    testWidgets('Case 2: Empty registration form shows validation error', (tester) async {
+    testWidgets('Case 2: Empty registration form shows validation error', (
+      tester,
+    ) async {
       await tester.pumpWidget(const ProviderScope(child: ClawkeApp()));
       await tester.pumpAndSettle(const Duration(seconds: 2));
 
-      final welcomeLoginButton = find.widgetWithText(FilledButton, '登录 Clawke 账号');
+      final welcomeLoginButton = find.widgetWithText(
+        FilledButton,
+        '登录 Clawke 账号',
+      );
       if (welcomeLoginButton.evaluate().isNotEmpty) {
         await tester.tap(welcomeLoginButton);
         await tester.pumpAndSettle(const Duration(seconds: 1));
@@ -56,11 +72,16 @@ void main() {
       expect(find.text('请填写所有字段'), findsOneWidget);
     });
 
-    testWidgets('Case 3: Forgot password navigation and email validation', (tester) async {
+    testWidgets('Case 3: Forgot password navigation and email validation', (
+      tester,
+    ) async {
       await tester.pumpWidget(const ProviderScope(child: ClawkeApp()));
       await tester.pumpAndSettle(const Duration(seconds: 2));
 
-      final welcomeLoginButton = find.widgetWithText(FilledButton, '登录 Clawke 账号');
+      final welcomeLoginButton = find.widgetWithText(
+        FilledButton,
+        '登录 Clawke 账号',
+      );
       if (welcomeLoginButton.evaluate().isNotEmpty) {
         await tester.tap(welcomeLoginButton);
         await tester.pumpAndSettle(const Duration(seconds: 1));
@@ -78,7 +99,7 @@ void main() {
       await tester.tap(find.text('发送验证码'));
       await tester.pumpAndSettle();
 
-      expect(find.text('请输入邮箱地址'), findsOneWidget);
+      expect(find.text('请先输入邮箱地址'), findsOneWidget);
     });
   });
 }

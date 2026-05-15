@@ -16,6 +16,44 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
+val stripReleaseIntegrationTestPlugin by tasks.registering {
+    val registrant = layout.projectDirectory.file(
+        "src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java"
+    )
+    inputs.file(registrant).optional()
+    outputs.upToDateWhen { false }
+    doLast {
+        val file = registrant.asFile
+        if (!file.exists()) {
+            return@doLast
+        }
+        val source = file.readText()
+        val keptLines = mutableListOf<String>()
+        var skippingIntegrationTest = false
+        source.lineSequence().forEach { line ->
+            if (line.contains("new dev.flutter.plugins.integration_test.IntegrationTestPlugin()")) {
+                if (keptLines.lastOrNull()?.trim() == "try {") {
+                    keptLines.removeAt(keptLines.lastIndex)
+                }
+                skippingIntegrationTest = true
+                return@forEach
+            }
+            if (skippingIntegrationTest) {
+                if (line.trim() == "}") {
+                    skippingIntegrationTest = false
+                }
+                return@forEach
+            }
+            keptLines.add(line)
+        }
+        val stripped = keptLines.joinToString(System.lineSeparator()) +
+            if (source.endsWith(System.lineSeparator())) System.lineSeparator() else ""
+        if (stripped != source) {
+            file.writeText(stripped)
+        }
+    }
+}
+
 android {
     namespace = "ai.clawke.app"
     compileSdk = flutter.compileSdkVersion
@@ -71,4 +109,12 @@ dependencies {
 
 flutter {
     source = "../.."
+}
+
+tasks.matching { it.name == "compileReleaseJavaWithJavac" }.configureEach {
+    dependsOn(stripReleaseIntegrationTestPlugin)
+}
+
+tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+    dependsOn(stripReleaseIntegrationTestPlugin)
 }

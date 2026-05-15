@@ -78,6 +78,8 @@ PODS:
     - Flutter
   - open_filex (0.0.2):
     - Flutter
+  - package_info_plus (0.4.5):
+    - Flutter
   - pasteboard (0.0.1):
     - Flutter
   - PromisesObjC (2.4.0)
@@ -128,6 +130,7 @@ DEPENDENCIES:
   - google_sign_in_ios (from `.symlinks/plugins/google_sign_in_ios/darwin`)
   - integration_test (from `.symlinks/plugins/integration_test/ios`)
   - open_filex (from `.symlinks/plugins/open_filex/ios`)
+  - package_info_plus (from `.symlinks/plugins/package_info_plus/ios`)
   - pasteboard (from `.symlinks/plugins/pasteboard/ios`)
   - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
   - sign_in_with_apple (from `.symlinks/plugins/sign_in_with_apple/ios`)
@@ -163,6 +166,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/integration_test/ios"
   open_filex:
     :path: ".symlinks/plugins/open_filex/ios"
+  package_info_plus:
+    :path: ".symlinks/plugins/package_info_plus/ios"
   pasteboard:
     :path: ".symlinks/plugins/pasteboard/ios"
   shared_preferences_foundation:
@@ -191,6 +196,7 @@ SPEC CHECKSUMS:
   GTMSessionFetcher: 5aea5ba6bd522a239e236100971f10cb71b96ab6
   integration_test: 252f60fa39af5e17c3aa9899d35d908a0721b573
   open_filex: 6e26e659846ec990262224a12ef1c528bb4edbe4
+  package_info_plus: c0502532a26c7662a62a356cebe2692ec5fe4ec4
   pasteboard: 982969ebaa7c78af3e6cc7761e8f5e77565d9ce0
   PromisesObjC: f5707f49cb48b9636751c5b2e7d227e43fba9f47
   SDWebImage: e9fc87c1aab89a8ab1bbd74eba378c6f53be8abf

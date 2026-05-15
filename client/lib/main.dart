@@ -88,6 +88,47 @@ AppPlatform currentAppPlatform() => switch (defaultTargetPlatform) {
   TargetPlatform.fuchsia => AppPlatform.fuchsia,
 };
 
+const _linuxFontFallbacks = <String>[
+  'Noto Sans CJK SC',
+  'Noto Sans CJK TC',
+  'Noto Sans CJK JP',
+  'Noto Sans CJK KR',
+  'Noto Sans SC',
+  'Source Han Sans SC',
+  'WenQuanYi Zen Hei',
+  'Droid Sans Fallback',
+];
+
+TextTheme _withPlatformFontFallback(
+  TextTheme textTheme, {
+  required AppPlatform platform,
+}) {
+  if (platform != AppPlatform.linux) {
+    return textTheme;
+  }
+
+  TextStyle? withFallback(TextStyle? style) =>
+      style?.copyWith(fontFamilyFallback: _linuxFontFallbacks);
+
+  return textTheme.copyWith(
+    displayLarge: withFallback(textTheme.displayLarge),
+    displayMedium: withFallback(textTheme.displayMedium),
+    displaySmall: withFallback(textTheme.displaySmall),
+    headlineLarge: withFallback(textTheme.headlineLarge),
+    headlineMedium: withFallback(textTheme.headlineMedium),
+    headlineSmall: withFallback(textTheme.headlineSmall),
+    titleLarge: withFallback(textTheme.titleLarge),
+    titleMedium: withFallback(textTheme.titleMedium),
+    titleSmall: withFallback(textTheme.titleSmall),
+    bodyLarge: withFallback(textTheme.bodyLarge),
+    bodyMedium: withFallback(textTheme.bodyMedium),
+    bodySmall: withFallback(textTheme.bodySmall),
+    labelLarge: withFallback(textTheme.labelLarge),
+    labelMedium: withFallback(textTheme.labelMedium),
+    labelSmall: withFallback(textTheme.labelSmall),
+  );
+}
+
 bool shouldEnableGlobalTextSelection({
   required AppPlatform platform,
   bool isWeb = kIsWeb,
@@ -121,7 +162,11 @@ class ClawkeApp extends ConsumerWidget {
     final themeMode = ref.watch(themeModeProvider);
     final locale = ref.watch(localeProvider);
     final fontScale = ref.watch(fontScaleProvider);
-    final scaledText = _scaledTextTheme(fontScale);
+    final platform = currentAppPlatform();
+    final scaledText = _withPlatformFontFallback(
+      _scaledTextTheme(fontScale),
+      platform: platform,
+    );
 
     return MaterialApp(
       title: 'Clawke',

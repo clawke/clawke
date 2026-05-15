@@ -80,7 +80,7 @@ function writeTestConfig() {
     },
     relay: {
       enable: false,
-      token: '',
+      token: setup.serverToken || setup.relayToken || '',
       relayUrl: '',
       serverAddr: '',
       serverPort: 7000,
@@ -478,6 +478,10 @@ function writeHumanReport({
     /Unsupported operation/,
     /Test failed/,
     /E2E_SCREENSHOT/,
+    /Auth failed/,
+    /Refreshing relay credentials/,
+    /Relay credentials refreshed/,
+    /token=<redacted>/,
     /Sent approval_response/,
     /Sent clarify_response/,
   ]);
@@ -763,6 +767,7 @@ async function main() {
 
     const flutterArgs = [
       'test',
+      ...(args['no-pub'] ? ['--no-pub'] : []),
       'integration_test/ui_e2e_app_test.dart',
       '-d',
       'macos',

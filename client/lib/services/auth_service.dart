@@ -12,6 +12,7 @@ import 'package:client/core/http_util.dart';
 import 'package:client/core/push_registration_service.dart';
 import 'package:client/models/user_model.dart';
 import 'package:client/models/account_summary.dart';
+import 'package:client/services/desktop_google_oauth_service.dart';
 
 /// 认证服务 —— 对接 clawke.ai 后端真实 API。
 ///
@@ -24,6 +25,44 @@ class AuthService {
   static const _kRelayJsonKey = 'clawke_relay_credentials';
   static const _kLoggedOutKey = 'clawke_logged_out';
   static const _kKnownAccountsKey = 'clawke_known_accounts';
+  static Future<RelayCredentials> Function()?
+  _relayCredentialsFetcherForTesting;
+
+  @visibleForTesting
+  static void setRelayCredentialsFetcherForTesting(
+    Future<RelayCredentials> Function()? fetcher,
+  ) {
+    _relayCredentialsFetcherForTesting = fetcher;
+  }
+
+  static bool get supportsGoogleSignIn {
+    if (kIsWeb) return true;
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.android ||
+      TargetPlatform.iOS ||
+      TargetPlatform.macOS => true,
+      TargetPlatform.windows ||
+      TargetPlatform.linux => EnvConfig.googleDesktopClientId.isNotEmpty,
+      _ => false,
+    };
+  }
+
+  static bool get supportsAppleSignIn {
+    if (kIsWeb) return false;
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.iOS => true,
+      TargetPlatform.macOS => EnvConfig.macOSAppleSignInEnabled,
+      _ => false,
+    };
+  }
+
+  static bool get _usesDesktopGoogleOAuth {
+    if (kIsWeb || EnvConfig.googleDesktopClientId.isEmpty) return false;
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.windows || TargetPlatform.linux => true,
+      _ => false,
+    };
+  }
 
   // ── 本地状态查询 ──
 
@@ -159,50 +198,24 @@ class AuthService {
     debugPrint('[Auth] Google login on ${Platform.operatingSystem}');
 
     try {
-      final googleSignIn = GoogleSignIn(scopes: ['email']);
-
-      debugPrint('[Auth] Google signIn starting...');
-      // 清除上一次残留的登录状态（macOS 上旧 session 可能阻塞新弹窗）
-      await googleSignIn.signOut();
-      final googleUser = await googleSignIn.signIn().timeout(
-        const Duration(seconds: 120),
-        onTimeout: () {
-          debugPrint('[Auth] Google signIn timeout after 120s');
-          return null;
-        },
-      );
-      debugPrint(
-        '[Auth] Google signIn result: ${googleUser?.email ?? 'null (cancelled)'}',
-      );
-
-      if (googleUser == null) {
-        throw const ApiException('Google 登录已取消');
+      if (!supportsGoogleSignIn) {
+        throw const ApiException('Google 登录暂不可用，请使用邮箱登录');
       }
 
-      // 获取认证 token（idToken 用于服务端验证）
-      final googleAuth = await googleUser.authentication;
-      debugPrint(
-        '[Auth] Got Google auth, idToken: ${googleAuth.idToken != null ? "OK" : "null"}',
-      );
+      final account = await _getGoogleAccount();
+      debugPrint('[Auth] Google signIn result: ${account.email}');
 
-      // 服务端 googleLogin 接口返回 302 + set-cookie（web OAuth 模式），
-      // 不走 HttpUtil.doPost，而是直接发请求并从 Cookie 中提取凭证。
-      final dio = Dio(
-        BaseOptions(followRedirects: false, validateStatus: (status) => true),
-      );
-      final formData = FormData.fromMap({
-        'idToken': googleAuth.idToken ?? '',
-        'accessToken': googleAuth.accessToken ?? '',
-        'uid': googleUser.id,
-        'name': googleUser.displayName ?? '',
-        'email': googleUser.email,
-        'imageUrl': googleUser.photoUrl ?? '',
-        'state': 'clawke',
-      });
-
-      final response = await dio.post(
+      final response = await _googleLoginDio.post(
         '${EnvConfig.webBaseUrl}/oauth/user/googleLogin.json',
-        data: formData,
+        data: FormData.fromMap({
+          'idToken': account.idToken,
+          'accessToken': account.accessToken,
+          'uid': account.id,
+          'name': account.displayName ?? '',
+          'email': account.email,
+          'imageUrl': account.photoUrl ?? '',
+          'state': 'clawke',
+        }),
       );
 
       debugPrint('[Auth] Google login response status: ${response.statusCode}');
@@ -246,6 +259,58 @@ class AuthService {
     }
   }
 
+  static final Dio _googleLoginDio = Dio(
+    BaseOptions(followRedirects: false, validateStatus: (status) => true),
+  );
+
+  static Future<DesktopGoogleAccount> _getGoogleAccount() async {
+    if (_usesDesktopGoogleOAuth) {
+      debugPrint('[Auth] Using desktop Google OAuth loopback flow');
+      return DesktopGoogleOAuthService(
+        clientId: EnvConfig.googleDesktopClientId,
+        clientSecret: EnvConfig.googleDesktopClientSecret,
+      ).signIn();
+    }
+
+    final googleSignIn = GoogleSignIn(scopes: ['email']);
+
+    debugPrint('[Auth] Google signIn starting...');
+    try {
+      debugPrint('[Auth] Google signOut stale session starting...');
+      // 清理旧会话不应阻塞新登录 — Stale-session cleanup must not block a fresh sign-in.
+      await googleSignIn.signOut();
+      debugPrint('[Auth] Google signOut stale session OK');
+    } catch (e, st) {
+      debugPrint('[Auth] Google signOut stale session skipped: $e\n$st');
+    }
+    debugPrint('[Auth] Google interactive signIn starting...');
+    final googleUser = await googleSignIn.signIn().timeout(
+      const Duration(seconds: 120),
+      onTimeout: () {
+        debugPrint('[Auth] Google signIn timeout after 120s');
+        return null;
+      },
+    );
+
+    if (googleUser == null) {
+      throw const ApiException('Google 登录已取消');
+    }
+
+    final googleAuth = await googleUser.authentication;
+    debugPrint(
+      '[Auth] Got Google auth, idToken: ${googleAuth.idToken != null ? "OK" : "null"}',
+    );
+
+    return DesktopGoogleAccount(
+      id: googleUser.id,
+      email: googleUser.email,
+      idToken: googleAuth.idToken ?? '',
+      accessToken: googleAuth.accessToken ?? '',
+      displayName: googleUser.displayName,
+      photoUrl: googleUser.photoUrl,
+    );
+  }
+
   // ── Apple 登录 ──
 
   /// Apple Sign-In → 后端验证登录。
@@ -255,6 +320,10 @@ class AuthService {
     debugPrint('[Auth] Apple login on ${Platform.operatingSystem}');
 
     try {
+      if (!supportsAppleSignIn) {
+        throw const ApiException('Apple 登录暂不可用，请使用邮箱或 Google 登录');
+      }
+
       final credential = await SignInWithApple.getAppleIDCredential(
         scopes: [
           AppleIDAuthorizationScopes.email,
@@ -402,6 +471,13 @@ class AuthService {
   /// 返回 token + subdomain + relayServer，拼接为 relayUrl。
   static Future<RelayCredentials> fetchRelayCredentials() async {
     debugPrint('[Auth] Fetching relay credentials');
+
+    final testingFetcher = _relayCredentialsFetcherForTesting;
+    if (testingFetcher != null) {
+      final relay = await testingFetcher();
+      await _persistRelay(relay);
+      return relay;
+    }
 
     final result = await HttpUtil.doPost('/clawke/relay/credentials.json');
     final relay = RelayCredentials.fromJson(

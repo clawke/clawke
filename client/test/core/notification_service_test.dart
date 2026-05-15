@@ -1,5 +1,6 @@
 import 'package:client/core/notification_event.dart';
 import 'package:client/core/notification_service.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -19,6 +20,7 @@ void main() {
   });
 
   tearDown(() {
+    debugDefaultTargetPlatformOverride = null;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(badgeChannel, null);
   });
@@ -89,5 +91,17 @@ void main() {
   test('notification payload returns null for invalid payload', () {
     expect(NotificationPayload.decode(''), isNull);
     expect(NotificationPayload.decode('{"message_id":"msg_1"}'), isNull);
+  });
+
+  test('init skips unsupported Windows local notification plugin', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+
+    await NotificationService.init();
+    await NotificationService.showMessageNotification(
+      title: 'title',
+      body: 'body',
+    );
+
+    expect(calls, isEmpty);
   });
 }

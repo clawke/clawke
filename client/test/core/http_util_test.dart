@@ -1,14 +1,19 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:client/core/http_util.dart';
 
 /// A simple fake adapter for Dio to intercept requests and return pre-defined responses.
 class FakeHttpClientAdapter implements HttpClientAdapter {
-  final Future<ResponseBody> Function(RequestOptions options, Stream<Uint8List>? requestStream, Future<void>? cancelFuture) handler;
+  final Future<ResponseBody> Function(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  )
+  handler;
 
   FakeHttpClientAdapter(this.handler);
 
@@ -41,19 +46,25 @@ void main() {
       String? capturedCookie;
 
       // Setup fake adapter
-      HttpUtil.setMockAdapter(FakeHttpClientAdapter((options, stream, cancel) async {
-        // Capture headers sent out
-        capturedCookie = options.headers['Cookie'];
+      HttpUtil.setMockAdapter(
+        FakeHttpClientAdapter((options, stream, cancel) async {
+          // Capture headers sent out
+          capturedCookie = options.headers['Cookie'];
 
-        // Return dummy success
-        final payload = jsonEncode({
-          'success': true,
-          'value': {'test': 'cookie_ok'},
-        });
-        return ResponseBody.fromString(payload, 200, headers: {
-          Headers.contentTypeHeader: ['application/json;charset=UTF-8'],
-        });
-      }));
+          // Return dummy success
+          final payload = jsonEncode({
+            'success': true,
+            'value': {'test': 'cookie_ok'},
+          });
+          return ResponseBody.fromString(
+            payload,
+            200,
+            headers: {
+              Headers.contentTypeHeader: ['application/json;charset=UTF-8'],
+            },
+          );
+        }),
+      );
 
       // 2. Act
       await HttpUtil.doPost('/test/endpoint');
@@ -66,53 +77,120 @@ void main() {
     test('doPost throws ApiException on success: false', () async {
       SharedPreferences.setMockInitialValues({});
 
-      HttpUtil.setMockAdapter(FakeHttpClientAdapter((options, stream, cancel) async {
-        final payload = jsonEncode({
-          'success': false,
-          'actionError': 'custom.error.code',
-          'actionMessage': 'You failed to login',
-        });
-        return ResponseBody.fromString(payload, 200, headers: {
-           Headers.contentTypeHeader: ['application/json;charset=UTF-8'],
-        });
-      }));
+      HttpUtil.setMockAdapter(
+        FakeHttpClientAdapter((options, stream, cancel) async {
+          final payload = jsonEncode({
+            'success': false,
+            'actionError': 'custom.error.code',
+            'actionMessage': 'You failed to login',
+          });
+          return ResponseBody.fromString(
+            payload,
+            200,
+            headers: {
+              Headers.contentTypeHeader: ['application/json;charset=UTF-8'],
+            },
+          );
+        }),
+      );
 
       // Expect an exception of type ApiException since success=false
       expect(
         () async => await HttpUtil.doPost('/test/fail'),
-        throwsA(isA<ApiException>().having((e) => e.message, 'message', 'custom.error.code')),
+        throwsA(
+          isA<ApiException>().having(
+            (e) => e.message,
+            'message',
+            'custom.error.code',
+          ),
+        ),
       );
     });
 
     test('doPost parses direct success objects safely', () async {
       SharedPreferences.setMockInitialValues({});
 
-      HttpUtil.setMockAdapter(FakeHttpClientAdapter((options, stream, cancel) async {
-        final payload = jsonEncode({
-          'success': true,
-          'value': {'username': 'bob'},
-        });
-        return ResponseBody.fromString(payload, 200, headers: {
-           Headers.contentTypeHeader: ['application/json;charset=UTF-8'],
-        });
-      }));
+      HttpUtil.setMockAdapter(
+        FakeHttpClientAdapter((options, stream, cancel) async {
+          final payload = jsonEncode({
+            'success': true,
+            'value': {'username': 'bob'},
+          });
+          return ResponseBody.fromString(
+            payload,
+            200,
+            headers: {
+              Headers.contentTypeHeader: ['application/json;charset=UTF-8'],
+            },
+          );
+        }),
+      );
 
       final result = await HttpUtil.doPost('/test/ok');
       expect(result['success'], isTrue);
       expect(result['value']['username'], 'bob');
     });
 
+    test('doPost redacts sensitive response values in logs', () async {
+      SharedPreferences.setMockInitialValues({});
+      final logs = <String>[];
+      final originalDebugPrint = debugPrint;
+      debugPrint = (String? message, {int? wrapWidth}) {
+        if (message != null) logs.add(message);
+      };
+
+      HttpUtil.setMockAdapter(
+        FakeHttpClientAdapter((options, stream, cancel) async {
+          final payload = jsonEncode({
+            'success': true,
+            'value': {
+              'token': 'secret-relay-token',
+              'access_token': 'secret-access-token',
+              'relayUrl': 'https://relay.example.com',
+            },
+          });
+          return ResponseBody.fromString(
+            payload,
+            200,
+            headers: {
+              Headers.contentTypeHeader: ['application/json;charset=UTF-8'],
+            },
+          );
+        }),
+      );
+
+      try {
+        final result = await HttpUtil.doPost('/test/token');
+        expect(result['value']['token'], 'secret-relay-token');
+      } finally {
+        debugPrint = originalDebugPrint;
+      }
+
+      final joined = logs.join('\n');
+      expect(joined, contains('<redacted>'));
+      expect(joined, isNot(contains('secret-relay-token')));
+      expect(joined, isNot(contains('secret-access-token')));
+    });
+
     test('doPost handles non-200 HTTP status gracefully', () async {
       SharedPreferences.setMockInitialValues({});
 
-      HttpUtil.setMockAdapter(FakeHttpClientAdapter((options, stream, cancel) async {
-        // Return 500 error code
-        return ResponseBody.fromString('Internal Server Error', 500);
-      }));
+      HttpUtil.setMockAdapter(
+        FakeHttpClientAdapter((options, stream, cancel) async {
+          // Return 500 error code
+          return ResponseBody.fromString('Internal Server Error', 500);
+        }),
+      );
 
       expect(
         () async => await HttpUtil.doPost('/test/500'),
-        throwsA(isA<ApiException>().having((e) => e.message, 'message', contains('网络返回状态异常：500'))),
+        throwsA(
+          isA<ApiException>().having(
+            (e) => e.message,
+            'message',
+            contains('网络返回状态异常：500'),
+          ),
+        ),
       );
     });
   });
