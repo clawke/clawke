@@ -8,9 +8,10 @@ import type { ResolvedClawkeAccount } from "./config.js";
 import { GatewayMessageType, InboundMessageType, AgentStatus } from "./protocol.js";
 import { getClawkeRuntime } from "./runtime.js";
 import { OpenClawTaskAdapter, type OpenClawTaskDraft, type OpenClawTaskPatch } from "./task-adapter.js";
-import { OpenClawSkillAdapter, type OpenClawSkillDraft } from "./skill-adapter.js";
+import { OpenClawSkillAdapter, type OpenClawSkillDraft, type OpenClawSkillHubInstallPackage } from "./skill-adapter.js";
 import { OpenClawModelAdapter } from "./model-adapter.js";
 import { GatewayFinalDeliveryGuard } from "./gateway-stream-finalizer.js";
+import { runSkillHubInstallJob, skillHubInstallAcceptedResponse, type SkillHubInstallMessage } from "./skillhub-install-flow.ts";
 import {
   handleGatewaySystemRequest,
   runOpenClawSystemPrompt,
@@ -266,12 +267,17 @@ export async function startClawkeGateway(
         }
         reconnectAttempt = 0;
         // 握手：告知 Clawke Server 我的 accountId
+        const clawkeHome = process.env.CLAWKE_DATA_DIR || join(homedir(), ".clawke");
+        const managedSkillsRoot = join(clawkeHome, "skills");
         ws!.send(JSON.stringify({
           type: GatewayMessageType.Identify,
           accountId: ctx.accountId,
           agentName: "OpenClaw",
           gatewayType: "openclaw",
           capabilities: ["chat", "tasks", "skills", "models"],
+          clawkeHome,
+          managedSkillsRoot,
+          sharedSkillRoot: managedSkillsRoot,
         }));
         ctx.setStatus({
           accountId: ctx.accountId,
@@ -296,6 +302,14 @@ export async function startClawkeGateway(
                   error_message: err?.message || String(err),
                 }));
               });
+          } else if (msg.type === InboundMessageType.SkillHubInstall) {
+            ws?.send(JSON.stringify(skillHubInstallAcceptedResponse(msg)));
+            void runSkillHubInstallJob(
+              skillAdapter,
+              msg,
+              ctx.accountId,
+              (payload) => ws?.send(JSON.stringify(payload)),
+            );
           } else if (isSkillCommand(msg.type)) {
             handleSkillCommand(ctx, msg)
               .then((response) => ws?.send(JSON.stringify(response)))
@@ -548,15 +562,17 @@ function requireDraft(msg: TaskCommandMessage): OpenClawTaskDraft {
 type SkillCommandMessage = {
   type: string;
   request_id?: string;
+  install_id?: string;
   account_id?: string;
   skill_id?: string;
   skill?: OpenClawSkillDraft;
   draft?: OpenClawSkillDraft;
+  package?: OpenClawSkillHubInstallPackage;
   enabled?: boolean;
 };
 
 function isSkillCommand(type: unknown): type is string {
-  return typeof type === "string" && type.startsWith("skill_");
+  return typeof type === "string" && (type.startsWith("skill_") || type === InboundMessageType.SkillHubInstall);
 }
 
 function responseTypeForSkillCommand(type: string): GatewayMessageType {
@@ -565,6 +581,8 @@ function responseTypeForSkillCommand(type: string): GatewayMessageType {
       return GatewayMessageType.SkillListResponse;
     case InboundMessageType.SkillGet:
       return GatewayMessageType.SkillGetResponse;
+    case InboundMessageType.SkillHubInstall:
+      return GatewayMessageType.SkillHubInstallResponse;
     default:
       return GatewayMessageType.SkillMutationResponse;
   }
@@ -594,6 +612,8 @@ async function handleSkillCommand(
     case InboundMessageType.SkillSetEnabled:
       if (typeof msg.enabled !== "boolean") throw new Error("enabled must be boolean");
       return { ...base, skill: await skillAdapter.setEnabled(requireSkillId(msg), msg.enabled) };
+    case InboundMessageType.SkillHubInstall:
+      return skillHubInstallAcceptedResponse(msg as SkillHubInstallMessage);
     default:
       throw new Error(`Unsupported skill command: ${msg.type}`);
   }
@@ -608,6 +628,11 @@ function requireSkillDraft(msg: SkillCommandMessage): OpenClawSkillDraft {
   const draft = msg.skill ?? msg.draft;
   if (!draft) throw new Error("skill draft is required");
   return draft;
+}
+
+function requireSkillHubPackage(msg: SkillCommandMessage): OpenClawSkillHubInstallPackage {
+  if (!msg.package) throw new Error("SkillHub package is required");
+  return msg.package;
 }
 
 /**

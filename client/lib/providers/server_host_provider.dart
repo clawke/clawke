@@ -17,6 +17,13 @@ const _kLegacyHostKey = 'clawke_server_host';
 const kDefaultHttpUrl = 'http://127.0.0.1:8780';
 const kDefaultWsUrl = 'ws://127.0.0.1:8780/ws';
 
+bool shouldUseForcedServerConfig({
+  String forcedHttpUrl = kForcedHttpUrl,
+  String forcedWsUrl = kForcedWsUrl,
+}) {
+  return forcedHttpUrl.isNotEmpty && forcedWsUrl.isNotEmpty;
+}
+
 String normalizeServerHttpUrl(String url) {
   final trimmed = url.trim();
   if (trimmed.isEmpty) return kDefaultHttpUrl;
@@ -54,6 +61,7 @@ Future<void> applyForcedServerConfig(
   if (forcedToken.isEmpty) {
     await prefs.remove(_kTokenKey);
   } else {
+    // 调试直连认证 token，适用于本地 dev Server — Debug-only auth token for local dev Server.
     await prefs.setString(_kTokenKey, forcedToken);
   }
   await prefs.remove(_kLoggedOutKey);
@@ -148,7 +156,7 @@ class ServerConfigNotifier extends StateNotifier<ServerConfig> {
 
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
-    if (kForcedHttpUrl.isNotEmpty && kForcedWsUrl.isNotEmpty) {
+    if (shouldUseForcedServerConfig()) {
       await applyForcedServerConfig(prefs);
       state = const ServerConfig(
         httpUrl: kForcedHttpUrl,

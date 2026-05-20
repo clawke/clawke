@@ -14,8 +14,11 @@ import 'package:client/models/user_model.dart';
 import 'package:client/providers/conversation_provider.dart';
 import 'package:client/providers/locale_provider.dart';
 import 'package:client/providers/server_host_provider.dart';
+import 'package:client/providers/skillhub_provider.dart';
 import 'package:client/screens/main_layout.dart';
+import 'package:client/models/skillhub_item.dart';
 import 'package:client/services/auth_service.dart';
+import 'package:client/services/skillhub_api_service.dart';
 
 const _mockControlUrl = String.fromEnvironment('CLAWKE_E2E_MOCK_CONTROL_URL');
 
@@ -43,6 +46,33 @@ void main() {
           testCase: testCase,
         );
         _configureMockAuth(testCase);
+        final setup = Map<String, dynamic>.from(
+          (testCase['setup'] as Map?) ?? const {},
+        );
+        final overrides = <Override>[
+          serverConfigProvider.overrideWith(
+            (ref) => ServerConfigNotifier(
+              initialConfig: serverConfig,
+              loadFromPrefs: false,
+            ),
+          ),
+          localeProvider.overrideWith(
+            (ref) => LocaleNotifier(
+              initialLocale: const Locale('zh'),
+              loadFromPrefs: false,
+            ),
+          ),
+        ];
+        if (setup['skillHubFake'] == true) {
+          overrides.add(
+            skillHubApiServiceProvider.overrideWithValue(
+              _E2eSkillHubApiService(
+                installErrorMessage:
+                    setup['skillHubFakeInstallError'] as String?,
+              ),
+            ),
+          );
+        }
         tester.view.physicalSize = const Size(1400, 900);
         tester.view.devicePixelRatio = 1.0;
         addTearDown(() {
@@ -54,20 +84,7 @@ void main() {
           RepaintBoundary(
             key: appBoundaryKey,
             child: ProviderScope(
-              overrides: [
-                serverConfigProvider.overrideWith(
-                  (ref) => ServerConfigNotifier(
-                    initialConfig: serverConfig,
-                    loadFromPrefs: false,
-                  ),
-                ),
-                localeProvider.overrideWith(
-                  (ref) => LocaleNotifier(
-                    initialLocale: const Locale('zh'),
-                    loadFromPrefs: false,
-                  ),
-                ),
-              ],
+              overrides: overrides,
               child: const MaterialApp(
                 debugShowCheckedModeBanner: false,
                 localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -105,6 +122,95 @@ void main() {
       timeout: const Timeout(Duration(minutes: 3)),
     );
   });
+}
+
+class _E2eSkillHubApiService extends SkillHubApiService {
+  _E2eSkillHubApiService({this.installErrorMessage});
+
+  final String? installErrorMessage;
+
+  @override
+  Future<SkillHubConfig> loadConfig({bool force = false}) async {
+    return const SkillHubConfig(
+      provider: 'e2e',
+      apiBaseUrl: 'https://e2e.local',
+      skillsPath: '/skills.json',
+      skillPath: '/skill.json',
+    );
+  }
+
+  @override
+  Future<SkillHubListResult> listSkills({
+    String? query,
+    String? category,
+    String? tag,
+    bool? featured,
+    String? gatewayType,
+    int? limit,
+    String? cursor,
+  }) async {
+    return SkillHubListResult(items: [_githubSkill()], total: 1);
+  }
+
+  @override
+  Future<SkillHubItem> getSkill(String id, {String? gatewayType}) async {
+    return _githubSkill(
+      usage: 'Use when working with GitHub issues, pull requests, and CI.',
+      originalSkillMd: '# Github\n\nInteract with GitHub using the `gh` CLI.\n',
+    );
+  }
+
+  @override
+  Future<SkillHubInstallResult> installSkill(
+    SkillHubItem item, {
+    String? gatewayId,
+    String? gatewayType,
+    String? installMode,
+  }) async {
+    final errorMessage = installErrorMessage?.trim();
+    if (errorMessage != null && errorMessage.isNotEmpty) {
+      throw SkillHubApiException(
+        errorMessage,
+        actionError: 'e2e_install_error',
+      );
+    }
+    return const SkillHubInstallResult(
+      installId: 'skillhub_e2e',
+      installed: false,
+      status: 'accepted',
+      message: '安装任务已提交',
+    );
+  }
+
+  SkillHubItem _githubSkill({String usage = '', String originalSkillMd = ''}) {
+    return SkillHubItem(
+      id: '204',
+      slug: 'github',
+      name: 'Github',
+      summary: 'Interact with GitHub using the `gh` CLI.',
+      category: 'coding',
+      tags: const ['Coding'],
+      source: 'clawhub',
+      sourceOwner: 'e2e',
+      sourceUrl: 'https://e2e.local/github',
+      featured: true,
+      downloadCount: 176251,
+      version: '1.0.0',
+      changelog: '',
+      license: 'MIT',
+      packageUrl: 'https://e2e.local/github.zip',
+      packageSha256: 'sha256:e2e',
+      packageSize: 1024,
+      compatibleGateways: const ['openclaw', 'hermes'],
+      compatibility: 'compatible',
+      packageType: 'bundle',
+      packageSkillMdPaths: const ['SKILL.md'],
+      updatedAt: 1778760000000,
+      status: 'published',
+      usage: usage,
+      originalSkillMd: originalSkillMd,
+    );
+  }
 }
 
 Map<String, dynamic> _loadCase({
@@ -288,7 +394,7 @@ Future<void> _runStep(WidgetTester tester, Map<String, dynamic> step) async {
       await _sendMessage(tester, step['text'] as String);
       return;
     case 'mock_gateway_push':
-      await _mockGatewayPush(step);
+      await _mockGatewayPush(tester, step);
       await tester.pump(const Duration(milliseconds: 300));
       return;
     case 'simulate_remote_push':
@@ -352,9 +458,7 @@ String _resolveNotificationConversationId(
 
   final name = step['conversation_name'] as String?;
   if (name == null || name.trim().isEmpty) {
-    throw TestFailure(
-      'simulate_remote_push requires conversation_id or conversation_name',
-    );
+    throw TestFailure('conversation_id or conversation_name is required');
   }
 
   final context = tester.element(find.byType(MainLayout));
@@ -471,7 +575,10 @@ Future<void> _sendMessage(WidgetTester tester, String text) async {
   await _tapIcon(tester, 'send');
 }
 
-Future<void> _mockGatewayPush(Map<String, dynamic> step) async {
+Future<void> _mockGatewayPush(
+  WidgetTester tester,
+  Map<String, dynamic> step,
+) async {
   if (_mockControlUrl.isEmpty) {
     throw StateError('CLAWKE_E2E_MOCK_CONTROL_URL is required');
   }
@@ -479,6 +586,10 @@ Future<void> _mockGatewayPush(Map<String, dynamic> step) async {
   if (replies is! List) {
     throw TestFailure('mock_gateway_push requires replies list');
   }
+  final conversationId =
+      step['conversation_id'] != null || step['conversation_name'] != null
+      ? _resolveNotificationConversationId(tester, step)
+      : null;
 
   final uri = Uri.parse('$_mockControlUrl/push');
   final client = HttpClient();
@@ -486,10 +597,7 @@ Future<void> _mockGatewayPush(Map<String, dynamic> step) async {
     final req = await client.postUrl(uri);
     req.headers.contentType = ContentType.json;
     req.write(
-      jsonEncode({
-        'conversation_id': step['conversation_id'],
-        'replies': replies,
-      }),
+      jsonEncode({'conversation_id': conversationId, 'replies': replies}),
     );
     final res = await req.close();
     final body = await utf8.decodeStream(res);

@@ -13,6 +13,7 @@ import 'package:client/providers/gateway_provider.dart';
 import 'package:client/providers/tasks_provider.dart';
 import 'package:client/widgets/app_floating_notice.dart';
 import 'package:client/widgets/app_snack_bar.dart';
+import 'package:client/widgets/copyable_text.dart';
 import 'package:client/widgets/empty_state_panel.dart';
 import 'package:client/widgets/gateway_selector_pane.dart';
 import 'package:client/widgets/gateway_unavailable_panel.dart';
@@ -2068,7 +2069,7 @@ class _TaskRunOutputPage extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: colorScheme.outlineVariant),
                 ),
-                child: SelectableText(
+                child: CopyableText(
                   body,
                   style: Theme.of(
                     context,
@@ -2198,7 +2199,7 @@ class _KeyValueList extends StatelessWidget {
               children: [
                 SizedBox(
                   width: 96,
-                  child: Text(
+                  child: CopyableText(
                     row.$1,
                     style: TextStyle(
                       color: colorScheme.onSurfaceVariant,
@@ -2224,7 +2225,7 @@ class _KeyValueValue extends StatelessWidget {
   Widget build(BuildContext context) {
     final current = value;
     if (current is Widget) return current;
-    return Text(
+    return CopyableText(
       current.toString(),
       style: const TextStyle(fontWeight: FontWeight.w600),
     );
@@ -2252,18 +2253,17 @@ class _TaskDeliveryDisplayValue extends StatelessWidget {
     if (conversationId == null ||
         conversationId.isEmpty ||
         conversationId == title) {
-      return Text(title, style: valueStyle);
+      return CopyableText(title, style: valueStyle);
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: valueStyle),
+        CopyableText(title, style: valueStyle),
         const SizedBox(height: 3),
-        Text(
+        CopyableText(
           conversationId,
           maxLines: 2,
-          overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.labelMedium?.copyWith(
             color: colorScheme.onSurfaceVariant,
             fontWeight: FontWeight.w700,
@@ -2292,7 +2292,7 @@ class _PromptBox extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: colorScheme.outlineVariant),
       ),
-      child: SelectableText(
+      child: CopyableText(
         text,
         style: Theme.of(
           context,

@@ -6,8 +6,17 @@ import 'package:client/core/ws_service.dart';
 import 'package:client/data/database/app_database.dart';
 import 'package:client/data/repositories/conversation_repository.dart';
 import 'package:client/data/repositories/message_repository.dart';
+import 'package:client/data/repositories/skill_cache_repository.dart';
+import 'package:client/models/gateway_info.dart';
+import 'package:client/models/managed_skill.dart';
+import 'package:client/models/skillhub_item.dart';
 import 'package:client/models/message_model.dart';
 import 'package:client/providers/chat_provider.dart';
+import 'package:client/providers/gateway_provider.dart';
+import 'package:client/providers/locale_provider.dart';
+import 'package:client/providers/skillhub_provider.dart';
+import 'package:client/services/skillhub_api_service.dart';
+import 'package:flutter/material.dart';
 import 'package:client/providers/ws_state_provider.dart';
 import 'package:client/providers/database_providers.dart';
 import 'package:client/providers/conversation_provider.dart';
@@ -116,6 +125,7 @@ void main() {
     late MockWsService mockWs;
     late MockMessageDao mockMsgDao;
     late MockConversationDao mockConvDao;
+    late _RecordingSkillCacheRepository skillCache;
 
     setUp(() {
       messageStreamController =
@@ -123,6 +133,7 @@ void main() {
       mockWs = MockWsService();
       mockMsgDao = MockMessageDao();
       mockConvDao = MockConversationDao();
+      skillCache = _RecordingSkillCacheRepository();
 
       // WsService stubs
       when(() => mockWs.connect()).thenAnswer((_) async {});
@@ -201,6 +212,27 @@ void main() {
               ws: mockWs,
             ),
           ),
+          skillHubApiServiceProvider.overrideWithValue(
+            _FakeSkillHubApiService(),
+          ),
+          skillCacheRepositoryProvider.overrideWithValue(skillCache),
+          onlineGatewayListProvider.overrideWith((ref) {
+            return Stream.value(const [
+              GatewayInfo(
+                gatewayId: 'openclaw-local',
+                displayName: 'OpenClaw',
+                gatewayType: 'openclaw',
+                status: GatewayConnectionStatus.online,
+                capabilities: ['chat', 'skills'],
+              ),
+            ]);
+          }),
+          localeProvider.overrideWith((ref) {
+            return LocaleNotifier(
+              initialLocale: const Locale('zh'),
+              loadFromPrefs: false,
+            );
+          }),
           selectedConversationIdProvider.overrideWith((ref) => 'conv_test'),
         ],
       );
@@ -386,5 +418,175 @@ void main() {
       expect(state!.messageId, 'think_2');
       expect(state.content, '新思考');
     });
+
+    test('skillhub_install_status 更新 SkillHub 安装状态', () async {
+      container.read(wsMessageHandlerProvider);
+      await container.read(skillHubControllerProvider.notifier).load();
+      final item = container.read(skillHubControllerProvider).items.single;
+
+      await container.read(skillHubControllerProvider.notifier).install(item);
+
+      expect(container.read(skillHubControllerProvider).installingIds, {'204'});
+
+      messageStreamController.add({
+        'payload_type': 'skillhub_install_status',
+        'installId': 'skillhub_1',
+        'status': 'downloading',
+        'message': '正在下载',
+      });
+      await Future<void>.delayed(Duration.zero);
+
+      var state = container.read(skillHubControllerProvider);
+      expect(state.installingIds, {'204'});
+      expect(state.installedIds, isEmpty);
+      expect(state.installMessages['204'], '正在下载');
+
+      messageStreamController.add({
+        'payload_type': 'skillhub_install_status',
+        'installId': 'skillhub_1',
+        'status': 'installed',
+        'message': '安装完成',
+      });
+      await Future<void>.delayed(Duration.zero);
+
+      state = container.read(skillHubControllerProvider);
+      expect(state.installingIds, isEmpty);
+      expect(state.installedIds, {'204'});
+      expect(state.installMessages['204'], '安装完成');
+      await Future<void>.delayed(Duration.zero);
+      expect(skillCache.syncedGatewayIds, ['openclaw-local']);
+    });
   });
+}
+
+class _RecordingSkillCacheRepository implements SkillCacheRepository {
+  final List<String> syncedGatewayIds = [];
+
+  @override
+  Stream<List<ManagedSkill>> watchSkills(String gatewayId, String locale) {
+    return Stream.value(const []);
+  }
+
+  @override
+  Future<List<ManagedSkill>> getSkills(String gatewayId, String locale) async {
+    return const [];
+  }
+
+  @override
+  Future<List<ManagedSkill>> syncGateway(
+    SkillScope scope,
+    String locale,
+  ) async {
+    syncedGatewayIds.add(scope.gatewayId ?? 'global');
+    return const [];
+  }
+
+  @override
+  Future<ManagedSkill?> getCachedSkill(
+    String id,
+    SkillScope scope,
+    String locale,
+  ) async {
+    return null;
+  }
+
+  @override
+  Future<ManagedSkill?> getDetail(
+    String id,
+    SkillScope scope,
+    String locale,
+  ) async {
+    return null;
+  }
+
+  @override
+  Future<ManagedSkill> create(
+    SkillDraft draft,
+    SkillScope? scope,
+    String locale,
+  ) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<ManagedSkill> update(
+    String id,
+    SkillDraft draft,
+    SkillScope? scope,
+    String locale,
+  ) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> delete(String id, SkillScope? scope) async {}
+
+  @override
+  Future<void> setEnabled(
+    String id,
+    bool enabled,
+    SkillScope? scope,
+    String locale,
+  ) async {}
+}
+
+class _FakeSkillHubApiService extends SkillHubApiService {
+  @override
+  Future<SkillHubListResult> listSkills({
+    String? query,
+    String? category,
+    String? tag,
+    bool? featured,
+    String? gatewayType,
+    int? limit,
+    String? cursor,
+  }) async {
+    return const SkillHubListResult(
+      items: [
+        SkillHubItem(
+          id: '204',
+          slug: 'weather',
+          name: 'Weather',
+          summary: 'Weather skill',
+          category: '',
+          tags: ['coding'],
+          source: 'clawhub',
+          sourceOwner: '',
+          sourceUrl: '',
+          featured: false,
+          downloadCount: 1,
+          version: '1.0.0',
+          changelog: '',
+          license: '',
+          packageUrl: '',
+          packageSha256: '',
+          packageSize: 0,
+          compatibleGateways: [],
+          compatibility: 'compatible',
+          packageType: 'single',
+          packageSkillMdPaths: [],
+          updatedAt: 0,
+          status: 'published',
+          usage: '',
+          originalSkillMd: '',
+        ),
+      ],
+      total: 1,
+    );
+  }
+
+  @override
+  Future<SkillHubInstallResult> installSkill(
+    SkillHubItem item, {
+    String? gatewayId,
+    String? gatewayType,
+    String? installMode,
+  }) async {
+    return const SkillHubInstallResult(
+      installId: 'skillhub_1',
+      installed: false,
+      status: 'accepted',
+      message: '安装任务已提交',
+    );
+  }
 }

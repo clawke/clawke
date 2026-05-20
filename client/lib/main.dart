@@ -284,6 +284,11 @@ class AuthGate extends ConsumerWidget {
     final loggedOut = prefs.getBool('clawke_logged_out') ?? false;
     if (loggedOut) return false;
 
+    if (shouldUseForcedServerConfig()) {
+      // 强制直连模式跳过云端登录校验，避免旧登录态污染本地调试 — Forced direct mode bypasses cloud auth checks to avoid stale login state contaminating local debugging.
+      return true;
+    }
+
     final httpUrl = prefs.getString('clawke_http_url');
     final hasConfig = hasPersistedServerConfig(httpUrl);
 

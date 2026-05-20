@@ -2,6 +2,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:client/providers/server_host_provider.dart';
 
+const _testForcedHttpUrl = String.fromEnvironment('CLAWKE_FORCE_HTTP_URL');
+const _testForcedWsUrl = String.fromEnvironment('CLAWKE_FORCE_WS_URL');
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -98,6 +101,14 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getString('clawke_http_url'), 'http://127.0.0.1:8780');
     expect(prefs.getString('clawke_ws_url'), 'ws://127.0.0.1:8780/ws');
+  });
+
+  test('forced server config marks startup as forced direct mode', () {
+    if (_testForcedHttpUrl.isEmpty || _testForcedWsUrl.isEmpty) {
+      return;
+    }
+
+    expect(shouldUseForcedServerConfig(), isTrue);
   });
 
   test('forced server config can include local relay token', () async {

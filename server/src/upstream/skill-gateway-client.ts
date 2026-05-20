@@ -24,11 +24,16 @@ const RESPONSE_BY_COMMAND: Record<string, string[]> = {
   skill_update: ['skill_mutation_response'],
   skill_delete: ['skill_mutation_response'],
   skill_set_enabled: ['skill_mutation_response'],
+  skillhub_install: ['skillhub_install_response'],
 };
+
+export function skillGatewayTimeoutMsFor(_type: SkillGatewayRequest['type']): number {
+  return 5_000;
+}
 
 export async function sendSkillGatewayRequest(
   request: SkillGatewayRequest,
-  timeoutMs = 5000,
+  timeoutMs = skillGatewayTimeoutMsFor(request.type),
 ): Promise<SkillGatewayResponse> {
   const ws = getUpstreamConnection(request.account_id);
   if (!ws) {
@@ -45,7 +50,7 @@ export async function sendSkillGatewayRequest(
 export function sendSkillGatewayRequestForTest(
   ws: SkillGatewayWebSocket,
   request: SkillGatewayRequest,
-  timeoutMs = 5000,
+  timeoutMs = skillGatewayTimeoutMsFor(request.type),
 ): Promise<SkillGatewayResponse> {
   const requestId = request.request_id || randomUUID();
   const expectedTypes = RESPONSE_BY_COMMAND[request.type] || [];

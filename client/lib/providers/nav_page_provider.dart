@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:client/models/message_model.dart';
 
 /// 导航页面枚举
-enum NavPage { chat, dashboard, tasks, cron, channels, skills }
+enum NavPage { chat, dashboard, tasks, skills, skillHub, cron, channels }
 
 /// 当前激活的页面
 final activeNavPageProvider = StateProvider<NavPage>((ref) => NavPage.chat);

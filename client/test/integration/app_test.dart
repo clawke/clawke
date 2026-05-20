@@ -22,12 +22,6 @@ void main() {
     testWidgets('Flow 1: connect and render SDUI MarkdownWidget', (
       tester,
     ) async {
-      final sduiComponent = {
-        'widget_name': 'MarkdownView',
-        'props': {'content': '# Welcome to Clawke'},
-        'actions': <Map<String, dynamic>>[],
-      };
-
       // Build chat screen with a cup_component message already in DB
       final messages = [
         makeMessage(
@@ -154,6 +148,13 @@ Future<void> _pumpIntegration(
     ),
     if (streamingMsg != null)
       streamingMessageProvider.overrideWith((ref) => streamingMsg),
+    if (streamingMsg != null)
+      conversationRuntimeStateProvider('conv_1').overrideWith(
+        (ref) => ConversationRuntimeState(
+          conversationId: 'conv_1',
+          streamingMessage: streamingMsg,
+        ),
+      ),
   ];
 
   await tester.pumpWidget(

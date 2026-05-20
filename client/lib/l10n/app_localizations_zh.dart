@@ -161,7 +161,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get navChat => '会话';
 
   @override
+  String get navManagement => '管理';
+
+  @override
   String get navDashboard => '仪表盘';
+
+  @override
+  String get navTasks => '任务管理';
 
   @override
   String get navCron => '定时任务';
@@ -170,7 +176,201 @@ class AppLocalizationsZh extends AppLocalizations {
   String get navChannels => '频道管理';
 
   @override
-  String get navSkills => '技能中心';
+  String get navSkills => '技能管理';
+
+  @override
+  String get navSkillHub => 'SkillHub';
+
+  @override
+  String navUnreadSemantics(String label, int count) {
+    return '$label未读消息 $count';
+  }
+
+  @override
+  String get managementWorkspaceTitle => '工作台';
+
+  @override
+  String get managementWorkspaceSubtitle => '状态、任务与执行入口';
+
+  @override
+  String get managementCapabilitiesTitle => '能力';
+
+  @override
+  String get managementCapabilitiesSubtitle => 'Skill 的安装、启停与维护';
+
+  @override
+  String get managementDashboardSubtitle => '用量、连接与健康状态';
+
+  @override
+  String get managementTasksSubtitle => '查看任务、触发执行';
+
+  @override
+  String get managementSkillsSubtitle => '管理本地已安装 Skill';
+
+  @override
+  String get managementSkillHubSubtitle => '发现、安装、更新远程 Skill';
+
+  @override
+  String get skillHubBack => '返回';
+
+  @override
+  String get skillHubBackToHub => '返回 SkillHub';
+
+  @override
+  String get skillHubSubtitle => '安装Skill，给Agent插上翅膀。';
+
+  @override
+  String get skillHubTagAll => '全部';
+
+  @override
+  String get skillHubTagFeatured => '精选';
+
+  @override
+  String get skillHubEmptyTitle => '暂无 Skill';
+
+  @override
+  String get skillHubEmptyMessage => '换一个搜索条件后再试。';
+
+  @override
+  String get skillHubLoadRetry => '加载失败，重试';
+
+  @override
+  String get skillHubSearchHint => '搜索名称、摘要、slug';
+
+  @override
+  String get skillHubSearch => '搜索';
+
+  @override
+  String get skillHubNotFoundTitle => '未找到 Skill';
+
+  @override
+  String get skillHubNotFoundMessage => '返回列表后重新选择。';
+
+  @override
+  String get skillHubInstallRequestSent => '安装请求已发送';
+
+  @override
+  String get skillHubInstallFailed => '安装失败';
+
+  @override
+  String get skillHubSelectGateway => '选择 Gateway';
+
+  @override
+  String get skillHubInstalled => '已安装';
+
+  @override
+  String get skillHubBuiltInInstalled => '内置安装';
+
+  @override
+  String get skillHubFeatured => '精选';
+
+  @override
+  String get skillHubNoSummary => '暂无简介';
+
+  @override
+  String get skillHubUsageTitle => '使用说明';
+
+  @override
+  String get skillHubUsageUnavailable => '详情接口未返回使用说明。';
+
+  @override
+  String get skillHubSkillMdUnavailable => '暂无 SKILL.md 内容';
+
+  @override
+  String get skillHubInstallStatusTitle => '安装状态';
+
+  @override
+  String get skillHubVersion => '版本';
+
+  @override
+  String get skillHubDownloads => '下载';
+
+  @override
+  String get skillHubInstallDisabled => '不可安装';
+
+  @override
+  String get skillHubInstalling => '安装中';
+
+  @override
+  String get skillHubInstallToAnotherGateway => '安装到其他 Gateway';
+
+  @override
+  String get skillHubInstall => '安装';
+
+  @override
+  String get skillHubPackageInfo => '包信息';
+
+  @override
+  String get skillHubPackageType => '类型';
+
+  @override
+  String get skillHubPackageSize => '大小';
+
+  @override
+  String get skillHubSource => '来源';
+
+  @override
+  String get skillHubCompatibleGateways => '兼容 Gateway';
+
+  @override
+  String get skillHubChangelog => '更新说明';
+
+  @override
+  String get skillHubUnknown => '未知';
+
+  @override
+  String get skillHubIncompatible => '不兼容';
+
+  @override
+  String get skillHubChecking => '检查中';
+
+  @override
+  String get skillHubNotInstalled => '未安装';
+
+  @override
+  String get skillHubCompatible => '兼容';
+
+  @override
+  String get skillHubNoGatewaySelected => '未选择 Gateway';
+
+  @override
+  String get skillHubInstallStatusAccepted => '安装任务已提交';
+
+  @override
+  String get skillHubInstallStatusResolving => '正在解析';
+
+  @override
+  String get skillHubInstallStatusDownloading => '正在下载';
+
+  @override
+  String get skillHubInstallStatusVerifying => '正在校验安装包';
+
+  @override
+  String get skillHubInstallStatusExtracting => '正在解压安装包';
+
+  @override
+  String get skillHubInstallStatusInstallingSkill => '正在安装 Skill';
+
+  @override
+  String get skillHubInstallStatusRecording => '正在记录安装信息';
+
+  @override
+  String get skillHubInstallStatusRefreshingCache => '正在刷新Skill缓存';
+
+  @override
+  String get skillHubInstallStatusFallbackPending => '正在切换到 Gateway 原生安装';
+
+  @override
+  String get skillHubInstallStatusGatewayInstalling => 'Gateway 原生安装中';
+
+  @override
+  String get skillHubInstallStatusInstalled => '安装完成';
+
+  @override
+  String get skillHubInstallStatusFailed => '安装失败';
+
+  @override
+  String get skillHubInstallStatusDefault => '正在安装';
 
   @override
   String get skillsPageSubtitle =>

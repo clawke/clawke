@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:client/main.dart';
+import 'package:client/providers/server_host_provider.dart';
 import 'package:client/screens/welcome_screen.dart';
 
 void main() {
@@ -24,6 +25,27 @@ void main() {
     await tester.pumpAndSettle();
 
     // 无配置时应显示 WelcomeScreen（登录/配置页）
+    expect(find.byType(WelcomeScreen), findsOneWidget);
+  });
+
+  testWidgets('ClawkeApp honors logout marker in forced direct mode', (
+    WidgetTester tester,
+  ) async {
+    if (!shouldUseForcedServerConfig()) {
+      return;
+    }
+
+    SharedPreferences.setMockInitialValues({'clawke_logged_out': true});
+
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    await tester.pumpWidget(const ProviderScope(child: ClawkeApp()));
+    await tester.pumpAndSettle();
+
     expect(find.byType(WelcomeScreen), findsOneWidget);
   });
 

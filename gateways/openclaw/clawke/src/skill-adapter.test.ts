@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -177,6 +178,123 @@ test("OpenClawSkillAdapter creates Clawke local skills in the configured skills 
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("OpenClawSkillAdapter installs SkillHub package through OpenClaw upload RPC", async () => {
+  const archive = Buffer.from("fake zip bytes");
+  const digest = createHash("sha256").update(archive).digest("hex");
+  const calls: Array<{ method: string; params?: any }> = [];
+  const adapter = new OpenClawSkillAdapter(undefined, {
+    rpc: async (method, params) => {
+      calls.push({ method, params });
+      if (method === "skills.upload.begin") {
+        return { uploadId: "upload-1" };
+      }
+      if (method === "skills.upload.chunk") {
+        return { ok: true };
+      }
+      if (method === "skills.upload.commit") {
+        return { ok: true, sha256: digest };
+      }
+      if (method === "skills.install") {
+        return { ok: true, slug: "github-helper", sha256: digest };
+      }
+      if (method === "skills.status") {
+        return {
+          skills: [{
+            skillKey: "github-helper",
+            name: "GitHub Helper",
+            description: "GitHub helper",
+            source: "openclaw-workspace",
+            bundled: false,
+            disabled: false,
+          }],
+        };
+      }
+      throw new Error(`Unexpected method: ${method}`);
+    },
+  });
+
+  const installed = await adapter.installSkillHubPackage({
+    id: "204",
+    slug: "github-helper",
+    name: "GitHub Helper",
+    version: "1.2.1",
+    packageUrl: `data:application/zip;base64,${archive.toString("base64")}`,
+    packageSha256: digest,
+    packageType: "bundle",
+  });
+
+  assert.equal(installed?.id, "openclaw-workspace/github-helper");
+  assert.deepEqual(calls.map((call) => call.method), [
+    "skills.upload.begin",
+    "skills.upload.chunk",
+    "skills.upload.commit",
+    "skills.install",
+    "skills.status",
+  ]);
+  assert.deepEqual(calls[0].params, {
+    kind: "skill-archive",
+    slug: "github-helper",
+    sizeBytes: archive.length,
+    sha256: digest,
+  });
+  assert.deepEqual(calls[1].params, {
+    uploadId: "upload-1",
+    offset: 0,
+    dataBase64: archive.toString("base64"),
+  });
+  assert.deepEqual(calls[3].params, {
+    source: "upload",
+    uploadId: "upload-1",
+    slug: "github-helper",
+    sha256: digest,
+  });
+});
+
+test("OpenClawSkillAdapter installs ClawHub-backed SkillHub package through native ClawHub RPC", async () => {
+  const calls: Array<{ method: string; params?: any }> = [];
+  const adapter = new OpenClawSkillAdapter(undefined, {
+    rpc: async (method, params) => {
+      calls.push({ method, params });
+      if (method === "skills.install") {
+        return { ok: true, slug: "github-helper", version: "1.2.1" };
+      }
+      if (method === "skills.status") {
+        return {
+          skills: [{
+            skillKey: "github-helper",
+            name: "GitHub Helper",
+            description: "GitHub helper",
+            source: "openclaw-workspace",
+            bundled: false,
+            disabled: false,
+          }],
+        };
+      }
+      throw new Error(`Unexpected method: ${method}`);
+    },
+  });
+
+  const installed = await adapter.installSkillHubPackage({
+    id: "204",
+    slug: "github-helper",
+    name: "GitHub Helper",
+    source: "clawhub",
+    packageType: "bundle",
+  });
+
+  assert.equal(installed?.id, "openclaw-workspace/github-helper");
+  assert.deepEqual(calls, [
+    {
+      method: "skills.install",
+      params: {
+        source: "clawhub",
+        slug: "github-helper",
+      },
+    },
+    { method: "skills.status", params: undefined },
+  ]);
 });
 
 test("OpenClawSkillAdapter manages gateway-host Clawke skills", async () => {

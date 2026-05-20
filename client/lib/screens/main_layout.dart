@@ -6,7 +6,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:client/screens/conversation_list_screen.dart';
 import 'package:client/screens/chat_screen.dart';
 import 'package:client/screens/dashboard_management_screen.dart';
-import 'package:client/screens/profile_screen.dart';
+import 'package:client/screens/mobile_management_screen.dart';
+import 'package:client/screens/settings_screen.dart';
+import 'package:client/screens/skillhub_screen.dart';
 import 'package:client/screens/skills_management_screen.dart';
 import 'package:client/screens/tasks_management_screen.dart';
 import 'package:client/providers/conversation_provider.dart';
@@ -38,6 +40,11 @@ const _kMaxSidebarWidth = 500.0;
 const _kNotificationIntroSeenKey = 'clawke_notification_intro_seen';
 const _kNotificationUserRequestedKey = 'clawke_notification_user_requested';
 const _isUiE2eRun = String.fromEnvironment('CLAWKE_E2E_RUN_DIR') != '';
+const _kReconnectAlertDelay = Duration(seconds: 5);
+const _kMobileManagementDashboardRoute = '/dashboard';
+const _kMobileManagementTasksRoute = '/tasks';
+const _kMobileManagementSkillsRoute = '/skills';
+const _kMobileManagementSkillHubRoute = '/skillhub';
 
 /// 响应式断点：小于此宽度使用移动端布局
 const _kMobileBreakpoint = 600.0;
@@ -66,6 +73,8 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
   /// 移动端底部导航栏当前选中索引
   int _mobileTabIndex = 0;
 
+  final _mobileManagementNavigatorKey = GlobalKey<NavigatorState>();
+
   /// 用户是否手动关闭了错误提示
   bool _alertDismissed = false;
 
@@ -77,6 +86,10 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
 
   /// 连接是否曾成功过（只有曾成功再断开才重置 dismissed）
   bool _hasEverConnected = false;
+
+  DateTime? _serverDisconnectStartedAt;
+  Timer? _serverDisconnectAlertTimer;
+  bool _serverDisconnectAlertReady = false;
 
   bool _notificationPermissionPromptOpen = false;
 
@@ -123,6 +136,7 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
 
   @override
   void dispose() {
+    _serverDisconnectAlertTimer?.cancel();
     NotificationService.setTapHandler(null);
     super.dispose();
   }
@@ -385,11 +399,34 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
       });
     }
 
+    _updateServerDisconnectAlertGate(ws);
+
     final content = _isMobile(context)
         ? _buildMobileLayout(context)
         : _buildDesktopLayout(context);
 
     return Stack(children: [content, _buildFloatingAlert(context, ref, ws)]);
+  }
+
+  void _updateServerDisconnectAlertGate(WsState ws) {
+    if (ws == WsState.connected) {
+      _serverDisconnectAlertTimer?.cancel();
+      _serverDisconnectAlertTimer = null;
+      _serverDisconnectStartedAt = null;
+      _serverDisconnectAlertReady = false;
+      return;
+    }
+
+    _serverDisconnectStartedAt ??= DateTime.now();
+    if (_serverDisconnectAlertReady ||
+        (_serverDisconnectAlertTimer?.isActive ?? false)) {
+      return;
+    }
+
+    _serverDisconnectAlertTimer = Timer(_kReconnectAlertDelay, () {
+      if (!mounted || _serverDisconnectStartedAt == null) return;
+      setState(() => _serverDisconnectAlertReady = true);
+    });
   }
 
   /// 构建浮动的底部错误提示
@@ -399,6 +436,7 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
         _hasEverAttempted &&
         !_inGracePeriod &&
         !_alertDismissed &&
+        _serverDisconnectAlertReady &&
         ws != WsState.connected;
 
     if (!showAlert) return const SizedBox.shrink();
@@ -443,6 +481,65 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
   //  移动端布局
   // ─────────────────────────────────────────────
 
+  void _handleMobileTabTap(int index) {
+    if (index == 0) {
+      ref.read(activeNavPageProvider.notifier).state = NavPage.chat;
+    }
+    if (index == 1) {
+      _mobileManagementNavigatorKey.currentState?.popUntil(
+        (route) => route.isFirst,
+      );
+    }
+    setState(() => _mobileTabIndex = index);
+  }
+
+  void _openMobileManagementRoute(String routeName, NavPage page) {
+    ref.read(activeNavPageProvider.notifier).state = page;
+    _mobileManagementNavigatorKey.currentState?.pushNamed(routeName);
+  }
+
+  Widget _buildMobileManagementNavigator() {
+    return Navigator(
+      key: _mobileManagementNavigatorKey,
+      onGenerateRoute: (settings) {
+        final page = switch (settings.name) {
+          _kMobileManagementDashboardRoute => const DashboardManagementScreen(
+            showAppBar: true,
+          ),
+          _kMobileManagementTasksRoute => const TasksManagementScreen(
+            showAppBar: true,
+          ),
+          _kMobileManagementSkillsRoute => const SkillsManagementScreen(
+            showAppBar: true,
+          ),
+          _kMobileManagementSkillHubRoute => const SkillHubScreen(
+            showAppBar: true,
+          ),
+          _ => MobileManagementScreen(
+            onDashboardTap: () => _openMobileManagementRoute(
+              _kMobileManagementDashboardRoute,
+              NavPage.dashboard,
+            ),
+            onTasksTap: () => _openMobileManagementRoute(
+              _kMobileManagementTasksRoute,
+              NavPage.tasks,
+            ),
+            onSkillsTap: () => _openMobileManagementRoute(
+              _kMobileManagementSkillsRoute,
+              NavPage.skills,
+            ),
+            onSkillHubTap: () => _openMobileManagementRoute(
+              _kMobileManagementSkillHubRoute,
+              NavPage.skillHub,
+            ),
+          ),
+        };
+
+        return MaterialPageRoute(builder: (_) => page, settings: settings);
+      },
+    );
+  }
+
   Widget _buildMobileLayout(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final l10n = context.l10n;
@@ -463,25 +560,15 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
                     isActive: _mobileTabIndex == 0,
                     child: _buildMobileConversationList(context),
                   ),
-                  // 1: 仪表盘
+                  // 管理入口与子页 — Management hub and child pages
                   buildIndexedChild(
                     isActive: _mobileTabIndex == 1,
-                    child: const DashboardManagementScreen(showAppBar: true),
+                    child: _buildMobileManagementNavigator(),
                   ),
-                  // 2: 任务管理
-                  buildLazyIndexedChild(
+                  // 设置 — Settings
+                  buildIndexedChild(
                     isActive: _mobileTabIndex == 2,
-                    child: const TasksManagementScreen(showAppBar: true),
-                  ),
-                  // 3: 技能中心
-                  buildLazyIndexedChild(
-                    isActive: _mobileTabIndex == 3,
-                    child: const SkillsManagementScreen(showAppBar: true),
-                  ),
-                  // 4: 我的
-                  buildLazyIndexedChild(
-                    isActive: _mobileTabIndex == 4,
-                    child: const ProfileScreen(),
+                    child: const SettingsScreen(),
                   ),
                 ],
               ),
@@ -493,9 +580,7 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _mobileTabIndex,
-        onTap: (index) {
-          setState(() => _mobileTabIndex = index);
-        },
+        onTap: _handleMobileTabTap,
         type: BottomNavigationBarType.fixed,
         backgroundColor: colorScheme.surface,
         selectedItemColor: colorScheme.primary,
@@ -508,7 +593,10 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
             icon: UnreadBadgeIcon(
               icon: Icons.chat_bubble_outline,
               count: unreadCount,
-              semanticsLabel: '${l10n.navChat}未读消息 $unreadCount',
+              semanticsLabel: l10n.navUnreadSemantics(
+                l10n.navChat,
+                unreadCount,
+              ),
               badgeKey: ValueKey(
                 'ui_e2e_nav_unread_${l10n.navChat}_$unreadCount',
               ),
@@ -520,7 +608,10 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
             activeIcon: UnreadBadgeIcon(
               icon: Icons.chat_bubble,
               count: unreadCount,
-              semanticsLabel: '${l10n.navChat}未读消息 $unreadCount',
+              semanticsLabel: l10n.navUnreadSemantics(
+                l10n.navChat,
+                unreadCount,
+              ),
               badgeKey: ValueKey(
                 'ui_e2e_nav_unread_${l10n.navChat}_$unreadCount',
               ),
@@ -532,24 +623,14 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
             label: l10n.navChat,
           ),
           BottomNavigationBarItem(
-            icon: const Icon(Icons.dashboard_outlined),
-            activeIcon: const Icon(Icons.dashboard),
-            label: l10n.navDashboard,
+            icon: const Icon(Icons.apps_outlined),
+            activeIcon: const Icon(Icons.apps),
+            label: l10n.navManagement,
           ),
           BottomNavigationBarItem(
-            icon: const Icon(Icons.task_alt_outlined),
-            activeIcon: const Icon(Icons.task_alt),
-            label: _localized(context, 'Tasks', '任务'),
-          ),
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.extension_outlined),
-            activeIcon: const Icon(Icons.extension),
-            label: l10n.navSkills,
-          ),
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.person_outline),
-            activeIcon: const Icon(Icons.person),
-            label: l10n.navProfile,
+            icon: const Icon(Icons.settings_outlined),
+            activeIcon: const Icon(Icons.settings),
+            label: l10n.settings,
           ),
         ],
       ),
@@ -685,7 +766,17 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
                         isActive: activePage == NavPage.tasks,
                         child: const TasksManagementScreen(),
                       ),
-                      // 3: 定时任务（旧 SDUI 页，导航暂隐藏）
+                      // 3: 技能管理
+                      buildLazyIndexedChild(
+                        isActive: activePage == NavPage.skills,
+                        child: const SkillsManagementScreen(),
+                      ),
+                      // 4: SkillHub
+                      buildLazyIndexedChild(
+                        isActive: activePage == NavPage.skillHub,
+                        child: const SkillHubScreen(),
+                      ),
+                      // 5: 定时任务（旧 SDUI 页，导航暂隐藏）
                       buildIndexedChild(
                         isActive: activePage == NavPage.cron,
                         child: _buildSduiPage(
@@ -695,7 +786,7 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
                           isActive: activePage == NavPage.cron,
                         ),
                       ),
-                      // 4: 频道管理
+                      // 6: 频道管理
                       buildIndexedChild(
                         isActive: activePage == NavPage.channels,
                         child: _buildSduiPage(
@@ -704,11 +795,6 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
                           colorScheme,
                           isActive: activePage == NavPage.channels,
                         ),
-                      ),
-                      // 5: 技能中心
-                      buildLazyIndexedChild(
-                        isActive: activePage == NavPage.skills,
-                        child: const SkillsManagementScreen(),
                       ),
                     ],
                   ),
@@ -771,8 +857,4 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
       ),
     );
   }
-}
-
-String _localized(BuildContext context, String en, String zh) {
-  return Localizations.localeOf(context).languageCode == 'zh' ? zh : en;
 }

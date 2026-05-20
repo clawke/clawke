@@ -164,7 +164,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get navChat => 'Chat';
 
   @override
+  String get navManagement => 'Manage';
+
+  @override
   String get navDashboard => 'Dashboard';
+
+  @override
+  String get navTasks => 'Task Mgmt';
 
   @override
   String get navCron => 'Scheduled Tasks';
@@ -173,7 +179,206 @@ class AppLocalizationsEn extends AppLocalizations {
   String get navChannels => 'Channels';
 
   @override
-  String get navSkills => 'Skills';
+  String get navSkills => 'Skill Mgmt';
+
+  @override
+  String get navSkillHub => 'SkillHub';
+
+  @override
+  String navUnreadSemantics(String label, int count) {
+    return '$label unread messages $count';
+  }
+
+  @override
+  String get managementWorkspaceTitle => 'Workspace';
+
+  @override
+  String get managementWorkspaceSubtitle => 'Status, tasks, and execution';
+
+  @override
+  String get managementCapabilitiesTitle => 'Capabilities';
+
+  @override
+  String get managementCapabilitiesSubtitle =>
+      'Install, enable, and maintain Skills';
+
+  @override
+  String get managementDashboardSubtitle => 'Usage, connections, and health';
+
+  @override
+  String get managementTasksSubtitle => 'View tasks and trigger runs';
+
+  @override
+  String get managementSkillsSubtitle => 'Manage installed local Skills';
+
+  @override
+  String get managementSkillHubSubtitle =>
+      'Discover, install, and update remote Skills';
+
+  @override
+  String get skillHubBack => 'Back';
+
+  @override
+  String get skillHubBackToHub => 'Back to SkillHub';
+
+  @override
+  String get skillHubSubtitle => 'Install Skills to extend your Agent.';
+
+  @override
+  String get skillHubTagAll => 'All';
+
+  @override
+  String get skillHubTagFeatured => 'Featured';
+
+  @override
+  String get skillHubEmptyTitle => 'No Skills';
+
+  @override
+  String get skillHubEmptyMessage => 'Try another search filter.';
+
+  @override
+  String get skillHubLoadRetry => 'Load failed, retry';
+
+  @override
+  String get skillHubSearchHint => 'Search name, summary, slug';
+
+  @override
+  String get skillHubSearch => 'Search';
+
+  @override
+  String get skillHubNotFoundTitle => 'Skill not found';
+
+  @override
+  String get skillHubNotFoundMessage => 'Return to the list and select again.';
+
+  @override
+  String get skillHubInstallRequestSent => 'Install request sent';
+
+  @override
+  String get skillHubInstallFailed => 'Install failed';
+
+  @override
+  String get skillHubSelectGateway => 'Select Gateway';
+
+  @override
+  String get skillHubInstalled => 'Installed';
+
+  @override
+  String get skillHubBuiltInInstalled => 'Built-in install';
+
+  @override
+  String get skillHubFeatured => 'Featured';
+
+  @override
+  String get skillHubNoSummary => 'No summary';
+
+  @override
+  String get skillHubUsageTitle => 'Usage';
+
+  @override
+  String get skillHubUsageUnavailable =>
+      'The detail API did not return usage instructions.';
+
+  @override
+  String get skillHubSkillMdUnavailable => 'No SKILL.md content';
+
+  @override
+  String get skillHubInstallStatusTitle => 'Install Status';
+
+  @override
+  String get skillHubVersion => 'Version';
+
+  @override
+  String get skillHubDownloads => 'Downloads';
+
+  @override
+  String get skillHubInstallDisabled => 'Unavailable';
+
+  @override
+  String get skillHubInstalling => 'Installing';
+
+  @override
+  String get skillHubInstallToAnotherGateway => 'Install to another Gateway';
+
+  @override
+  String get skillHubInstall => 'Install';
+
+  @override
+  String get skillHubPackageInfo => 'Package Info';
+
+  @override
+  String get skillHubPackageType => 'Type';
+
+  @override
+  String get skillHubPackageSize => 'Size';
+
+  @override
+  String get skillHubSource => 'Source';
+
+  @override
+  String get skillHubCompatibleGateways => 'Compatible Gateways';
+
+  @override
+  String get skillHubChangelog => 'Changelog';
+
+  @override
+  String get skillHubUnknown => 'Unknown';
+
+  @override
+  String get skillHubIncompatible => 'Incompatible';
+
+  @override
+  String get skillHubChecking => 'Checking';
+
+  @override
+  String get skillHubNotInstalled => 'Not installed';
+
+  @override
+  String get skillHubCompatible => 'Compatible';
+
+  @override
+  String get skillHubNoGatewaySelected => 'No Gateway selected';
+
+  @override
+  String get skillHubInstallStatusAccepted => 'Install task submitted';
+
+  @override
+  String get skillHubInstallStatusResolving => 'Resolving';
+
+  @override
+  String get skillHubInstallStatusDownloading => 'Downloading';
+
+  @override
+  String get skillHubInstallStatusVerifying => 'Verifying package';
+
+  @override
+  String get skillHubInstallStatusExtracting => 'Extracting package';
+
+  @override
+  String get skillHubInstallStatusInstallingSkill => 'Installing Skill';
+
+  @override
+  String get skillHubInstallStatusRecording => 'Recording install info';
+
+  @override
+  String get skillHubInstallStatusRefreshingCache => 'Refreshing Skill cache';
+
+  @override
+  String get skillHubInstallStatusFallbackPending =>
+      'Switching to Gateway native install';
+
+  @override
+  String get skillHubInstallStatusGatewayInstalling =>
+      'Gateway native install in progress';
+
+  @override
+  String get skillHubInstallStatusInstalled => 'Installed';
+
+  @override
+  String get skillHubInstallStatusFailed => 'Install failed';
+
+  @override
+  String get skillHubInstallStatusDefault => 'Installing';
 
   @override
   String get skillsPageSubtitle =>

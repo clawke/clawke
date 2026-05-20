@@ -24,11 +24,21 @@ const TRANSIENT_GATEWAY_RESPONSE_TYPES = new Set([
   'skill_list_response',
   'skill_get_response',
   'skill_mutation_response',
+  'skillhub_install_response',
   'gateway_system_response',
 ]);
 
 export function isTransientGatewayResponseType(type: unknown): boolean {
   return typeof type === 'string' && TRANSIENT_GATEWAY_RESPONSE_TYPES.has(type);
+}
+
+export function toSkillHubInstallStatusPayload(payload: Record<string, unknown>): Record<string, unknown> {
+  const { type: _type, install_id, request_id, ...rest } = payload;
+  return {
+    payload_type: 'skillhub_install_status',
+    installId: String(install_id || request_id || ''),
+    ...rest,
+  };
 }
 
 export function startGatewayListener(
@@ -79,6 +89,10 @@ export function startGatewayListener(
           gateway_type: gatewayType,
           status: 'online',
           capabilities,
+          clawke_home: stringValue(payload.clawkeHome) || stringValue(payload.clawke_home) || null,
+          managed_skills_root: stringValue(payload.managedSkillsRoot) || stringValue(payload.managed_skills_root) || null,
+          shared_skill_root: stringValue(payload.sharedSkillRoot) || stringValue(payload.shared_skill_root) || null,
+          local_to_server: isLoopbackAddress(remote),
           last_connected_at: now,
           last_seen_at: now,
         });
@@ -101,6 +115,11 @@ export function startGatewayListener(
 
       if (accountId) {
         payload.account_id = payload.account_id || accountId;
+      }
+
+      if (payload.type === 'skillhub_install_status') {
+        broadcastToClients(toSkillHubInstallStatusPayload(payload));
+        return;
       }
 
       if (payload.type === 'e2e_disconnect_clients') {
@@ -154,6 +173,16 @@ export function startGatewayListener(
   });
 
   return wss;
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+export function isLoopbackAddress(remoteAddress: string): boolean {
+  return remoteAddress === '127.0.0.1'
+    || remoteAddress === '::1'
+    || remoteAddress === '::ffff:127.0.0.1';
 }
 
 export function finalizeAllStreaming(): void {

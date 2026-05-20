@@ -1,0 +1,713 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>多会话流式运行态隔离设计</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #090d16;
+      --panel: #101827;
+      --panel-2: #121d2f;
+      --panel-3: #172338;
+      --text: #e6edf6;
+      --muted: #9fb0c5;
+      --line: #28364d;
+      --blue: #4ea1ff;
+      --cyan: #39d6c0;
+      --orange: #ffb454;
+      --red: #ff6b6b;
+      --green: #7ee787;
+      --shadow: rgba(0, 0, 0, 0.35);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.65;
+    }
+
+    .shell {
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    aside {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      padding: 28px 22px;
+      border-right: 1px solid var(--line);
+      background: #0b1220;
+    }
+
+    aside h2 {
+      margin: 0 0 18px;
+      font-size: 16px;
+      letter-spacing: 0;
+      color: var(--text);
+    }
+
+    aside a {
+      display: block;
+      padding: 8px 0;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 14px;
+    }
+
+    aside a:hover {
+      color: var(--cyan);
+    }
+
+    main {
+      padding: 44px;
+      max-width: 1180px;
+      width: 100%;
+    }
+
+    .hero {
+      padding: 32px;
+      border: 1px solid var(--line);
+      background: linear-gradient(135deg, #101827 0%, #132136 100%);
+      border-radius: 8px;
+      box-shadow: 0 18px 50px var(--shadow);
+    }
+
+    .eyebrow {
+      margin: 0 0 10px;
+      color: var(--cyan);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    h1 {
+      margin: 0 0 16px;
+      font-size: 34px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    .lead {
+      margin: 0;
+      max-width: 820px;
+      color: var(--muted);
+      font-size: 17px;
+    }
+
+    section {
+      margin-top: 28px;
+      padding: 26px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    h2 {
+      margin: 0 0 18px;
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 22px 0 10px;
+      color: var(--text);
+      font-size: 17px;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0 0 14px;
+      color: var(--muted);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .cards-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .card {
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+    }
+
+    .card strong {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--text);
+      font-size: 15px;
+    }
+
+    .card p {
+      margin: 0;
+      font-size: 14px;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 2px 9px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #0d1728;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .tag.ok {
+      border-color: rgba(126, 231, 135, 0.35);
+      color: var(--green);
+    }
+
+    .tag.warn {
+      border-color: rgba(255, 180, 84, 0.35);
+      color: var(--orange);
+    }
+
+    .tag.no {
+      border-color: rgba(255, 107, 107, 0.35);
+      color: var(--red);
+    }
+
+    .rule-list {
+      display: grid;
+      gap: 10px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .rule-list li {
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+      color: var(--text);
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .step {
+      position: relative;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+      min-height: 128px;
+    }
+
+    .step .num {
+      display: inline-flex;
+      width: 28px;
+      height: 28px;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: rgba(78, 161, 255, 0.16);
+      color: var(--blue);
+      font-weight: 800;
+      margin-bottom: 10px;
+    }
+
+    .step strong {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--text);
+    }
+
+    .step p {
+      margin: 0;
+      font-size: 13px;
+    }
+
+    .diagram {
+      display: grid;
+      grid-template-columns: 1fr 80px 1.2fr;
+      align-items: center;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .box {
+      min-height: 86px;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+      text-align: center;
+    }
+
+    .box b {
+      display: block;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    .box span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .plus {
+      text-align: center;
+      color: var(--cyan);
+      font-size: 34px;
+      font-weight: 800;
+    }
+
+    code,
+    pre {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    }
+
+    pre {
+      overflow: auto;
+      margin: 12px 0 0;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #08111f;
+      color: #d9e6f2;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    th,
+    td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--panel-3);
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    td {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .callout {
+      padding: 16px 18px;
+      border: 1px solid rgba(57, 214, 192, 0.35);
+      border-radius: 8px;
+      background: rgba(57, 214, 192, 0.08);
+      color: var(--text);
+    }
+
+    .checklist {
+      columns: 2;
+      margin: 0;
+      padding-left: 20px;
+      color: var(--muted);
+    }
+
+    .checklist li {
+      margin: 0 0 8px;
+      break-inside: avoid;
+    }
+
+    @media (max-width: 900px) {
+      .shell {
+        display: block;
+      }
+
+      aside {
+        position: relative;
+        height: auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      main {
+        padding: 24px;
+      }
+
+      .grid,
+      .cards-3,
+      .flow,
+      .diagram {
+        grid-template-columns: 1fr;
+      }
+
+      .plus {
+        font-size: 24px;
+      }
+
+      .checklist {
+        columns: 1;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside>
+      <h2>评审目录</h2>
+      <a href="#summary">结论</a>
+      <a href="#constraints">硬约束</a>
+      <a href="#architecture">架构原则</a>
+      <a href="#runtime">运行态模型</a>
+      <a href="#flow">接收流程</a>
+      <a href="#display">展示流程</a>
+      <a href="#rejected">不采用方案</a>
+      <a href="#scope">第一阶段范围</a>
+      <a href="#testing">TDD / E2E</a>
+      <a href="#acceptance">验收标准</a>
+    </aside>
+
+    <main>
+      <div class="hero" id="summary">
+        <p class="eyebrow">Clawke Client 设计评审</p>
+        <h1>多会话流式运行态隔离设计</h1>
+        <p class="lead">右侧聊天区保持一个 <code>ChatScreen</code> viewport。接收层允许多个会话同时流式接收，但每个会话的正文、Thinking、等待状态、工具状态和缓冲区都按 <code>conversationId</code> 隔离。当前 viewport 只订阅当前会话。</p>
+      </div>
+
+      <section>
+        <h2>问题定位</h2>
+        <div class="callout">当前闪烁的根因不是渲染细节，而是接收层和展示层共用全局单槽 streaming state。后台会话 delta 到达时，会覆盖当前会话状态，并触发当前聊天页重建。</div>
+        <div class="grid" style="margin-top: 14px;">
+          <div class="card">
+            <strong>现在的问题</strong>
+            <p>全局 <code>streamingMessageProvider</code> / <code>streamingThinkingProvider</code> 只能保存一条流。两个会话交错 delta 会互相覆盖。</p>
+          </div>
+          <div class="card">
+            <strong>目标体验</strong>
+            <p>后台会话继续累计流式内容；当前聊天区不闪。用户切过去时，看到已经累计到的位置并继续流式。</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="constraints">
+        <h2>硬约束</h2>
+        <ul class="rule-list">
+          <li><span class="tag no">禁止</span> <code>text_delta</code> 和 <code>thinking_delta</code> 写数据库。</li>
+          <li><span class="tag no">禁止</span> 每个会话保留一个常驻隐藏 <code>ChatScreen</code>。</li>
+          <li><span class="tag ok">固定</span> 左侧会话列表 preview/time 只在 <code>text_done</code> 后一次性更新。</li>
+          <li><span class="tag ok">固定</span> 后台会话流式接收不能触发当前聊天区闪烁。</li>
+          <li><span class="tag ok">固定</span> 切到后台会话时，展示该会话已累计到的位置。</li>
+        </ul>
+      </section>
+
+      <section id="architecture">
+        <h2>架构原则</h2>
+        <div class="diagram">
+          <div class="box">
+            <b>一个 ChatScreen viewport</b>
+            <span>只负责展示当前 selectedConversationId</span>
+          </div>
+          <div class="plus">+</div>
+          <div class="box">
+            <b>按会话隔离的轻量运行态</b>
+            <span>stream / thinking / waiting / tool / buffer / timer</span>
+          </div>
+        </div>
+        <p style="margin-top: 16px;">切换会话时，viewport 绑定到另一个 <code>conversationId</code> 的状态。系统不创建多个隐藏聊天页，也不把 token 流写入 DB。</p>
+      </section>
+
+      <section id="runtime">
+        <h2>运行态模型</h2>
+        <pre>Map&lt;String, ConversationRuntimeState&gt;</pre>
+        <table style="margin-top: 14px;">
+          <thead>
+            <tr>
+              <th>字段</th>
+              <th>用途</th>
+              <th>隔离要求</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>streamingTextMessage</code></td>
+              <td>当前会话正在显示的流式正文</td>
+              <td>按 conversationId</td>
+            </tr>
+            <tr>
+              <td><code>streamingThinkingMessage</code></td>
+              <td>当前会话正在显示的 Thinking</td>
+              <td>按 conversationId</td>
+            </tr>
+            <tr>
+              <td><code>waitingForReply</code></td>
+              <td>发送后、首个 delta 前的等待状态</td>
+              <td>按 conversationId</td>
+            </tr>
+            <tr>
+              <td><code>activeTool</code></td>
+              <td>工具调用中的展示状态</td>
+              <td>按 conversationId</td>
+            </tr>
+            <tr>
+              <td><code>textBuffer / thinkingBuffer</code></td>
+              <td>高频 delta 的内存缓冲区</td>
+              <td>按 conversationId</td>
+            </tr>
+            <tr>
+              <td><code>textFlushTimer / thinkingFlushTimer</code></td>
+              <td>节流刷新定时器</td>
+              <td>按 conversationId</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="flow">
+        <h2>接收流程</h2>
+        <div class="cards-3">
+          <div class="card">
+            <span class="tag">text_delta</span>
+            <h3>只进内存</h3>
+            <p>读取 <code>conversationId</code>，append 到该会话 text buffer，刷新该会话 streaming text。不写 DB，不更新左侧列表。</p>
+          </div>
+          <div class="card">
+            <span class="tag">thinking_delta</span>
+            <h3>只进内存</h3>
+            <p>读取 <code>conversationId</code>，append 到该会话 thinking buffer，刷新该会话 Thinking。不写 DB，不更新左侧列表。</p>
+          </div>
+          <div class="card">
+            <span class="tag ok">text_done</span>
+            <h3>一次性持久化</h3>
+            <p>读取该会话 runtime state，将最终正文和 Thinking 写入 DB，更新 preview/time，清理该会话运行态。</p>
+          </div>
+        </div>
+        <div class="flow">
+          <div class="step">
+            <div class="num">1</div>
+            <strong>delta 到达</strong>
+            <p>从消息中拿到 conversationId。</p>
+          </div>
+          <div class="step">
+            <div class="num">2</div>
+            <strong>定位运行态</strong>
+            <p>更新 runtimeState[conversationId]。</p>
+          </div>
+          <div class="step">
+            <div class="num">3</div>
+            <strong>按会话通知</strong>
+            <p>只通知该会话的订阅者。</p>
+          </div>
+          <div class="step">
+            <div class="num">4</div>
+            <strong>done 后落库</strong>
+            <p>最终消息写 DB，列表一次性更新。</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="display">
+        <h2>展示流程</h2>
+        <pre>selectedConversationId -> ConversationRuntimeState?</pre>
+        <div class="grid" style="margin-top: 14px;">
+          <div class="card">
+            <strong>当前会话</strong>
+            <p>展示正文、Thinking、等待状态、工具状态和停止按钮。只有当前会话的运行态变化会刷新右侧聊天区。</p>
+          </div>
+          <div class="card">
+            <strong>后台会话</strong>
+            <p>继续在内存中累计流式内容。不会刷新当前右侧聊天区，不会触发 preview/time 跳动。</p>
+          </div>
+          <div class="card">
+            <strong>切到后台会话</strong>
+            <p>立即显示该会话已累计内容，然后继续 append 后续 delta。</p>
+          </div>
+          <div class="card">
+            <strong>切回原会话</strong>
+            <p>原会话运行态仍在，不会被其他会话清掉或 finalize。</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="rejected">
+        <h2>不采用的方案</h2>
+        <div class="grid">
+          <div class="card">
+            <span class="tag no">不做</span>
+            <h3>delta 写 DB</h3>
+            <p>token 高频到达会造成大量 IO、Drift watch 重算、列表刷新和移动端性能压力。最终 <code>text_done</code> 已足够完成持久化。</p>
+          </div>
+          <div class="card">
+            <span class="tag no">不做</span>
+            <h3>每会话常驻 ChatScreen</h3>
+            <p>隐藏页面也会占用 controller、ListView、Widget 树和 DB watcher，还可能在后台继续 rebuild。会话多时内存和 CPU 线性增长。</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="scope">
+        <h2>第一阶段范围</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>任务</th>
+              <th>说明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>流式正文按会话隔离</td>
+              <td><code>streamingMessageProvider</code> 从单值改为按 conversationId 读取。</td>
+            </tr>
+            <tr>
+              <td>Thinking 按会话隔离</td>
+              <td><code>streamingThinkingProvider</code> 从单值改为按 conversationId 读取。</td>
+            </tr>
+            <tr>
+              <td>Waiting / Tool 按会话隔离</td>
+              <td>等待回复和工具执行状态不再是全局单槽。</td>
+            </tr>
+            <tr>
+              <td>Buffer / Timer 按会话隔离</td>
+              <td>移除跨会话共享的文本缓冲、Thinking 缓冲和 flush timer。</td>
+            </tr>
+            <tr>
+              <td>ChatScreen 订阅当前会话</td>
+              <td>右侧聊天区只 watch 当前 conversationId 的运行态。</td>
+            </tr>
+            <tr>
+              <td>补充测试</td>
+              <td>覆盖两个会话交错 delta、切换会话继续显示累计内容、done 后才写 DB。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="testing">
+        <h2>TDD 与 E2E 策略</h2>
+        <div class="callout">这次必须先复现 bug，再改代码。先写失败用例，确认当前实现会失败，并且失败原因是多会话流式状态串扰。</div>
+
+        <div class="grid" style="margin-top: 14px;">
+          <div class="card">
+            <span class="tag no">RED</span>
+            <h3>Provider / Widget 先精确复现</h3>
+            <p>模拟 A、B 两个会话交错收到 delta，断言 A 的内容仍是 A 自己的累计内容，B 也是 B 自己的累计内容，且任一会话都不能被另一会话 finalize 或清空。</p>
+            <pre>A: text_delta "A1"
+B: text_delta "B1"
+A: text_delta "A2"
+
+expect(A.streamingText == "A1A2")
+expect(B.streamingText == "B1")</pre>
+          </div>
+          <div class="card">
+            <span class="tag warn">E2E</span>
+            <h3>再覆盖用户可见路径</h3>
+            <p>创建会话 A 和 B，让 Mock Gateway 对两个 conversation_id 慢速交错流式回复。测试在 A/B 之间切换，验证已累计内容、当前页不被后台污染、text_done 前列表不跳动。</p>
+            <pre>create A -> stream A slowly
+create B -> stream B slowly
+switch A/B
+assert current chat only shows current conversation
+assert preview/time updates only after text_done</pre>
+          </div>
+        </div>
+
+        <h3>为什么不是只靠 E2E</h3>
+        <p>E2E 必须有，因为这个 bug 是用户可见闪烁和切换体验问题。但 E2E 粒度大、运行慢、定位不够精确，所以需要 provider/widget 测试先锁住根因，再用 E2E 做端到端验收。</p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>顺序</th>
+              <th>动作</th>
+              <th>通过条件</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>1</td>
+              <td>新增 provider/widget 失败用例</td>
+              <td>当前代码 RED，失败点是全局单槽串扰</td>
+            </tr>
+            <tr>
+              <td>2</td>
+              <td>新增 UI E2E 失败用例</td>
+              <td>能复现两个会话交错流式的用户路径问题</td>
+            </tr>
+            <tr>
+              <td>3</td>
+              <td>实现按会话隔离运行态</td>
+              <td>不写 delta 到 DB，不引入多个常驻 ChatScreen</td>
+            </tr>
+            <tr>
+              <td>4</td>
+              <td>重跑 provider/widget 测试</td>
+              <td>多会话运行态互不覆盖</td>
+            </tr>
+            <tr>
+              <td>5</td>
+              <td>重跑 UI E2E</td>
+              <td>切换会话时能看到各自累计内容，当前页不闪烁</td>
+            </tr>
+            <tr>
+              <td>6</td>
+              <td>重跑既有聊天/流式回归</td>
+              <td>断连恢复、Thinking、停止按钮不回归</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>暂不做</h2>
+        <ul class="rule-list">
+          <li>不做每个会话独立 <code>ChatScreen</code> 常驻。</li>
+          <li>不做 delta 写 DB。</li>
+          <li>不扩大到草稿和滚动位置持久化。</li>
+          <li>不改服务端重试机制和 Gateway 协议。</li>
+        </ul>
+      </section>
+
+      <section id="acceptance">
+        <h2>验收标准</h2>
+        <ul class="checklist">
+          <li>两个会话同时接收流式内容时，当前聊天区不闪烁。</li>
+          <li>A 会话流式中切到 B，会显示 B 已累计的流式内容。</li>
+          <li>B 后台继续流式时，不影响 A 的右侧聊天区。</li>
+          <li><code>text_done</code> 前左侧会话 preview/time 不跳动。</li>
+          <li><code>text_done</code> 后消息写入 DB，左侧会话列表一次性更新。</li>
+          <li>Flutter 单元测试覆盖多会话交错流式场景。</li>
+          <li>UI E2E 覆盖两个会话交错流式、切换会话、后台流式不污染当前会话。</li>
+        </ul>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

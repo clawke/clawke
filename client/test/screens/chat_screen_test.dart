@@ -251,6 +251,13 @@ Future<void> _pumpChatScreen(
     ),
     if (streamingMsg != null)
       streamingMessageProvider.overrideWith((ref) => streamingMsg),
+    if (streamingMsg != null && selectedConvId != null)
+      conversationRuntimeStateProvider(selectedConvId).overrideWith(
+        (ref) => ConversationRuntimeState(
+          conversationId: selectedConvId,
+          streamingMessage: streamingMsg,
+        ),
+      ),
   ];
 
   await tester.pumpWidget(

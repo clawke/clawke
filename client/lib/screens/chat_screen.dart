@@ -8,6 +8,7 @@ import 'package:file_picker/file_picker.dart';
 // path_provider used via MediaCacheService
 import 'package:client/services/media_cache_service.dart';
 import 'package:client/services/media_upload_service.dart';
+import 'package:client/services/mixed_message_content_service.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:pasteboard/pasteboard.dart';
 import 'package:client/data/database/app_database.dart';
@@ -106,6 +107,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         content: response,
         senderId: 'local_user',
       );
+      ref
+          .read(conversationRuntimeControllerProvider.notifier)
+          .setWaiting(convId, true);
       ref.read(waitingForReplyProvider.notifier).state = convId;
     });
     // 设置卡片内容更新回调（响应后替换 DB 中的代码块为结果文本）
@@ -214,11 +218,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           watch: false,
         );
         final currentConvId = ref.read(selectedConversationIdProvider);
-        final waitingConvId = ref.read(waitingForReplyProvider);
         final isStreaming =
-            ref.read(streamingMessageProvider) != null ||
-            ref.read(streamingThinkingProvider) != null ||
-            (waitingConvId != null && waitingConvId == currentConvId);
+            currentConvId != null &&
+            (ref.read(streamingMessageForConversationProvider(currentConvId)) !=
+                    null ||
+                ref.read(
+                      streamingThinkingForConversationProvider(currentConvId),
+                    ) !=
+                    null ||
+                ref.read(
+                  waitingForReplyForConversationProvider(currentConvId),
+                ));
         if (connected && !isStreaming) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             final text = _controller.text;
@@ -302,6 +312,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     ref.read(stagedAttachmentsProvider.notifier).clear();
     ref.read(editingMessageProvider.notifier).state = null;
     ref.read(replyingToProvider.notifier).state = null;
+    ref
+        .read(conversationRuntimeControllerProvider.notifier)
+        .setWaiting(convId, true);
     ref.read(waitingForReplyProvider.notifier).state = convId;
     _controller.clear();
 
@@ -407,24 +420,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   /// 构建本地版混合消息 JSON（仅缓存文件到本地，无 HTTP 上传）
   String _buildLocalMixedJson(String text, List<StagedAttachment> attachments) {
-    final atts = <Map<String, dynamic>>[];
-    for (final a in attachments) {
-      final cachedPath = a.path != null
-          ? MediaCacheService.instance.cacheFileSync(a.path!)
-          : '';
-      if (cachedPath.isEmpty) continue;
-      if (a.isImage) {
-        atts.add({'type': 'image', 'path': cachedPath});
-      } else {
-        atts.add({
-          'type': 'file',
-          'path': cachedPath,
-          'name': a.name ?? 'unknown',
-          'size': a.size ?? 0,
-        });
-      }
-    }
-    return jsonEncode({'text': text, 'attachments': atts});
+    return buildLocalMixedContentJson(text, attachments);
   }
 
   Future<String> _buildMixedContentJson(
@@ -432,58 +428,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     List<StagedAttachment> attachments,
   ) async {
     final uploadService = MediaUploadService(baseUrl: MediaResolver.baseUrl);
-    final atts = <Map<String, dynamic>>[];
-
-    for (final a in attachments) {
-      // 缓存到 App 目录
-      final cachedPath = a.path != null
-          ? MediaCacheService.instance.cacheFileSync(a.path!)
-          : '';
-
-      if (cachedPath.isEmpty) continue;
-
-      try {
-        // HTTP 上传每个附件到 CS（同 sendImageMessage/sendFileMessage）
-        final result = await uploadService.upload(File(cachedPath));
-        debugPrint('[ChatScreen] Mixed upload OK: ${result.mediaUrl}');
-
-        if (a.isImage) {
-          atts.add({
-            'type': 'image',
-            'mediaUrl': result.mediaUrl,
-            'thumbUrl': result.thumbUrl,
-            'thumbHash': result.thumbHash,
-            'width': result.width,
-            'height': result.height,
-            'localPath': cachedPath, // 仅本地 DB 使用，发送时剥离
-          });
-        } else {
-          atts.add({
-            'type': 'file',
-            'mediaUrl': result.mediaUrl,
-            'mediaType': result.mediaType ?? 'application/octet-stream',
-            'name': a.name ?? 'unknown',
-            'size': a.size ?? 0,
-            'localPath': cachedPath, // 仅本地 DB 使用，发送时剥离
-          });
-        }
-      } catch (e) {
-        debugPrint('[ChatScreen] Mixed upload failed: $e');
-        // 上传失败时回退到本地路径（仅本机可读）
-        if (a.isImage) {
-          atts.add({'type': 'image', 'path': cachedPath});
-        } else {
-          atts.add({
-            'type': 'file',
-            'path': cachedPath,
-            'name': a.name ?? 'unknown',
-            'size': a.size ?? 0,
-          });
-        }
-      }
-    }
-
-    return jsonEncode({'text': text, 'attachments': atts});
+    return buildUploadedMixedContentJson(
+      text,
+      attachments,
+      upload: uploadService.upload,
+      onUploadSuccess: (result) =>
+          debugPrint('[ChatScreen] Mixed upload OK: ${result.mediaUrl}'),
+      onUploadError: (error) =>
+          debugPrint('[ChatScreen] Mixed upload failed: $error'),
+    );
   }
 
   Future<void> _saveBytesAndSendImage(
@@ -569,23 +522,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     final wsState = ref.watch(wsStateProvider);
     final convId = ref.watch(selectedConversationIdProvider);
-    final rawStreamingMsg = ref.watch(streamingMessageProvider);
-    final rawStreamingThinking = ref.watch(streamingThinkingProvider);
+    final runtime = convId == null
+        ? null
+        : ref.watch(conversationRuntimeStateProvider(convId));
     final colorScheme = Theme.of(context).colorScheme;
-
-    // 只显示属于当前会话的流式消息
-    final streamingMsg =
-        (rawStreamingMsg is TextMessage &&
-            rawStreamingMsg.conversationId != null &&
-            rawStreamingMsg.conversationId != convId)
-        ? null
-        : rawStreamingMsg;
-    final streamingThinking =
-        (rawStreamingThinking is ThinkingMessage &&
-            rawStreamingThinking.conversationId != null &&
-            rawStreamingThinking.conversationId != convId)
-        ? null
-        : rawStreamingThinking;
+    final streamingMsg = runtime?.streamingMessage;
+    final streamingThinking = runtime?.streamingThinking;
 
     // 同步 Mermaid 渲染开关到全局 builder
     final mermaidEnabled = ref.watch(mermaidEnabledProvider);
@@ -651,13 +593,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     ThinkingMessage? streamingThinking,
   ) {
     final messagesAsync = ref.watch(chatMessagesProvider(convId));
-    final activeToolRaw = ref.watch(activeToolProvider);
-    final activeTool = (activeToolRaw != null && activeToolRaw.convId == convId)
-        ? activeToolRaw.name
-        : null;
-    final waiting = ref.watch(waitingForReplyProvider);
+    final activeTool = ref.watch(
+      activeToolForConversationProvider(convId).select((tool) => tool?.name),
+    );
+    final waiting = ref.watch(waitingForReplyForConversationProvider(convId));
     final isWaitingOnly =
-        waiting == convId &&
+        waiting &&
         streamingMsg == null &&
         streamingThinking == null &&
         activeTool == null;
@@ -713,7 +654,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
                   // Slot 1: streaming item
                   if (hasStreaming && cursorIndex == 0) {
-                    return _buildStreamingItem(streamingMsg, streamingThinking);
+                    return _buildStreamingItem(
+                      streamingMsg,
+                      streamingThinking,
+                      activeTool,
+                    );
                   }
                   if (hasStreaming) cursorIndex--;
                   // Remaining: DB messages
@@ -748,6 +693,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         return _buildStreamingItem(
                           streamingMsg,
                           streamingThinking,
+                          activeTool,
                         );
                       }
                       if (hasStreaming) cursorIndex--;
@@ -1561,11 +1507,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Widget _buildStreamingItem(
     TextMessage? streamingMsg,
     ThinkingMessage? streamingThinking,
+    String? activeTool,
   ) {
     final colorScheme = Theme.of(context).colorScheme;
-    final activeToolRaw = ref.watch(activeToolProvider);
-    // activeTool 在此处无 convId 上下文，显示时由 _buildChatBody 过滤
-    final activeTool = activeToolRaw?.name;
 
     // 等待中（无流式内容）→ 显示 typing 动画气泡
     if (streamingMsg == null &&
@@ -1770,85 +1714,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ],
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTextBubble(TextMessage message) {
-    final isUser = message.role == 'user';
-    final colorScheme = Theme.of(context).colorScheme;
-    final bubbleColor = isUser
-        ? colorScheme.primary
-        : colorScheme.surfaceContainerLowest;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Align(
-        alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (!isUser) ...[_buildAvatar(false), const SizedBox(width: 2)],
-            Flexible(
-              child: Column(
-                crossAxisAlignment: isUser
-                    ? CrossAxisAlignment.end
-                    : CrossAxisAlignment.start,
-                children: [
-                  // 箭头 + 气泡
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (!isUser)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 14),
-                          child: _BubbleArrow(
-                            isUser: false,
-                            color: bubbleColor,
-                          ),
-                        ),
-                      Flexible(
-                        child: Container(
-                          constraints: BoxConstraints(
-                            maxWidth:
-                                MediaQuery.of(context).size.width *
-                                ((Platform.isIOS || Platform.isAndroid)
-                                    ? 0.78
-                                    : 0.55),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: bubbleColor,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: SelectableText(
-                            message.content,
-                            style: TextStyle(
-                              color: isUser
-                                  ? colorScheme.onPrimary
-                                  : colorScheme.onSurface,
-                            ),
-                          ),
-                        ),
-                      ),
-                      if (isUser)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 14),
-                          child: _BubbleArrow(isUser: true, color: bubbleColor),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            if (isUser) ...[const SizedBox(width: 2), _buildAvatar(true)],
           ],
         ),
       ),
@@ -2074,19 +1939,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               Builder(
                 builder: (context) {
                   final convId = ref.watch(selectedConversationIdProvider);
-                  final rawMsg = ref.watch(streamingMessageProvider);
-                  final rawThink = ref.watch(streamingThinkingProvider);
-                  final waiting = ref.watch(waitingForReplyProvider);
+                  final runtime = convId == null
+                      ? null
+                      : ref.watch(conversationRuntimeStateProvider(convId));
                   // 只看属于当前会话的流式状态
                   final isMyStreaming =
-                      (rawMsg != null &&
-                          (rawMsg.conversationId == null ||
-                              rawMsg.conversationId == convId)) ||
-                      (rawThink != null &&
-                          (rawThink.conversationId == null ||
-                              rawThink.conversationId == convId)) ||
-                      (waiting != null && waiting == convId) ||
-                      (ref.watch(activeToolProvider)?.convId == convId);
+                      runtime != null &&
+                      (runtime.streamingMessage != null ||
+                          runtime.streamingThinking != null ||
+                          runtime.waitingForReply ||
+                          runtime.activeTool != null);
                   return IconButton.filled(
                     onPressed: connected
                         ? (isMyStreaming

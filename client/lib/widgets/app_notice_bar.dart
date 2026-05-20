@@ -114,7 +114,7 @@ class AppNoticeBar extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
+                      SelectableText(
                         message,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: palette.foreground,
@@ -124,7 +124,7 @@ class AppNoticeBar extends StatelessWidget {
                       ),
                       if (detail != null) ...[
                         const SizedBox(height: 2),
-                        Text(
+                        SelectableText(
                           detail!,
                           style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(

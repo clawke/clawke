@@ -12,6 +12,7 @@ import multer from 'multer';
 import { mediaUpload, serveMedia, serveThumbnail } from './routes/media-routes.js';
 import { listModels, getModels, getSkills, getConvConfig, putConvConfig } from './routes/config-routes.js';
 import { createSkill, deleteSkill, getSkill, listSkillScopes, listSkills, setSkillEnabled, updateSkill } from './routes/skills-routes.js';
+import { getSkillHubConfig, installSkillHubSkill } from './routes/skillhub-routes.js';
 import { listGateways, renameGateway } from './routes/gateway-routes.js';
 import { getDashboardUsage } from './routes/dashboard-routes.js';
 import { listConversations, createConversation, updateConversation, deleteConversation } from './routes/conversation-routes.js';
@@ -94,7 +95,7 @@ export function startUnifiedServer(port: number = 8780): { server: Server; wss: 
     res.json({
       service: 'clawke-cs',
       kind: 'api',
-      message: 'Clawke HTTP server is an API service. Open the Flutter app for the product UI, or docs/ui-preview.html for the static preview.',
+      message: 'Clawke HTTP server is an API service. Open the Flutter app for the product UI.',
       endpoints: [
         '/health',
         '/api/gateways',
@@ -104,6 +105,8 @@ export function startUnifiedServer(port: number = 8780): { server: Server; wss: 
         '/api/config/skills',
         '/api/config/models',
         '/api/conversations',
+        '/api/skillhub/config',
+        '/api/skillhub/install',
         '/api/push/devices',
       ],
     });
@@ -164,6 +167,8 @@ export function startUnifiedServer(port: number = 8780): { server: Server; wss: 
         '/api/config/skills',
         '/api/conversations',
         '/api/tasks',
+        '/api/skillhub/config',
+        '/api/skillhub/install',
       ],
     });
   });
@@ -190,6 +195,9 @@ export function startUnifiedServer(port: number = 8780): { server: Server; wss: 
   app.put('/api/skills/:category/:name/enabled', setSkillEnabled as any);
   app.put('/api/skills/:category/:name', updateSkill as any);
   app.delete('/api/skills/:category/:name', deleteSkill as any);
+
+  app.get('/api/skillhub/config', getSkillHubConfig as any);
+  app.post('/api/skillhub/install', installSkillHubSkill as any);
 
   // 会话 CRUD API
   app.get('/api/conversations', listConversations as any);

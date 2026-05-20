@@ -1617,6 +1617,15 @@ void main() {
     expect(find.text('编辑任务'), findsNothing);
 
     final overviewPanel = find.byKey(const ValueKey('task_detail_overview'));
+    expect(
+      find.descendant(
+        of: overviewPanel,
+        matching: find.byWidgetPredicate(
+          (widget) => widget is SelectableText && widget.data == 'hermes',
+        ),
+      ),
+      findsWidgets,
+    );
     final promptPanel = find.byKey(const ValueKey('task_detail_prompt'));
     expect(
       tester.getSize(overviewPanel).width,

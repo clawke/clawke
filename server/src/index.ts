@@ -41,6 +41,7 @@ import { handleReadFile } from './mock/mock-file-handler.js';
 import { CronService } from './services/cron-service.js';
 import { initLogger } from './logger.js';
 import { initSkillsRoutes } from './routes/skills-routes.js';
+import { initSkillHubRoutes } from './routes/skillhub-routes.js';
 import { initGatewayRoutes } from './routes/gateway-routes.js';
 import { initDashboardRoutes } from './routes/dashboard-routes.js';
 import { GatewayStore } from './store/gateway-store.js';
@@ -369,6 +370,16 @@ export async function startClawkeServer() {
         };
       },
     });
+    initSkillHubRoutes({
+      getConnectedAccountIds: () => ['mock'],
+      sendSkillRequest: async (payload) => ({
+        type: payload.type === 'skillhub_install' ? 'skillhub_install_response' : 'skill_mutation_response',
+        request_id: payload.request_id || 'mock',
+        ok: false,
+        error: 'skillhub_unsupported',
+        message: 'Mock mode does not install SkillHub packages.',
+      }),
+    });
     initTasksRoutes({
       getConnectedAccountIds: () => ['mock'],
       sendTaskRequest: async (payload) => {
@@ -417,6 +428,11 @@ export async function startClawkeServer() {
       getConnectedAccountIds,
       sendSkillRequest: sendSkillGatewayRequest,
       translationService: skillTranslationService,
+    });
+    initSkillHubRoutes({
+      getConnectedAccountIds,
+      getConnectedGateways,
+      sendSkillRequest: sendSkillGatewayRequest,
     });
 
     // 初始化任务路由。任务真相和执行均归 Gateway/Agent 侧。

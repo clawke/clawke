@@ -14,8 +14,8 @@ class ConversationRepository {
   ConversationRepository({
     required ConversationDao dao,
     required ConfigApiService api,
-  })  : _dao = dao,
-        _api = api;
+  }) : _dao = dao,
+       _api = api;
 
   /// 监听所有会话
   Stream<List<Conversation>> watchAll() => _dao.watchAll();
@@ -48,6 +48,7 @@ class ConversationRepository {
 
     // 无论 Server 是否成功，都写本地（保证离线可用）
     final convId = serverConv?.id ?? id;
+    final now = DateTime.now().millisecondsSinceEpoch;
     await _dao.upsertConversation(
       ConversationsCompanion(
         conversationId: Value(convId),
@@ -55,7 +56,8 @@ class ConversationRepository {
         type: Value(type),
         name: Value(name),
         iconUrl: Value(iconUrl),
-        createdAt: Value(DateTime.now().millisecondsSinceEpoch),
+        lastMessageAt: Value(now),
+        createdAt: Value(now),
       ),
     );
     return convId;
@@ -76,7 +78,12 @@ class ConversationRepository {
     // 新建：始终使用 UUID 作为 conversation_id
     final convId = _uuid.v4();
     // Server 创建
-    await _api.createConversation(id: convId, name: name, type: type, accountId: accountId);
+    await _api.createConversation(
+      id: convId,
+      name: name,
+      type: type,
+      accountId: accountId,
+    );
     // 本地创建
     return _dao.upsertConversation(
       ConversationsCompanion(
@@ -100,7 +107,10 @@ class ConversationRepository {
     final conv = await _dao.getConversation(conversationId);
     if (conv != null) {
       final newPinned = conv.isPinned == 0;
-      final ok = await _api.updateConversation(conversationId, isPinned: newPinned);
+      final ok = await _api.updateConversation(
+        conversationId,
+        isPinned: newPinned,
+      );
       if (ok) {
         await _dao.updatePin(conversationId, newPinned);
       }
@@ -112,7 +122,10 @@ class ConversationRepository {
     final conv = await _dao.getConversation(conversationId);
     if (conv != null) {
       final newMuted = conv.isMuted == 0;
-      final ok = await _api.updateConversation(conversationId, isMuted: newMuted);
+      final ok = await _api.updateConversation(
+        conversationId,
+        isMuted: newMuted,
+      );
       if (ok) {
         await _dao.updateMute(conversationId, newMuted);
       }
@@ -156,7 +169,9 @@ class ConversationRepository {
     try {
       final serverList = await _api.getConversations();
       if (serverList.isEmpty) {
-        debugPrint('[ConvRepo] syncFromServer: server returned empty list, skipping');
+        debugPrint(
+          '[ConvRepo] syncFromServer: server returned empty list, skipping',
+        );
         return;
       }
 
@@ -188,7 +203,9 @@ class ConversationRepository {
               createdAt: Value(sc.createdAt),
             ),
           );
-          debugPrint('[ConvRepo] sync: created ${sc.id} (${sc.name}, account=${sc.accountId})');
+          debugPrint(
+            '[ConvRepo] sync: created ${sc.id} (${sc.name}, account=${sc.accountId})',
+          );
         } else {
           // 两边都有 → 检查是否需要更新（name, pin, mute, accountId）
           bool needUpdate = false;
@@ -213,7 +230,9 @@ class ConversationRepository {
                 createdAt: Value(sc.createdAt),
               ),
             );
-            debugPrint('[ConvRepo] sync: updated ${sc.id} (name=${sc.name}, pin=${sc.isPinned}, mute=${sc.isMuted}, account=${serverAccountId ?? local.accountId})');
+            debugPrint(
+              '[ConvRepo] sync: updated ${sc.id} (name=${sc.name}, pin=${sc.isPinned}, mute=${sc.isMuted}, account=${serverAccountId ?? local.accountId})',
+            );
           }
         }
       }
@@ -222,11 +241,15 @@ class ConversationRepository {
       for (final lc in localList) {
         if (!serverIds.contains(lc.conversationId)) {
           await _dao.deleteConversation(lc.conversationId);
-          debugPrint('[ConvRepo] sync: deleted ${lc.conversationId} (not on server)');
+          debugPrint(
+            '[ConvRepo] sync: deleted ${lc.conversationId} (not on server)',
+          );
         }
       }
 
-      debugPrint('[ConvRepo] syncFromServer done: ${serverList.length} server, ${localList.length} local');
+      debugPrint(
+        '[ConvRepo] syncFromServer done: ${serverList.length} server, ${localList.length} local',
+      );
     } catch (e) {
       debugPrint('[ConvRepo] syncFromServer error: $e');
     }
