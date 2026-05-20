@@ -647,7 +647,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final title = tester
-        .widgetList<Text>(find.text('技能中心'))
+        .widgetList<Text>(find.text('技能管理'))
         .singleWhere((widget) => widget.style?.fontWeight == FontWeight.w700);
     expect(title.style?.fontSize, 25);
   });
@@ -684,7 +684,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final title = tester
-        .widgetList<Text>(find.text('Skills'))
+        .widgetList<Text>(find.text('Skill Mgmt'))
         .singleWhere((widget) => widget.style?.fontWeight == FontWeight.w700);
     expect(title.style?.fontSize, 25);
 
@@ -953,6 +953,56 @@ void main() {
     );
   });
 
+  testWidgets(
+    'SkillsManagementScreen ignores IME composing text until commit',
+    (tester) async {
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      await tester.pumpWidget(buildSubject(locale: const Locale('zh')));
+      await tester.pumpAndSettle();
+
+      final searchField = find.byType(TextField).first;
+      await tester.tap(searchField);
+      await tester.pump();
+
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(
+          text: 'zzz',
+          selection: TextSelection.collapsed(offset: 3),
+          composing: TextRange(start: 0, end: 3),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('web-search'), findsOneWidget);
+      expect(find.text('deploy-helper'), findsOneWidget);
+      var editable = tester.state<EditableTextState>(
+        find.byType(EditableText).first,
+      );
+      expect(editable.widget.focusNode.hasFocus, isTrue);
+
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(
+          text: 'zzz',
+          selection: TextSelection.collapsed(offset: 3),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('web-search'), findsNothing);
+      expect(find.text('deploy-helper'), findsNothing);
+      editable = tester.state<EditableTextState>(
+        find.byType(EditableText).first,
+      );
+      expect(editable.widget.focusNode.hasFocus, isTrue);
+    },
+  );
+
   testWidgets('SkillsManagementScreen uses English labels in English locale', (
     tester,
   ) async {
@@ -1046,6 +1096,14 @@ void main() {
     expect(find.text('web-search'), findsWidgets);
     expect(find.text('Search the web'), findsWidgets);
     expect(find.text('Use when web lookup is needed'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is SelectableText &&
+            widget.data == '/tmp/skills/general/web-search/SKILL.md',
+      ),
+      findsOneWidget,
+    );
     expect(find.text('## Existing body\n'), findsOneWidget);
     expect(find.text('查看技能定义、元数据和 SKILL.md 内容。'), findsNothing);
 
@@ -1329,7 +1387,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(api.listCalls, callsAfterInitialLoad);
-      expect(find.text('技能中心'), findsOneWidget);
+      expect(find.text('技能管理'), findsOneWidget);
       expect(find.text('搜索 Skills...'), findsOneWidget);
       expect(find.text('OpenClaw Gateway 未连接'), findsOneWidget);
       expect(find.text('当前不会发起技能请求'), findsOneWidget);

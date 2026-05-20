@@ -105,7 +105,7 @@ class _NavRailState extends ConsumerState<NavRail> {
               const SizedBox(height: 2),
               _NavItem(
                 icon: Icons.task_alt,
-                label: _localized(context, 'Tasks', '任务管理'),
+                label: context.l10n.navTasks,
                 isActive: activePage == NavPage.tasks,
                 isExpanded: _isExpanded,
                 colorScheme: colorScheme,
@@ -116,7 +116,7 @@ class _NavRailState extends ConsumerState<NavRail> {
               ),
               const SizedBox(height: 2),
               _NavItem(
-                icon: Icons.extension,
+                icon: Icons.settings_suggest,
                 label: context.l10n.navSkills,
                 isActive: activePage == NavPage.skills,
                 isExpanded: _isExpanded,
@@ -124,6 +124,18 @@ class _NavRailState extends ConsumerState<NavRail> {
                 onTap: () {
                   ref.read(activeNavPageProvider.notifier).state =
                       NavPage.skills;
+                },
+              ),
+              const SizedBox(height: 2),
+              _NavItem(
+                icon: Icons.extension,
+                label: context.l10n.navSkillHub,
+                isActive: activePage == NavPage.skillHub,
+                isExpanded: _isExpanded,
+                colorScheme: colorScheme,
+                onTap: () {
+                  ref.read(activeNavPageProvider.notifier).state =
+                      NavPage.skillHub;
                 },
               ),
               // MVP: Cron and Channels nav items hidden
@@ -234,10 +246,6 @@ class _NavRailState extends ConsumerState<NavRail> {
   }
 }
 
-String _localized(BuildContext context, String en, String zh) {
-  return Localizations.localeOf(context).languageCode == 'zh' ? zh : en;
-}
-
 class _NavItem extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -288,7 +296,10 @@ class _NavItem extends StatelessWidget {
                     UnreadBadgeIcon(
                       icon: icon,
                       count: badgeCount,
-                      semanticsLabel: '$label未读消息 $badgeCount',
+                      semanticsLabel: context.l10n.navUnreadSemantics(
+                        label,
+                        badgeCount,
+                      ),
                       badgeKey: ValueKey(
                         'ui_e2e_nav_unread_${label}_$badgeCount',
                       ),

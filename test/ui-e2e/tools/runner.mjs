@@ -81,6 +81,7 @@ function writeTestConfig() {
     relay: {
       enable: false,
       token: setup.serverToken || setup.relayToken || '',
+      apiBaseUrl: setup.skillHubApiBaseUrl || 'https://api.clawke.ai',
       relayUrl: '',
       serverAddr: '',
       serverPort: 7000,

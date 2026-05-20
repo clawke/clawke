@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 
 const {
   sendSkillGatewayRequestForTest,
+  skillGatewayTimeoutMsFor,
   SkillGatewayError,
 } = require('../dist/upstream/skill-gateway-client');
 
@@ -25,6 +26,11 @@ function fakeWs(onSend) {
 }
 
 describe('Skill gateway client', () => {
+  it('uses short ack timeout for SkillHub install requests', () => {
+    assert.equal(skillGatewayTimeoutMsFor('skill_list'), 5000);
+    assert.equal(skillGatewayTimeoutMsFor('skillhub_install'), 5000);
+  });
+
   it('routes skill_list with request_id and resolves matching response', async () => {
     const ws = fakeWs((request, onMessage) => {
       assert.equal(request.type, 'skill_list');
@@ -66,5 +72,36 @@ describe('Skill gateway client', () => {
       }),
       (err) => err instanceof SkillGatewayError && err.code === 'skill_error' && err.message === 'boom',
     );
+  });
+
+  it('routes skillhub_install to skillhub_install_response', async () => {
+    const ws = fakeWs((request, onMessage) => {
+      assert.equal(request.type, 'skillhub_install');
+      assert.equal(request.account_id, 'openclaw-local');
+      assert.equal(request.package.slug, 'github-helper');
+      onMessage(Buffer.from(JSON.stringify({
+        type: 'skillhub_install_response',
+        request_id: request.request_id,
+        ok: true,
+        installed: true,
+      })));
+    });
+
+    const response = await sendSkillGatewayRequestForTest(ws, {
+      type: 'skillhub_install',
+      account_id: 'openclaw-local',
+      package: {
+        id: '204',
+        slug: 'github-helper',
+        name: 'GitHub Helper',
+        version: '1.2.1',
+        packageUrl: 'https://local.clawke.ai/upload/package.zip',
+        packageSha256: 'bed752338e7a19db1074e239075c4cd24fd5da73b0d40bfe040a496d73119371',
+        packageType: 'bundle',
+      },
+    });
+
+    assert.equal(response.type, 'skillhub_install_response');
+    assert.equal(response.installed, true);
   });
 });

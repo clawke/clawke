@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:client/screens/main_layout.dart';
 import 'package:client/core/ws_service.dart';
 import 'package:client/data/repositories/gateway_repository.dart';
@@ -68,6 +70,75 @@ void main() {
       expect(find.text('暂无已连接 Gateway'), findsOneWidget);
     },
   );
+
+  testWidgets('mobile bottom nav groups management entries under manage', (
+    tester,
+  ) async {
+    await _pumpMainLayout(tester, size: const Size(390, 844));
+
+    final nav = tester.widget<BottomNavigationBar>(
+      find.byType(BottomNavigationBar),
+    );
+    expect(nav.items.map((item) => item.label), ['会话', '管理', '设置']);
+    expect(find.text('仪表盘'), findsNothing);
+    expect(find.text('任务管理'), findsNothing);
+    expect(find.text('技能管理'), findsNothing);
+    expect(find.text('SkillHub'), findsNothing);
+
+    await tester.tap(find.byIcon(Icons.apps_outlined));
+    await tester.pumpAndSettle();
+
+    expect(find.text('工作台'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('mobile_management_dashboard')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('mobile_management_tasks')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('mobile_management_skills')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('mobile_management_skillhub')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('mobile_management_dashboard')));
+    await tester.pumpAndSettle();
+
+    final navAfterOpen = tester.widget<BottomNavigationBar>(
+      find.byType(BottomNavigationBar),
+    );
+    expect(navAfterOpen.currentIndex, 1);
+    expect(find.text('暂无已连接 Gateway'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.apps));
+    await tester.pumpAndSettle();
+
+    expect(find.text('工作台'), findsOneWidget);
+  });
+
+  testWidgets('mobile management nav is localized in English', (tester) async {
+    await _pumpMainLayout(
+      tester,
+      size: const Size(390, 844),
+      locale: const Locale('en'),
+    );
+
+    final nav = tester.widget<BottomNavigationBar>(
+      find.byType(BottomNavigationBar),
+    );
+    expect(nav.items.map((item) => item.label), ['Chat', 'Manage', 'Settings']);
+
+    await tester.tap(find.byIcon(Icons.apps_outlined));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Workspace'), findsOneWidget);
+    expect(find.text('Capabilities'), findsOneWidget);
+  });
 
   testWidgets('desktop nav switches from dashboard back to chat page', (
     tester,
@@ -234,12 +305,103 @@ void main() {
     await tester.tap(find.byIcon(Icons.refresh));
     verify(() => mockWs.reconnect()).called(1);
   });
+
+  testWidgets('delays server disconnected alert during reconnect debounce', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final states = StreamController<WsState>();
+    addTearDown(states.close);
+
+    var currentState = WsState.connected;
+    String? lastError;
+    final mockWs = MockWsService();
+    when(() => mockWs.connect()).thenAnswer((_) async {});
+    when(() => mockWs.state).thenAnswer((_) => currentState);
+    when(() => mockWs.lastError).thenAnswer((_) => lastError);
+    when(() => mockWs.reconnect()).thenReturn(null);
+    when(() => mockWs.dispose()).thenReturn(null);
+    when(() => mockWs.send(any())).thenReturn(null);
+    when(() => mockWs.sendJson(any())).thenReturn(null);
+    when(() => mockWs.stateStream).thenAnswer((_) => states.stream);
+    when(
+      () => mockWs.messageStream,
+    ).thenAnswer((_) => const Stream<Map<String, dynamic>>.empty());
+
+    final mockHandler = MockWsMessageHandler();
+    when(() => mockHandler.dispose()).thenReturn(null);
+
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          wsServiceProvider.overrideWithValue(mockWs),
+          wsStateProvider.overrideWith((ref) => states.stream),
+          aiBackendStateProvider.overrideWith(
+            (ref) => AiBackendState.connected,
+          ),
+          wsMessageHandlerProvider.overrideWithValue(mockHandler),
+          conversationListProvider.overrideWith((ref) => Stream.value([])),
+          gatewayListProvider.overrideWith((ref) => Stream.value([])),
+        ],
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('zh'),
+          home: MainLayout(),
+        ),
+      ),
+    );
+
+    states.add(WsState.connected);
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 9));
+
+    currentState = WsState.disconnected;
+    lastError = 'Disconnected';
+    states.add(WsState.disconnected);
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 4));
+
+    expect(find.text('服务器已断开'), findsNothing);
+
+    currentState = WsState.connected;
+    lastError = null;
+    states.add(WsState.connected);
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 2));
+
+    expect(find.text('服务器已断开'), findsNothing);
+
+    currentState = WsState.disconnected;
+    lastError = 'Disconnected';
+    states.add(WsState.disconnected);
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 4));
+
+    expect(find.text('服务器已断开'), findsNothing);
+
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
+    expect(find.text('服务器已断开'), findsOneWidget);
+  });
 }
 
 Future<void> _pumpMainLayout(
   WidgetTester tester, {
   required Size size,
   NavPage? activePage,
+  Locale locale = const Locale('zh'),
 }) async {
   SharedPreferences.setMockInitialValues({});
   await _pumpMainLayoutWithContainer(
@@ -248,6 +410,7 @@ Future<void> _pumpMainLayout(
     container: ProviderContainer(
       overrides: _mainLayoutOverrides(activePage: activePage),
     ),
+    locale: locale,
   );
 }
 
@@ -255,6 +418,7 @@ Future<void> _pumpMainLayoutWithContainer(
   WidgetTester tester, {
   required Size size,
   required ProviderContainer container,
+  Locale locale = const Locale('zh'),
 }) async {
   SharedPreferences.setMockInitialValues({});
   addTearDown(container.dispose);
@@ -269,11 +433,11 @@ Future<void> _pumpMainLayoutWithContainer(
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: container,
-      child: const MaterialApp(
+      child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
-        locale: Locale('zh'),
-        home: MainLayout(),
+        locale: locale,
+        home: const MainLayout(),
       ),
     ),
   );

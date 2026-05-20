@@ -51,6 +51,8 @@ export const GatewayMessageType = {
   SkillListResponse:     "skill_list_response",
   SkillGetResponse:      "skill_get_response",
   SkillMutationResponse: "skill_mutation_response",
+  SkillHubInstallResponse: "skillhub_install_response",
+  SkillHubInstallStatus: "skillhub_install_status",
 
   // 后台系统会话
   GatewaySystemResponse: "gateway_system_response",
@@ -90,6 +92,7 @@ export const InboundMessageType = {
   SkillUpdate:     "skill_update",
   SkillDelete:     "skill_delete",
   SkillSetEnabled: "skill_set_enabled",
+  SkillHubInstall: "skillhub_install",
 
   // 后台系统会话
   GatewaySystemRequest: "gateway_system_request",

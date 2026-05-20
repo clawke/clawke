@@ -386,11 +386,23 @@ abstract class AppLocalizations {
   /// **'会话'**
   String get navChat;
 
+  /// No description provided for @navManagement.
+  ///
+  /// In zh, this message translates to:
+  /// **'管理'**
+  String get navManagement;
+
   /// No description provided for @navDashboard.
   ///
   /// In zh, this message translates to:
   /// **'仪表盘'**
   String get navDashboard;
+
+  /// No description provided for @navTasks.
+  ///
+  /// In zh, this message translates to:
+  /// **'任务管理'**
+  String get navTasks;
 
   /// No description provided for @navCron.
   ///
@@ -407,8 +419,392 @@ abstract class AppLocalizations {
   /// No description provided for @navSkills.
   ///
   /// In zh, this message translates to:
-  /// **'技能中心'**
+  /// **'技能管理'**
   String get navSkills;
+
+  /// No description provided for @navSkillHub.
+  ///
+  /// In zh, this message translates to:
+  /// **'SkillHub'**
+  String get navSkillHub;
+
+  /// No description provided for @navUnreadSemantics.
+  ///
+  /// In zh, this message translates to:
+  /// **'{label}未读消息 {count}'**
+  String navUnreadSemantics(String label, int count);
+
+  /// No description provided for @managementWorkspaceTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'工作台'**
+  String get managementWorkspaceTitle;
+
+  /// No description provided for @managementWorkspaceSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'状态、任务与执行入口'**
+  String get managementWorkspaceSubtitle;
+
+  /// No description provided for @managementCapabilitiesTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'能力'**
+  String get managementCapabilitiesTitle;
+
+  /// No description provided for @managementCapabilitiesSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'Skill 的安装、启停与维护'**
+  String get managementCapabilitiesSubtitle;
+
+  /// No description provided for @managementDashboardSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'用量、连接与健康状态'**
+  String get managementDashboardSubtitle;
+
+  /// No description provided for @managementTasksSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'查看任务、触发执行'**
+  String get managementTasksSubtitle;
+
+  /// No description provided for @managementSkillsSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'管理本地已安装 Skill'**
+  String get managementSkillsSubtitle;
+
+  /// No description provided for @managementSkillHubSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'发现、安装、更新远程 Skill'**
+  String get managementSkillHubSubtitle;
+
+  /// No description provided for @skillHubBack.
+  ///
+  /// In zh, this message translates to:
+  /// **'返回'**
+  String get skillHubBack;
+
+  /// No description provided for @skillHubBackToHub.
+  ///
+  /// In zh, this message translates to:
+  /// **'返回 SkillHub'**
+  String get skillHubBackToHub;
+
+  /// No description provided for @skillHubSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'安装Skill，给Agent插上翅膀。'**
+  String get skillHubSubtitle;
+
+  /// No description provided for @skillHubTagAll.
+  ///
+  /// In zh, this message translates to:
+  /// **'全部'**
+  String get skillHubTagAll;
+
+  /// No description provided for @skillHubTagFeatured.
+  ///
+  /// In zh, this message translates to:
+  /// **'精选'**
+  String get skillHubTagFeatured;
+
+  /// No description provided for @skillHubEmptyTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂无 Skill'**
+  String get skillHubEmptyTitle;
+
+  /// No description provided for @skillHubEmptyMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'换一个搜索条件后再试。'**
+  String get skillHubEmptyMessage;
+
+  /// No description provided for @skillHubLoadRetry.
+  ///
+  /// In zh, this message translates to:
+  /// **'加载失败，重试'**
+  String get skillHubLoadRetry;
+
+  /// No description provided for @skillHubSearchHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'搜索名称、摘要、slug'**
+  String get skillHubSearchHint;
+
+  /// No description provided for @skillHubSearch.
+  ///
+  /// In zh, this message translates to:
+  /// **'搜索'**
+  String get skillHubSearch;
+
+  /// No description provided for @skillHubNotFoundTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'未找到 Skill'**
+  String get skillHubNotFoundTitle;
+
+  /// No description provided for @skillHubNotFoundMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'返回列表后重新选择。'**
+  String get skillHubNotFoundMessage;
+
+  /// No description provided for @skillHubInstallRequestSent.
+  ///
+  /// In zh, this message translates to:
+  /// **'安装请求已发送'**
+  String get skillHubInstallRequestSent;
+
+  /// No description provided for @skillHubInstallFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'安装失败'**
+  String get skillHubInstallFailed;
+
+  /// No description provided for @skillHubSelectGateway.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择 Gateway'**
+  String get skillHubSelectGateway;
+
+  /// No description provided for @skillHubInstalled.
+  ///
+  /// In zh, this message translates to:
+  /// **'已安装'**
+  String get skillHubInstalled;
+
+  /// No description provided for @skillHubBuiltInInstalled.
+  ///
+  /// In zh, this message translates to:
+  /// **'内置安装'**
+  String get skillHubBuiltInInstalled;
+
+  /// No description provided for @skillHubFeatured.
+  ///
+  /// In zh, this message translates to:
+  /// **'精选'**
+  String get skillHubFeatured;
+
+  /// No description provided for @skillHubNoSummary.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂无简介'**
+  String get skillHubNoSummary;
+
+  /// No description provided for @skillHubUsageTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'使用说明'**
+  String get skillHubUsageTitle;
+
+  /// No description provided for @skillHubUsageUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'详情接口未返回使用说明。'**
+  String get skillHubUsageUnavailable;
+
+  /// No description provided for @skillHubSkillMdUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂无 SKILL.md 内容'**
+  String get skillHubSkillMdUnavailable;
+
+  /// No description provided for @skillHubInstallStatusTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'安装状态'**
+  String get skillHubInstallStatusTitle;
+
+  /// No description provided for @skillHubVersion.
+  ///
+  /// In zh, this message translates to:
+  /// **'版本'**
+  String get skillHubVersion;
+
+  /// No description provided for @skillHubDownloads.
+  ///
+  /// In zh, this message translates to:
+  /// **'下载'**
+  String get skillHubDownloads;
+
+  /// No description provided for @skillHubInstallDisabled.
+  ///
+  /// In zh, this message translates to:
+  /// **'不可安装'**
+  String get skillHubInstallDisabled;
+
+  /// No description provided for @skillHubInstalling.
+  ///
+  /// In zh, this message translates to:
+  /// **'安装中'**
+  String get skillHubInstalling;
+
+  /// No description provided for @skillHubInstallToAnotherGateway.
+  ///
+  /// In zh, this message translates to:
+  /// **'安装到其他 Gateway'**
+  String get skillHubInstallToAnotherGateway;
+
+  /// No description provided for @skillHubInstall.
+  ///
+  /// In zh, this message translates to:
+  /// **'安装'**
+  String get skillHubInstall;
+
+  /// No description provided for @skillHubPackageInfo.
+  ///
+  /// In zh, this message translates to:
+  /// **'包信息'**
+  String get skillHubPackageInfo;
+
+  /// No description provided for @skillHubPackageType.
+  ///
+  /// In zh, this message translates to:
+  /// **'类型'**
+  String get skillHubPackageType;
+
+  /// No description provided for @skillHubPackageSize.
+  ///
+  /// In zh, this message translates to:
+  /// **'大小'**
+  String get skillHubPackageSize;
+
+  /// No description provided for @skillHubSource.
+  ///
+  /// In zh, this message translates to:
+  /// **'来源'**
+  String get skillHubSource;
+
+  /// No description provided for @skillHubCompatibleGateways.
+  ///
+  /// In zh, this message translates to:
+  /// **'兼容 Gateway'**
+  String get skillHubCompatibleGateways;
+
+  /// No description provided for @skillHubChangelog.
+  ///
+  /// In zh, this message translates to:
+  /// **'更新说明'**
+  String get skillHubChangelog;
+
+  /// No description provided for @skillHubUnknown.
+  ///
+  /// In zh, this message translates to:
+  /// **'未知'**
+  String get skillHubUnknown;
+
+  /// No description provided for @skillHubIncompatible.
+  ///
+  /// In zh, this message translates to:
+  /// **'不兼容'**
+  String get skillHubIncompatible;
+
+  /// No description provided for @skillHubChecking.
+  ///
+  /// In zh, this message translates to:
+  /// **'检查中'**
+  String get skillHubChecking;
+
+  /// No description provided for @skillHubNotInstalled.
+  ///
+  /// In zh, this message translates to:
+  /// **'未安装'**
+  String get skillHubNotInstalled;
+
+  /// No description provided for @skillHubCompatible.
+  ///
+  /// In zh, this message translates to:
+  /// **'兼容'**
+  String get skillHubCompatible;
+
+  /// No description provided for @skillHubNoGatewaySelected.
+  ///
+  /// In zh, this message translates to:
+  /// **'未选择 Gateway'**
+  String get skillHubNoGatewaySelected;
+
+  /// No description provided for @skillHubInstallStatusAccepted.
+  ///
+  /// In zh, this message translates to:
+  /// **'安装任务已提交'**
+  String get skillHubInstallStatusAccepted;
+
+  /// No description provided for @skillHubInstallStatusResolving.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在解析'**
+  String get skillHubInstallStatusResolving;
+
+  /// No description provided for @skillHubInstallStatusDownloading.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在下载'**
+  String get skillHubInstallStatusDownloading;
+
+  /// No description provided for @skillHubInstallStatusVerifying.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在校验安装包'**
+  String get skillHubInstallStatusVerifying;
+
+  /// No description provided for @skillHubInstallStatusExtracting.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在解压安装包'**
+  String get skillHubInstallStatusExtracting;
+
+  /// No description provided for @skillHubInstallStatusInstallingSkill.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在安装 Skill'**
+  String get skillHubInstallStatusInstallingSkill;
+
+  /// No description provided for @skillHubInstallStatusRecording.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在记录安装信息'**
+  String get skillHubInstallStatusRecording;
+
+  /// No description provided for @skillHubInstallStatusRefreshingCache.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在刷新Skill缓存'**
+  String get skillHubInstallStatusRefreshingCache;
+
+  /// No description provided for @skillHubInstallStatusFallbackPending.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在切换到 Gateway 原生安装'**
+  String get skillHubInstallStatusFallbackPending;
+
+  /// No description provided for @skillHubInstallStatusGatewayInstalling.
+  ///
+  /// In zh, this message translates to:
+  /// **'Gateway 原生安装中'**
+  String get skillHubInstallStatusGatewayInstalling;
+
+  /// No description provided for @skillHubInstallStatusInstalled.
+  ///
+  /// In zh, this message translates to:
+  /// **'安装完成'**
+  String get skillHubInstallStatusInstalled;
+
+  /// No description provided for @skillHubInstallStatusFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'安装失败'**
+  String get skillHubInstallStatusFailed;
+
+  /// No description provided for @skillHubInstallStatusDefault.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在安装'**
+  String get skillHubInstallStatusDefault;
 
   /// No description provided for @skillsPageSubtitle.
   ///

@@ -6,9 +6,11 @@ import json
 import os
 import re
 import shutil
+import subprocess
+import sys
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import yaml
 
@@ -23,6 +25,7 @@ class HermesSkillAdapter:
         self,
         clawke_home: str | Path | None = None,
         external_roots: list[str | Path] | None = None,
+        skillhub_installer: Callable[[str, Path, bool], None] | None = None,
     ):
         self.clawke_home = Path(
             clawke_home or os.environ.get("CLAWKE_HOME", "~/.clawke")
@@ -30,19 +33,21 @@ class HermesSkillAdapter:
         self.managed_root = self.clawke_home / "skills"
         self.disabled_root = self.clawke_home / "disabled-skills"
         self.state_path = self.clawke_home / "skills-state.json"
-        hermes_home = Path(os.environ.get("HERMES_HOME", "~/.hermes")).expanduser()
+        self.hermes_home = Path(os.environ.get("HERMES_HOME", "~/.hermes")).expanduser().resolve()
         default_home = Path(os.environ.get("CLAWKE_HOME", "~/.clawke")).expanduser().resolve()
         roots = (
             external_roots
             if external_roots is not None
-            else ([hermes_home / "skills", Path("~/.agents/skills")] if self.clawke_home == default_home else [])
+            else ([self.hermes_home / "skills", Path("~/.agents/skills")] if self.clawke_home == default_home else [])
         )
         self.external_roots = [Path(root).expanduser().resolve() for root in roots]
+        self._skillhub_installer = skillhub_installer or self._run_native_skillhub_install
 
     def list_skills(self) -> list[dict[str, Any]]:
         by_id: dict[str, dict[str, Any]] = {}
         for root in self.external_roots:
-            for skill in self._scan_root(root, True, "external", "Hermes skills", False, False):
+            is_hermes_native_root = root.resolve() == (self.hermes_home / "skills").resolve()
+            for skill in self._scan_root(root, True, "external", "Hermes skills", False, is_hermes_native_root):
                 by_id[skill["id"]] = skill
         for skill in self._scan_root(self.managed_root, True, "managed", "Clawke skills", True, True):
             by_id[skill["id"]] = skill
@@ -186,6 +191,31 @@ class HermesSkillAdapter:
         self._write_state(state)
         return self._require_skill(skill_id)
 
+    def install_skillhub_package(self, package: dict[str, Any]) -> dict[str, Any]:
+        normalized = self._normalize_skillhub_package(package)
+        identifier = f"clawhub/{normalized['slug']}"
+        self._skillhub_installer(identifier, self.hermes_home, True)
+        installed = self._find_skill_by_name(normalized["slug"]) or self._find_skill_by_name(normalized["name"])
+        if installed is not None:
+            return installed
+        skill_path = self.hermes_home / "skills" / normalized["slug"] / "SKILL.md"
+        return {
+            "id": self._skill_id("general", normalized["slug"]),
+            "name": normalized["slug"],
+            "description": normalized["name"],
+            "category": "general",
+            "enabled": True,
+            "source": "external",
+            "sourceLabel": "Hermes skills",
+            "writable": False,
+            "deletable": True,
+            "path": str(skill_path.relative_to(self.hermes_home / "skills")),
+            "absolutePath": str(skill_path),
+            "root": str(self.hermes_home / "skills"),
+            "updatedAt": int(time.time() * 1000),
+            "hasConflict": False,
+        }
+
     def ensure_hermes_extra_dir(self) -> bool:
         """Best-effort config update so Hermes can load Clawke-managed skills."""
         hermes_home = Path(os.environ.get("HERMES_HOME", "~/.hermes")).expanduser()
@@ -228,6 +258,45 @@ class HermesSkillAdapter:
             return True
         except Exception:
             return False
+
+    def _normalize_skillhub_package(self, package: dict[str, Any]) -> dict[str, str]:
+        source = str(package.get("source") or "").strip().lower()
+        if source != "clawhub":
+            raise ValueError("Hermes SkillHub install only supports ClawHub source")
+        slug = str(package.get("slug") or "").strip()
+        name = str(package.get("name") or slug).strip()
+        if not SAFE_SEGMENT.match(slug):
+            raise ValueError(f"Invalid SkillHub slug: {slug}")
+        if not name:
+            raise ValueError("SkillHub package name is required")
+        return {"slug": slug, "name": name}
+
+    def _run_native_skillhub_install(self, identifier: str, hermes_home: Path, force: bool) -> None:
+        code = (
+            "import sys\n"
+            "from hermes_cli.skills_hub import do_install\n"
+            "do_install(sys.argv[1], force=sys.argv[2] == '1', skip_confirm=True)\n"
+        )
+        env = os.environ.copy()
+        env["HERMES_HOME"] = str(hermes_home)
+        env.setdefault("CLAWKE_HOME", str(self.clawke_home))
+        result = subprocess.run(
+            [sys.executable, "-c", code, identifier, "1" if force else "0"],
+            env=env,
+            text=True,
+            capture_output=True,
+            timeout=180,
+            check=False,
+        )
+        if result.returncode != 0:
+            message = (result.stderr or result.stdout or "").strip()
+            raise RuntimeError(message or f"Hermes SkillHub install failed: {identifier}")
+
+    def _find_skill_by_name(self, name: str) -> dict[str, Any] | None:
+        for skill in self.list_skills():
+            if skill.get("name") == name or str(skill.get("id", "")).endswith(f"/{name}"):
+                return skill
+        return None
 
     def _scan_root(
         self,

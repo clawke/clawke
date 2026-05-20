@@ -1,0 +1,98 @@
+{
+  "id": "p0-multi-conversation-stream-isolation",
+  "title": "多会话交错流式回复互不污染当前聊天区",
+  "module": "会话",
+  "objective": "验证两个会话交错收到流式 delta 时，当前会话的流式气泡、停止按钮和已累计内容不会被后台会话覆盖；切回后台会话后能看到已累计到的位置。",
+  "coverage": [
+    "两个 conversation_id 交错收到 text_delta",
+    "后台会话 delta 不覆盖当前聊天区",
+    "当前会话的停止按钮在后台 delta 到达后仍保持",
+    "切回后台会话后能看到累计流式内容",
+    "text_done 后最终消息正常落库"
+  ],
+  "tags": ["p0", "chat", "streaming", "conversation", "ui"],
+  "setup": {
+    "serverMode": "openclaw",
+    "accountId": "e2e_mock",
+    "agentName": "E2E Mock Gateway",
+    "httpPort": 18780,
+    "upstreamPort": 18766,
+    "mediaPort": 18781,
+    "controlPort": 18782
+  },
+  "steps": [
+    { "action": "launch_app" },
+    { "action": "wait_for_text", "text": "e2e_mock" },
+    { "action": "tap_text", "text": "e2e_mock", "exact": true },
+    { "action": "create_conversation", "name": "E2E Stream B" },
+    {
+      "action": "mock_gateway_push",
+      "conversation_name": "E2E Stream B",
+      "replies": [
+        {
+          "type": "agent_text_delta",
+          "message_id": "e2e_stream_b",
+          "delta": "B流第一段",
+          "delayMs": 40
+        }
+      ]
+    },
+    { "action": "wait_for_text", "text": "B流第一段", "timeoutMs": 6000 },
+    { "action": "wait_for_icon", "icon": "stop" },
+    {
+      "action": "mock_gateway_push",
+      "conversation_name": "e2e_mock",
+      "replies": [
+        {
+          "type": "agent_text_delta",
+          "message_id": "e2e_stream_a",
+          "delta": "A后台第一段",
+          "delayMs": 40
+        }
+      ]
+    },
+    { "action": "wait_for_text", "text": "B流第一段", "timeoutMs": 3000 },
+    { "action": "wait_for_icon", "icon": "stop", "timeoutMs": 3000 },
+    { "action": "wait_for_absent_text", "text": "A后台第一段", "durationMs": 600 },
+    { "action": "tap_text", "text": "e2e_mock", "exact": true },
+    { "action": "wait_for_text", "text": "A后台第一段", "timeoutMs": 6000 },
+    { "action": "wait_for_icon", "icon": "stop" },
+    {
+      "action": "mock_gateway_push",
+      "conversation_name": "E2E Stream B",
+      "replies": [
+        {
+          "type": "agent_text_delta",
+          "message_id": "e2e_stream_b",
+          "delta": "B流第二段",
+          "delayMs": 40
+        }
+      ]
+    },
+    { "action": "wait_for_text", "text": "A后台第一段", "timeoutMs": 3000 },
+    { "action": "wait_for_icon", "icon": "stop", "timeoutMs": 3000 },
+    { "action": "wait_for_absent_text", "text": "B流第二段", "durationMs": 600 },
+    { "action": "tap_text", "text": "E2E Stream B", "exact": true },
+    { "action": "wait_for_text", "text": "B流第一段B流第二段", "timeoutMs": 6000 },
+    { "action": "wait_for_icon", "icon": "stop" },
+    {
+      "action": "mock_gateway_push",
+      "conversation_name": "E2E Stream B",
+      "replies": [
+        {
+          "type": "agent_text_done",
+          "message_id": "e2e_stream_b_done",
+          "fullText": "B流第一段B流第二段",
+          "delayMs": 40
+        }
+      ]
+    },
+    { "action": "wait_for_text", "text": "B流第一段B流第二段", "timeoutMs": 6000 },
+    { "action": "wait_for_icon", "icon": "send" },
+    { "action": "wait_for_absent_icon", "icon": "stop", "durationMs": 600 }
+  ],
+  "mockGateway": {},
+  "assert": [
+    { "uiTextVisible": "B流第一段B流第二段" }
+  ]
+}

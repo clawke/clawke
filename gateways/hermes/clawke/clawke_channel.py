@@ -98,6 +98,8 @@ class GatewayMessageType:
     SkillListResponse = "skill_list_response"
     SkillGetResponse = "skill_get_response"
     SkillMutationResponse = "skill_mutation_response"
+    SkillHubInstallResponse = "skillhub_install_response"
+    SkillHubInstallStatus = "skillhub_install_status"
     GatewaySystemResponse = "gateway_system_response"
 
 
@@ -124,6 +126,7 @@ class InboundMessageType:
     SkillUpdate = "skill_update"
     SkillDelete = "skill_delete"
     SkillSetEnabled = "skill_set_enabled"
+    SkillHubInstall = "skillhub_install"
     GatewaySystemRequest = "gateway_system_request"
 
 
@@ -715,12 +718,17 @@ class ClawkeHermesGateway:
             logger.info("Connected to Clawke Server")
 
             # Handshake: identify
+            clawke_home = os.environ.get("CLAWKE_DATA_DIR") or str(Path.home() / ".clawke")
+            managed_skills_root = str(Path(clawke_home) / "skills")
             await ws.send(json.dumps({
                 "type": GatewayMessageType.Identify,
                 "accountId": self.config.account_id,
                 "agentName": "Hermes",
                 "gatewayType": "hermes",
                 "capabilities": ["chat", "tasks", "skills", "models"],
+                "clawkeHome": clawke_home,
+                "managedSkillsRoot": managed_skills_root,
+                "sharedSkillRoot": managed_skills_root,
             }))
             logger.info("Identified as account=%s", self.config.account_id)
 
@@ -731,42 +739,50 @@ class ClawkeHermesGateway:
                 except (json.JSONDecodeError, TypeError):
                     continue
 
-                msg_type = msg.get("type")
-
-                if isinstance(msg_type, str) and msg_type.startswith("skill_"):
-                    await self._handle_skill_command(msg)
-
-                elif isinstance(msg_type, str) and msg_type.startswith("task_"):
-                    await self._handle_task_command(msg)
-
-                elif msg_type == InboundMessageType.GatewaySystemRequest:
-                    await self._handle_gateway_system_request(msg)
-
-                elif msg_type == InboundMessageType.Chat:
-                    # MUST NOT await — the WS loop must stay free to receive
-                    # approval_response / abort while the agent is running.
-                    task = asyncio.ensure_future(self._dispatch_chat(msg))
-                    # 跟踪活跃 dispatch，stop() 时可 cancel — Track for stop() cancellation
-                    self._active_dispatches.add(task)
-                    task.add_done_callback(self._active_dispatches.discard)
-
-                elif msg_type == InboundMessageType.Abort:
-                    self._handle_abort(msg)
-
-                elif msg_type == InboundMessageType.QueryModels:
-                    await self._handle_query_models()
-
-                elif msg_type == InboundMessageType.QuerySkills:
-                    await self._handle_query_skills()
-
-                elif msg_type == InboundMessageType.ApprovalResponse:
-                    self._handle_approval_response(msg)
-
-                elif msg_type == InboundMessageType.ClarifyResponse:
-                    self._handle_clarify_response(msg)
+                await self._handle_inbound_message(msg)
 
         self._ws = None
         logger.info("Disconnected from Clawke Server")
+
+    async def _handle_inbound_message(self, msg: dict) -> None:
+        msg_type = msg.get("type")
+
+        if msg_type == InboundMessageType.SkillHubInstall:
+            await self._handle_skill_command(msg)
+
+        elif isinstance(msg_type, str) and msg_type.startswith("skill_"):
+            await self._handle_skill_command(msg)
+
+        elif isinstance(msg_type, str) and msg_type.startswith("task_"):
+            await self._handle_task_command(msg)
+
+        elif msg_type == InboundMessageType.GatewaySystemRequest:
+            task = asyncio.create_task(self._handle_gateway_system_request(msg))
+            self._active_dispatches.add(task)
+            task.add_done_callback(self._active_dispatches.discard)
+
+        elif msg_type == InboundMessageType.Chat:
+            # MUST NOT await — the WS loop must stay free to receive
+            # approval_response / abort while the agent is running.
+            task = asyncio.ensure_future(self._dispatch_chat(msg))
+            # 跟踪活跃 dispatch，stop() 时可 cancel — Track for stop() cancellation
+            self._active_dispatches.add(task)
+            task.add_done_callback(self._active_dispatches.discard)
+
+        elif msg_type == InboundMessageType.Abort:
+            self._handle_abort(msg)
+
+        elif msg_type == InboundMessageType.QueryModels:
+            await self._handle_query_models()
+
+        elif msg_type == InboundMessageType.QuerySkills:
+            await self._handle_query_skills()
+
+        elif msg_type == InboundMessageType.ApprovalResponse:
+            self._handle_approval_response(msg)
+
+        elif msg_type == InboundMessageType.ClarifyResponse:
+            self._handle_clarify_response(msg)
 
     async def _handle_gateway_system_request(self, msg: dict) -> None:
         """Handle isolated server-to-gateway background system requests."""
@@ -1636,6 +1652,22 @@ class ClawkeHermesGateway:
         """Route Clawke skill commands to the gateway-host skill adapter."""
         msg_type = str(msg.get("type") or "")
         request_id = msg.get("request_id", "")
+        install_id = str(msg.get("install_id") or request_id or "")
+        if msg_type == InboundMessageType.SkillHubInstall:
+            await self._send({
+                "type": GatewayMessageType.SkillHubInstallResponse,
+                "request_id": request_id,
+                "install_id": install_id,
+                "ok": True,
+                "installed": False,
+                "status": "accepted",
+                "message": "安装任务已提交",
+            })
+            task = asyncio.create_task(self._run_skillhub_install(msg, install_id))
+            self._active_dispatches.add(task)
+            task.add_done_callback(self._active_dispatches.discard)
+            return
+
         response: dict[str, Any] = {
             "type": self._skill_response_type(msg_type),
             "request_id": request_id,
@@ -1669,12 +1701,74 @@ class ClawkeHermesGateway:
 
         await self._send(response)
 
+    async def _run_skillhub_install(self, msg: dict, install_id: str) -> None:
+        package = msg.get("package") or {}
+        slug = str(package.get("slug") or "")
+        await self._send_skillhub_install_status(
+            install_id,
+            "installing",
+            slug=slug,
+            message="正在安装",
+        )
+        try:
+            adapter = self._get_skill_adapter()
+            skill = await asyncio.to_thread(adapter.install_skillhub_package, package)
+            await self._send_skillhub_install_status(
+                install_id,
+                "installed",
+                slug=slug,
+                message="安装完成",
+                installed=True,
+                skill=skill,
+            )
+        except Exception as e:
+            logger.warning("SkillHub install failed: install_id=%s error=%s", install_id, e)
+            await self._send_skillhub_install_status(
+                install_id,
+                "failed",
+                slug=slug,
+                message=str(e),
+                installed=False,
+                error="skill_error",
+            )
+
+    async def _send_skillhub_install_status(
+        self,
+        install_id: str,
+        status: str,
+        *,
+        slug: str = "",
+        message: str = "",
+        installed: bool | None = None,
+        skill: Any = None,
+        error: str | None = None,
+    ) -> None:
+        payload: dict[str, Any] = {
+            "type": GatewayMessageType.SkillHubInstallStatus,
+            "install_id": install_id,
+            "account_id": self._gateway_id(),
+            "status": status,
+        }
+        if slug:
+            payload["slug"] = slug
+        if message:
+            payload["message"] = message
+        if installed is not None:
+            payload["installed"] = installed
+        if skill is not None:
+            payload["skill"] = skill
+        if error:
+            payload["error"] = error
+        await self._send(payload)
+
     @staticmethod
     def _skill_response_type(msg_type: str) -> str:
         if msg_type == InboundMessageType.SkillList:
             return GatewayMessageType.SkillListResponse
         if msg_type == InboundMessageType.SkillGet:
             return GatewayMessageType.SkillGetResponse
+        if msg_type == InboundMessageType.SkillHubInstall:
+            return GatewayMessageType.SkillHubInstallResponse
         return GatewayMessageType.SkillMutationResponse
 
     def _get_skill_adapter(self):

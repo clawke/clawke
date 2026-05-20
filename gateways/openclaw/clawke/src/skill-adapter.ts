@@ -9,6 +9,7 @@ import {
   writeFileSync,
   type Dirent,
 } from "node:fs";
+import { createHash } from "node:crypto";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { homedir } from "node:os";
 import {
@@ -24,6 +25,19 @@ export interface OpenClawSkillDraft {
   trigger?: string;
   body?: string;
   content?: string;
+}
+
+export interface OpenClawSkillHubInstallPackage {
+  id: string;
+  slug: string;
+  name: string;
+  source?: string;
+  sourceOwner?: string;
+  version?: string;
+  packageUrl?: string;
+  packageSha256?: string;
+  packageType?: string;
+  gatewayType?: string;
 }
 
 export interface OpenClawManagedSkill {
@@ -100,6 +114,7 @@ export interface OpenClawSkillAdapterOptions extends OpenClawGatewayRpcOptions {
 }
 
 const SAFE_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+const SKILLHUB_UPLOAD_CHUNK_BYTES = 256 * 1024;
 
 export class OpenClawSkillAdapter {
   private readonly rpc: OpenClawGatewayRpc;
@@ -229,6 +244,66 @@ export class OpenClawSkillAdapter {
     const skillKey = this.skillKeyFromId(id);
     await this.rpc("skills.update", { skillKey, enabled });
     return (await this.getSkill(id)) ?? this.placeholderSkill(id, skillKey, enabled);
+  }
+
+  async installSkillHubPackage(installPackage: OpenClawSkillHubInstallPackage): Promise<OpenClawManagedSkill | null> {
+    const normalized = this.normalizeSkillHubPackage(installPackage);
+    if (normalized.source?.toLowerCase() === "clawhub") {
+      return this.installClawHubSkillHubPackage(normalized);
+    }
+
+    const packageUrl = normalized.packageUrl;
+    const packageSha256 = normalized.packageSha256;
+    if (!packageUrl || !packageSha256) throw new Error("SkillHub package archive metadata is required");
+
+    const archive = await this.downloadSkillHubArchive(packageUrl);
+    const digest = createHash("sha256").update(archive).digest("hex");
+    if (digest.toLowerCase() !== packageSha256.toLowerCase()) {
+      throw new Error("SkillHub package sha256 mismatch");
+    }
+
+    const begin = await this.rpc("skills.upload.begin", {
+      kind: "skill-archive",
+      slug: normalized.slug,
+      sizeBytes: archive.byteLength,
+      sha256: digest,
+    }, { timeoutMs: 30_000 });
+    const uploadId = this.requireUploadId(begin);
+
+    for (let offset = 0; offset < archive.byteLength; offset += SKILLHUB_UPLOAD_CHUNK_BYTES) {
+      const chunk = archive.subarray(offset, Math.min(offset + SKILLHUB_UPLOAD_CHUNK_BYTES, archive.byteLength));
+      await this.rpc("skills.upload.chunk", {
+        uploadId,
+        offset,
+        dataBase64: Buffer.from(chunk).toString("base64"),
+      }, { timeoutMs: 30_000 });
+    }
+
+    this.requirePayloadOk(await this.rpc("skills.upload.commit", {
+      uploadId,
+      sha256: digest,
+    }, { timeoutMs: 30_000 }));
+
+    this.requirePayloadOk(await this.rpc("skills.install", {
+      source: "upload",
+      uploadId,
+      slug: normalized.slug,
+      sha256: digest,
+    }, { timeoutMs: 90_000 }));
+
+    const skills = await this.listSkills();
+    return skills.find((skill) => this.skillKeyFromId(skill.id) === normalized.slug) ?? null;
+  }
+
+  private async installClawHubSkillHubPackage(installPackage: OpenClawSkillHubInstallPackage): Promise<OpenClawManagedSkill | null> {
+    this.requirePayloadOk(await this.rpc("skills.install", {
+      source: "clawhub",
+      slug: installPackage.slug,
+      ...(installPackage.version ? { version: installPackage.version } : {}),
+    }, { timeoutMs: 90_000 }));
+
+    const skills = await this.listSkills();
+    return skills.find((skill) => this.skillKeyFromId(skill.id) === installPackage.slug) ?? null;
   }
 
   ensureOpenClawExtraDir(): boolean {
@@ -374,6 +449,57 @@ export class OpenClawSkillAdapter {
       trigger: draft.trigger?.trim() || undefined,
       body: draft.body ?? draft.content ?? "",
     };
+  }
+
+  private normalizeSkillHubPackage(installPackage: OpenClawSkillHubInstallPackage): OpenClawSkillHubInstallPackage {
+    const normalized = {
+      ...installPackage,
+      id: installPackage.id.trim(),
+      slug: this.normalizeSegment(installPackage.slug),
+      name: installPackage.name.trim(),
+      source: installPackage.source?.trim() || undefined,
+      sourceOwner: installPackage.sourceOwner?.trim() || undefined,
+      version: installPackage.version?.trim() || undefined,
+      packageUrl: installPackage.packageUrl?.trim() || undefined,
+      packageSha256: installPackage.packageSha256?.trim() || undefined,
+      packageType: installPackage.packageType?.trim() || undefined,
+      gatewayType: installPackage.gatewayType?.trim() || undefined,
+    };
+    this.requireSafeSegment(normalized.slug, "SkillHub package slug");
+    if (!normalized.id) throw new Error("SkillHub package id is required");
+    if (!normalized.name) throw new Error("SkillHub package name is required");
+    if (normalized.source?.toLowerCase() === "clawhub") return normalized;
+    if (!normalized.version) throw new Error("SkillHub package version is required");
+    if (!normalized.packageUrl) throw new Error("SkillHub packageUrl is required");
+    if (!normalized.packageSha256 || !/^[a-fA-F0-9]{64}$/.test(normalized.packageSha256)) {
+      throw new Error("SkillHub packageSha256 must be a 64-character hex digest");
+    }
+    return normalized;
+  }
+
+  private async downloadSkillHubArchive(packageUrl: string): Promise<Uint8Array> {
+    if (typeof fetch !== "function") throw new Error("fetch is not available in this runtime");
+    const response = await fetch(packageUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to download SkillHub package: HTTP ${response.status}`);
+    }
+    return new Uint8Array(await response.arrayBuffer());
+  }
+
+  private requireUploadId(value: unknown): string {
+    if (this.isRecord(value) && typeof value.uploadId === "string" && value.uploadId.trim()) {
+      return value.uploadId;
+    }
+    throw new Error("OpenClaw skills.upload.begin did not return uploadId");
+  }
+
+  private requirePayloadOk(value: unknown): void {
+    if (this.isRecord(value) && value.ok === false) {
+      const message = this.isRecord(value.error) && typeof value.error.message === "string"
+        ? value.error.message
+        : "OpenClaw SkillHub install failed";
+      throw new Error(message);
+    }
   }
 
   private buildContent(draft: Required<Pick<OpenClawSkillDraft, "name" | "category" | "description" | "body">> & { trigger?: string }): string {

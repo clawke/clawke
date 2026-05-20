@@ -2,6 +2,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:client/providers/server_host_provider.dart';
 
+const _testForcedHttpUrl = String.fromEnvironment('CLAWKE_FORCE_HTTP_URL');
+const _testForcedWsUrl = String.fromEnvironment('CLAWKE_FORCE_WS_URL');
+const _testForcedToken = String.fromEnvironment('CLAWKE_FORCE_TOKEN');
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -98,5 +102,39 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getString('clawke_http_url'), 'http://127.0.0.1:8780');
     expect(prefs.getString('clawke_ws_url'), 'ws://127.0.0.1:8780/ws');
+  });
+
+  test('forced server config marks startup as forced direct mode', () {
+    if (_testForcedHttpUrl.isEmpty || _testForcedWsUrl.isEmpty) {
+      return;
+    }
+
+    expect(shouldUseForcedServerConfig(), isTrue);
+  });
+
+  test('forced server config preserves logged out marker', () async {
+    if (_testForcedHttpUrl.isEmpty || _testForcedWsUrl.isEmpty) {
+      return;
+    }
+
+    SharedPreferences.setMockInitialValues({
+      'clawke_token': 'stale-token',
+      'clawke_logged_out': true,
+    });
+
+    final notifier = ServerConfigNotifier();
+    final loaded = await notifier.ensureLoaded();
+
+    expect(loaded.httpUrl, _testForcedHttpUrl);
+    expect(loaded.wsUrl, _testForcedWsUrl);
+    expect(loaded.token, _testForcedToken);
+
+    final prefs = await SharedPreferences.getInstance();
+    if (_testForcedToken.isEmpty) {
+      expect(prefs.getString('clawke_token'), isNull);
+    } else {
+      expect(prefs.getString('clawke_token'), _testForcedToken);
+    }
+    expect(prefs.getBool('clawke_logged_out'), isTrue);
   });
 }

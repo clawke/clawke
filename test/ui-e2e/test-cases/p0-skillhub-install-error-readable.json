@@ -1,0 +1,45 @@
+{
+  "id": "p0-skillhub-install-error-readable",
+  "title": "SkillHub 安装失败时展示可读错误",
+  "module": "SkillHub",
+  "objective": "验证安装接口失败时，页面展示业务错误文案，不泄漏 DioException 原始异常。",
+  "coverage": [
+    "进入 SkillHub 详情页",
+    "点击安装",
+    "展示业务错误",
+    "不展示 DioException"
+  ],
+  "tags": ["p0", "skillhub", "install", "error", "ui"],
+  "setup": {
+    "serverMode": "openclaw",
+    "accountId": "e2e_mock",
+    "agentName": "E2E Mock Gateway",
+    "httpPort": 18780,
+    "upstreamPort": 18766,
+    "mediaPort": 18781,
+    "controlPort": 18782,
+    "skillHubFake": true,
+    "skillHubFakeInstallError": "gateway_id is required when gateway native install is needed."
+  },
+  "steps": [
+    { "action": "launch_app" },
+    { "action": "tap_text", "text": "SkillHub", "exact": true },
+    { "action": "wait_for_text", "text": "Github", "timeoutMs": 20000 },
+    { "action": "tap_text", "text": "Github", "exact": true },
+    { "action": "wait_for_text", "text": "安装", "timeoutMs": 10000 },
+    { "action": "tap_text", "text": "安装", "exact": true, "preferLast": true },
+    {
+      "action": "wait_for_text",
+      "text": "gateway_id is required when gateway native install is needed.",
+      "timeoutMs": 10000
+    },
+    { "action": "wait_for_absent_text", "text": "DioException", "durationMs": 1000 }
+  ],
+  "mockGateway": {},
+  "assert": [
+    {
+      "uiTextVisible": "gateway_id is required when gateway native install is needed."
+    },
+    { "uiTextAbsent": "DioException" }
+  ]
+}

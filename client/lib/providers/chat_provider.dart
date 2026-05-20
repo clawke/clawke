@@ -19,6 +19,7 @@ import 'package:client/providers/auth_provider.dart';
 import 'package:client/providers/chat_limit_provider.dart';
 import 'package:client/providers/conversation_provider.dart';
 import 'package:client/providers/server_host_provider.dart';
+import 'package:client/providers/skillhub_provider.dart';
 import 'package:client/providers/nav_page_provider.dart';
 import 'package:client/providers/locale_provider.dart';
 import 'package:client/providers/app_version_provider.dart';
@@ -48,6 +49,193 @@ final waitingForReplyProvider = StateProvider<String?>((ref) => null);
 final activeToolProvider = StateProvider<({String name, String convId})?>(
   (ref) => null,
 );
+
+typedef ActiveToolState = ({String name, String convId});
+
+class ConversationRuntimeState {
+  final String conversationId;
+  final TextMessage? streamingMessage;
+  final ThinkingMessage? streamingThinking;
+  final bool waitingForReply;
+  final ActiveToolState? activeTool;
+
+  const ConversationRuntimeState({
+    required this.conversationId,
+    this.streamingMessage,
+    this.streamingThinking,
+    this.waitingForReply = false,
+    this.activeTool,
+  });
+
+  factory ConversationRuntimeState.empty(String conversationId) {
+    return ConversationRuntimeState(conversationId: conversationId);
+  }
+
+  bool get isEmpty =>
+      streamingMessage == null &&
+      streamingThinking == null &&
+      !waitingForReply &&
+      activeTool == null;
+
+  ConversationRuntimeState copyWith({
+    Object? streamingMessage = _runtimeUnset,
+    Object? streamingThinking = _runtimeUnset,
+    bool? waitingForReply,
+    Object? activeTool = _runtimeUnset,
+  }) {
+    return ConversationRuntimeState(
+      conversationId: conversationId,
+      streamingMessage: identical(streamingMessage, _runtimeUnset)
+          ? this.streamingMessage
+          : streamingMessage as TextMessage?,
+      streamingThinking: identical(streamingThinking, _runtimeUnset)
+          ? this.streamingThinking
+          : streamingThinking as ThinkingMessage?,
+      waitingForReply: waitingForReply ?? this.waitingForReply,
+      activeTool: identical(activeTool, _runtimeUnset)
+          ? this.activeTool
+          : activeTool as ActiveToolState?,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is ConversationRuntimeState &&
+        other.conversationId == conversationId &&
+        other.streamingMessage == streamingMessage &&
+        other.streamingThinking == streamingThinking &&
+        other.waitingForReply == waitingForReply &&
+        other.activeTool == activeTool;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    conversationId,
+    streamingMessage,
+    streamingThinking,
+    waitingForReply,
+    activeTool,
+  );
+}
+
+const Object _runtimeUnset = Object();
+
+class ConversationRuntimeController
+    extends StateNotifier<Map<String, ConversationRuntimeState>> {
+  ConversationRuntimeController() : super(const {});
+
+  ConversationRuntimeState runtimeFor(String conversationId) {
+    return state[conversationId] ??
+        ConversationRuntimeState.empty(conversationId);
+  }
+
+  void update(
+    String conversationId,
+    ConversationRuntimeState Function(ConversationRuntimeState current) apply,
+  ) {
+    if (conversationId.isEmpty) return;
+    final next = apply(runtimeFor(conversationId));
+    final updated = Map<String, ConversationRuntimeState>.from(state);
+    if (next.isEmpty) {
+      updated.remove(conversationId);
+    } else {
+      updated[conversationId] = next;
+    }
+    state = updated;
+  }
+
+  void setWaiting(String conversationId, bool waiting) {
+    update(
+      conversationId,
+      (current) => current.copyWith(waitingForReply: waiting),
+    );
+  }
+
+  void setActiveTool(String conversationId, ActiveToolState? tool) {
+    update(conversationId, (current) => current.copyWith(activeTool: tool));
+  }
+
+  void setStreamingMessage(String conversationId, TextMessage? message) {
+    update(
+      conversationId,
+      (current) => current.copyWith(streamingMessage: message),
+    );
+  }
+
+  void setStreamingThinking(String conversationId, ThinkingMessage? message) {
+    update(
+      conversationId,
+      (current) => current.copyWith(streamingThinking: message),
+    );
+  }
+
+  void clearConversation(String conversationId) {
+    if (conversationId.isEmpty || !state.containsKey(conversationId)) return;
+    final updated = Map<String, ConversationRuntimeState>.from(state)
+      ..remove(conversationId);
+    state = updated;
+  }
+
+  void clearAll() {
+    if (state.isEmpty) return;
+    state = const {};
+  }
+}
+
+final conversationRuntimeControllerProvider =
+    StateNotifierProvider<
+      ConversationRuntimeController,
+      Map<String, ConversationRuntimeState>
+    >((ref) => ConversationRuntimeController());
+
+final conversationRuntimeStateProvider =
+    Provider.family<ConversationRuntimeState, String>((ref, conversationId) {
+      return ref.watch(
+        conversationRuntimeControllerProvider.select(
+          (states) =>
+              states[conversationId] ??
+              ConversationRuntimeState.empty(conversationId),
+        ),
+      );
+    });
+
+final streamingMessageForConversationProvider =
+    Provider.family<TextMessage?, String>((ref, conversationId) {
+      return ref.watch(
+        conversationRuntimeStateProvider(
+          conversationId,
+        ).select((state) => state.streamingMessage),
+      );
+    });
+
+final streamingThinkingForConversationProvider =
+    Provider.family<ThinkingMessage?, String>((ref, conversationId) {
+      return ref.watch(
+        conversationRuntimeStateProvider(
+          conversationId,
+        ).select((state) => state.streamingThinking),
+      );
+    });
+
+final waitingForReplyForConversationProvider = Provider.family<bool, String>((
+  ref,
+  conversationId,
+) {
+  return ref.watch(
+    conversationRuntimeStateProvider(
+      conversationId,
+    ).select((state) => state.waitingForReply),
+  );
+});
+
+final activeToolForConversationProvider =
+    Provider.family<ActiveToolState?, String>((ref, conversationId) {
+      return ref.watch(
+        conversationRuntimeStateProvider(
+          conversationId,
+        ).select((state) => state.activeTool),
+      );
+    });
 
 // 全局 SDUI 弹窗组件（如 Dashboard, CronList 等），通过 ref.listen 在 UI 顶层展示
 final globalSduiProvider = StateProvider<SduiMessage?>((ref) => null);
@@ -105,6 +293,26 @@ final wsMessageHandlerProvider = Provider<WsMessageHandler>((ref) {
   return handler;
 });
 
+class _ConversationStreamBuffer {
+  _ConversationStreamBuffer(this.conversationId);
+
+  final String conversationId;
+  String? accountId;
+  Timer? textFlushTimer;
+  String textBuffer = '';
+  String? textMessageId;
+  Timer? thinkingFlushTimer;
+  String thinkingBuffer = '';
+  String? thinkingMessageId;
+
+  void cancelTimers() {
+    textFlushTimer?.cancel();
+    thinkingFlushTimer?.cancel();
+    textFlushTimer = null;
+    thinkingFlushTimer = null;
+  }
+}
+
 class WsMessageHandler with WidgetsBindingObserver {
   final Ref _ref;
   StreamSubscription<Map<String, dynamic>>? _sub;
@@ -116,23 +324,9 @@ class WsMessageHandler with WidgetsBindingObserver {
   /// 待确认请求的会话路由：requestId → conversationId
   final Map<String, String> _pendingConversationIds = {};
 
-  /// 当前流式消息关联的 accountId
-  String? _streamingAccountId;
-
-  /// 当前流式消息关联的 conversationId
-  String? _streamingConversationId;
-
   Future<bool>? _relayCredentialRefresh;
 
-  // ── 流式 debounce 缓冲 ──────────────────────────
-  // 累积 delta 到缓冲区，定时刷新到 provider，减少 GptMarkdown 重建次数
-  Timer? _textFlushTimer;
-  String _textBuffer = '';
-  String? _textBufferMsgId;
-
-  Timer? _thinkingFlushTimer;
-  String _thinkingBuffer = '';
-  String? _thinkingBufferMsgId;
+  final Map<String, _ConversationStreamBuffer> _streamBuffers = {};
 
   /// 根据已有文本长度自适应节流间隔（长文本减少重建频率）
   int _throttleMs(int currentLength) => currentLength > 3000 ? 100 : 50;
@@ -245,9 +439,8 @@ class WsMessageHandler with WidgetsBindingObserver {
 
   void _onConnected() {
     debugPrint('[WsMessageHandler] Connected, sending sync request');
-    // 重连时清除流式状态，防止跨会话路由错误
-    _streamingAccountId = null;
-    _streamingConversationId = null;
+    // 重连时清除运行态 — Clear reply runtime state after reconnect.
+    _clearAllReplyRuntimeState();
     // 重连时清空在线后端列表，等 ai_connected 消息重建
     _ref.read(connectedAccountsProvider.notifier).state = [];
     _sendSync();
@@ -319,6 +512,117 @@ class WsMessageHandler with WidgetsBindingObserver {
     }
   }
 
+  ConversationRuntimeController get _runtimeController =>
+      _ref.read(conversationRuntimeControllerProvider.notifier);
+
+  ConversationRuntimeState _runtimeFor(String conversationId) {
+    return _runtimeController.runtimeFor(conversationId);
+  }
+
+  _ConversationStreamBuffer _bufferFor(
+    String conversationId, {
+    String? accountId,
+  }) {
+    final buffer = _streamBuffers.putIfAbsent(
+      conversationId,
+      () => _ConversationStreamBuffer(conversationId),
+    );
+    if (accountId != null && accountId.isNotEmpty) {
+      buffer.accountId = accountId;
+    }
+    return buffer;
+  }
+
+  String _resolveConversationId(
+    String? conversationId,
+    String? accountId, {
+    String? messageId,
+  }) {
+    if (conversationId != null && conversationId.isNotEmpty) {
+      return conversationId;
+    }
+    if (messageId != null) {
+      for (final entry in _streamBuffers.entries) {
+        final buffer = entry.value;
+        if (buffer.textMessageId == messageId ||
+            buffer.thinkingMessageId == messageId) {
+          return entry.key;
+        }
+      }
+    }
+    final selected = _ref.read(selectedConversationIdProvider);
+    if (selected != null && selected.isNotEmpty) return selected;
+    if (accountId != null && accountId.isNotEmpty) return accountId;
+    return 'default';
+  }
+
+  bool _isSelectedConversation(String conversationId) {
+    return _ref.read(selectedConversationIdProvider) == conversationId;
+  }
+
+  void _setWaitingForConversation(String conversationId, bool waiting) {
+    _runtimeController.setWaiting(conversationId, waiting);
+    final legacy = _ref.read(waitingForReplyProvider);
+    if (_isSelectedConversation(conversationId)) {
+      _ref.read(waitingForReplyProvider.notifier).state = waiting
+          ? conversationId
+          : null;
+    } else if (!waiting && legacy == conversationId) {
+      _ref.read(waitingForReplyProvider.notifier).state = null;
+    }
+  }
+
+  void _setActiveToolForConversation(
+    String conversationId,
+    ActiveToolState? tool,
+  ) {
+    _runtimeController.setActiveTool(conversationId, tool);
+    final legacy = _ref.read(activeToolProvider);
+    if (_isSelectedConversation(conversationId)) {
+      _ref.read(activeToolProvider.notifier).state = tool;
+    } else if (tool == null && legacy?.convId == conversationId) {
+      _ref.read(activeToolProvider.notifier).state = null;
+    }
+  }
+
+  void _setStreamingMessageForConversation(
+    String conversationId,
+    TextMessage? message,
+  ) {
+    _runtimeController.setStreamingMessage(conversationId, message);
+    final legacy = _ref.read(streamingMessageProvider);
+    if (_isSelectedConversation(conversationId)) {
+      _ref.read(streamingMessageProvider.notifier).state = message;
+    } else if (message == null && legacy?.conversationId == conversationId) {
+      _ref.read(streamingMessageProvider.notifier).state = null;
+    }
+  }
+
+  void _setStreamingThinkingForConversation(
+    String conversationId,
+    ThinkingMessage? message,
+  ) {
+    _runtimeController.setStreamingThinking(conversationId, message);
+    final legacy = _ref.read(streamingThinkingProvider);
+    if (_isSelectedConversation(conversationId)) {
+      _ref.read(streamingThinkingProvider.notifier).state = message;
+    } else if (message == null && legacy?.conversationId == conversationId) {
+      _ref.read(streamingThinkingProvider.notifier).state = null;
+    }
+  }
+
+  void _clearAllReplyRuntimeState() {
+    for (final buffer in _streamBuffers.values) {
+      buffer.cancelTimers();
+    }
+    _streamBuffers.clear();
+    _runtimeController.clearAll();
+    _ref.read(waitingForReplyProvider.notifier).state = null;
+    _ref.read(activeToolProvider.notifier).state = null;
+    _ref.read(streamingMessageProvider.notifier).state = null;
+    _ref.read(streamingThinkingProvider.notifier).state = null;
+  }
+
   /// 按会话清理回复运行态 — Clear reply runtime state for one conversation.
   Future<void> _clearReplyRuntimeState(
     String convId, {
@@ -326,53 +630,26 @@ class WsMessageHandler with WidgetsBindingObserver {
   }) async {
     if (convId.isEmpty) return;
 
-    final clearsWaiting = _ref.read(waitingForReplyProvider) == convId;
-    if (clearsWaiting) {
+    if (yieldBeforeClearingThinking) {
+      // 等待消息 watch 先刷新 UI — Let message watchers refresh before clearing runtime UI.
+      await Future<void>.delayed(Duration.zero);
+    }
+
+    final buffer = _streamBuffers.remove(convId);
+    buffer?.cancelTimers();
+    _runtimeController.clearConversation(convId);
+
+    if (_ref.read(waitingForReplyProvider) == convId) {
       _ref.read(waitingForReplyProvider.notifier).state = null;
     }
-
-    final activeTool = _ref.read(activeToolProvider);
-    final clearsActiveTool = activeTool?.convId == convId;
-    if (clearsActiveTool) {
+    if (_ref.read(activeToolProvider)?.convId == convId) {
       _ref.read(activeToolProvider.notifier).state = null;
     }
-
-    final streamingMsg = _ref.read(streamingMessageProvider);
-    final streamingMsgConvId =
-        streamingMsg?.conversationId ?? _streamingConversationId;
-    final clearsStreamingMsg = streamingMsgConvId == convId;
-    if (clearsStreamingMsg) {
+    if (_ref.read(streamingMessageProvider)?.conversationId == convId) {
       _ref.read(streamingMessageProvider.notifier).state = null;
-      _textFlushTimer?.cancel();
-      _textFlushTimer = null;
-      _textBuffer = '';
-      _textBufferMsgId = null;
     }
-
-    final thinkingMsg = _ref.read(streamingThinkingProvider);
-    final thinkingMsgConvId =
-        thinkingMsg?.conversationId ?? _streamingConversationId;
-    final clearsThinking =
-        thinkingMsgConvId == convId ||
-        (thinkingMsg != null &&
-            thinkingMsg.conversationId == null &&
-            (clearsWaiting || clearsActiveTool || clearsStreamingMsg));
-    if (clearsThinking) {
-      if (yieldBeforeClearingThinking) {
-        // 等待消息 watch 先刷新 UI，避免 text_done 后 Thinking 短暂闪烁。
-        // Let message watchers refresh first to avoid a short Thinking flicker after text_done.
-        await Future<void>.delayed(Duration.zero);
-      }
+    if (_ref.read(streamingThinkingProvider)?.conversationId == convId) {
       _ref.read(streamingThinkingProvider.notifier).state = null;
-      _thinkingFlushTimer?.cancel();
-      _thinkingFlushTimer = null;
-      _thinkingBuffer = '';
-      _thinkingBufferMsgId = null;
-    }
-
-    if (_streamingConversationId == convId) {
-      _streamingAccountId = null;
-      _streamingConversationId = null;
     }
   }
 
@@ -515,9 +792,8 @@ class WsMessageHandler with WidgetsBindingObserver {
 
     // 立即清除客户端流式状态（不等服务端确认）
     // text_done 到达后 _finalizeStreaming 会 upsert（同 ID 覆盖），不会重复
-    _finalizeStreaming({'account_id': convId});
-    _ref.read(waitingForReplyProvider.notifier).state = null;
-    _ref.read(streamingThinkingProvider.notifier).state = null;
+    _finalizeStreaming({'conversation_id': convId, 'account_id': accountId});
+    unawaited(_clearReplyRuntimeState(convId));
   }
 
   Future<String> _resolveAppVersion() async {
@@ -592,7 +868,7 @@ class WsMessageHandler with WidgetsBindingObserver {
         final typingConvId = json['conversation_id'] as String?;
         debugPrint('[WsMessageHandler] ⌨️ typing_start: conv=$typingConvId');
         if (typingConvId != null) {
-          _ref.read(waitingForReplyProvider.notifier).state = typingConvId;
+          _setWaitingForConversation(typingConvId, true);
         }
         return;
       case 'agent_status':
@@ -603,27 +879,35 @@ class WsMessageHandler with WidgetsBindingObserver {
         );
         // queued 状态：消息已入队等待前一个请求完成，保持等待指示
         if (status == 'queued' && convId != null) {
-          _ref.read(waitingForReplyProvider.notifier).state = convId;
+          _setWaitingForConversation(convId, true);
         }
+        return;
+      case 'skillhub_install_status':
+        _ref
+            .read(skillHubControllerProvider.notifier)
+            .handleInstallStatus(json);
         return;
       case 'tool_call_start':
         final toolTitle = json['tool_title'] as String? ?? '';
         final toolName = json['tool_name'] as String? ?? 'tool';
         final displayName = toolTitle.isNotEmpty ? toolTitle : toolName;
-        // 已有丰富描述且新消息无 title → 不覆盖
-        final current = _ref.read(activeToolProvider);
-        if (current != null && toolTitle.isEmpty) return;
         final convId =
             json['conversation_id'] as String? ??
-            _streamingConversationId ??
-            '';
+            _resolveConversationId(
+              json['conversation_id'] as String?,
+              json['account_id'] as String?,
+              messageId: json['message_id'] as String?,
+            );
+        // 已有丰富描述且新消息无 title → 不覆盖
+        final current = _runtimeFor(convId).activeTool;
+        if (current != null && toolTitle.isEmpty) return;
         debugPrint(
           '[WsMessageHandler] 🔧 tool_call_start: $displayName (conv=$convId)',
         );
-        _ref.read(activeToolProvider.notifier).state = (
+        _setActiveToolForConversation(convId, (
           name: displayName,
           convId: convId,
-        );
+        ));
         return;
       case 'tool_call_done':
         final doneToolName = json['tool_name'] as String? ?? 'tool';
@@ -698,11 +982,7 @@ class WsMessageHandler with WidgetsBindingObserver {
       final seq = params?['seq'] as int?;
       msgDao.updateStatus(clientMsgId, 'sent', serverId: serverMsgId, seq: seq);
       if (seq != null) _advanceSyncSeq(seq);
-      // 在回复到达前锁定 conversationId → 确保多会话路由正确
       final trackedConvId = _pendingConversationIds[requestId];
-      if (trackedConvId != null) {
-        _streamingConversationId = trackedConvId;
-      }
       debugPrint(
         '[WsMessageHandler] ACK sent: $clientMsgId → $serverMsgId, seq=$seq, convId=$trackedConvId',
       );
@@ -1081,67 +1361,70 @@ class WsMessageHandler with WidgetsBindingObserver {
     String? accountId,
     String? conversationId,
   ) {
-    debugPrint(
-      '[WsHandler] 📥 text_delta: msgId=$messageId, len=${delta.length}, convId=${conversationId ?? accountId}',
+    final convId = _resolveConversationId(
+      conversationId,
+      accountId,
+      messageId: messageId,
     );
-    final current = _ref.read(streamingMessageProvider);
+    final buffer = _bufferFor(convId, accountId: accountId);
+    debugPrint(
+      '[WsHandler] 📥 text_delta: msgId=$messageId, len=${delta.length}, convId=$convId',
+    );
+    final current = _runtimeFor(convId).streamingMessage;
     if (current != null && current.messageId != messageId) {
-      // 新消息到达，先结束旧流 — 必须传入旧流的 conversationId
-      // 否则 _finalizeStreaming 的 fallback 链会用错误的 convId
-      _finalizeStreaming({
-        'conversation_id': current.conversationId ?? _streamingConversationId,
-        'account_id': _streamingAccountId,
-      });
+      unawaited(
+        _finalizeStreaming({
+          'conversation_id': convId,
+          'account_id': buffer.accountId ?? accountId,
+        }),
+      );
     }
     if (current == null || current.messageId != messageId) {
       // 首个 delta — 立即显示（不等 debounce）
       // waitingForReply 不在此清除 — isWaitingOnly 会自动失效（streamingMsg != null）
-      _ref.read(activeToolProvider.notifier).state = null; // 工具执行结束
-      _streamingAccountId = accountId;
-      _streamingConversationId = conversationId;
-      _textBuffer = delta;
-      _textBufferMsgId = messageId;
-      final convId = conversationId ?? _streamingConversationId ?? accountId;
+      _setActiveToolForConversation(convId, null); // 工具执行结束
+      buffer.textBuffer = delta;
+      buffer.textMessageId = messageId;
       _fl.log(
         '[ROUTE] text_delta START: msgId=$messageId, convId=$convId, selected=${_ref.read(selectedConversationIdProvider)}',
       );
-      _ref.read(streamingMessageProvider.notifier).state = TextMessage(
-        messageId: messageId,
-        role: 'agent',
-        content: delta,
-        conversationId: convId,
+      _setStreamingMessageForConversation(
+        convId,
+        TextMessage(
+          messageId: messageId,
+          role: 'agent',
+          content: delta,
+          conversationId: convId,
+        ),
       );
     } else {
-      if (accountId != null) {
-        _streamingAccountId = accountId;
-      }
-      if (conversationId != null) {
-        _streamingConversationId = conversationId;
-      }
-      _textBuffer += delta;
-      _textBufferMsgId = messageId;
+      buffer.textBuffer += delta;
+      buffer.textMessageId = messageId;
       if (_enableDebounce) {
         // 节流：取消旧 Timer，启动新 Timer
-        _textFlushTimer?.cancel();
-        _textFlushTimer = Timer(
-          Duration(milliseconds: _throttleMs(_textBuffer.length)),
-          _flushTextBuffer,
+        buffer.textFlushTimer?.cancel();
+        buffer.textFlushTimer = Timer(
+          Duration(milliseconds: _throttleMs(buffer.textBuffer.length)),
+          () => _flushTextBuffer(convId),
         );
       } else {
         // 无 debounce：立即刷新
-        _flushTextBuffer();
+        _flushTextBuffer(convId);
       }
     }
   }
 
-  void _flushTextBuffer() {
-    if (_textBufferMsgId == null) return;
-    final existing = _ref.read(streamingMessageProvider);
-    _ref.read(streamingMessageProvider.notifier).state = TextMessage(
-      messageId: _textBufferMsgId!,
-      role: 'agent',
-      content: _textBuffer,
-      conversationId: existing?.conversationId ?? _streamingConversationId,
+  void _flushTextBuffer(String conversationId) {
+    final buffer = _streamBuffers[conversationId];
+    if (buffer == null || buffer.textMessageId == null) return;
+    _setStreamingMessageForConversation(
+      conversationId,
+      TextMessage(
+        messageId: buffer.textMessageId!,
+        role: 'agent',
+        content: buffer.textBuffer,
+        conversationId: conversationId,
+      ),
     );
   }
 
@@ -1151,62 +1434,70 @@ class WsMessageHandler with WidgetsBindingObserver {
     String? accountId,
     String? conversationId,
   ) {
+    final convId = _resolveConversationId(
+      conversationId,
+      accountId,
+      messageId: messageId,
+    );
+    final buffer = _bufferFor(convId, accountId: accountId);
     debugPrint(
-      '[WsHandler] 🧠 thinking_delta: msgId=$messageId, len=${delta.length}, convId=${conversationId ?? accountId}',
+      '[WsHandler] 🧠 thinking_delta: msgId=$messageId, len=${delta.length}, convId=$convId',
     );
 
-    final current = _ref.read(streamingThinkingProvider);
+    final current = _runtimeFor(convId).streamingThinking;
 
     // 新会话的 thinking 到达，先结束旧流式文本（如有）
-    final currentText = _ref.read(streamingMessageProvider);
+    final currentText = _runtimeFor(convId).streamingMessage;
     if (currentText != null &&
         currentText.messageId != messageId.replaceFirst('think_', '')) {
-      _finalizeStreaming({
-        'conversation_id':
-            currentText.conversationId ?? _streamingConversationId,
-        'account_id': _streamingAccountId,
-      });
+      unawaited(
+        _finalizeStreaming({
+          'conversation_id': convId,
+          'account_id': buffer.accountId ?? accountId,
+        }),
+      );
     }
-
-    // 在旧流结束后再更新会话标识
-    if (accountId != null) _streamingAccountId = accountId;
-    if (conversationId != null) _streamingConversationId = conversationId;
-    final convId = conversationId ?? _streamingConversationId ?? accountId;
 
     if (current == null || current.messageId != messageId) {
       // 首个 delta — 立即显示
       // waitingForReply 不在此清除 — isWaitingOnly 会自动失效（streamingThinking != null）
-      _thinkingBuffer = delta;
-      _thinkingBufferMsgId = messageId;
-      _ref.read(streamingThinkingProvider.notifier).state = ThinkingMessage(
-        messageId: messageId,
-        role: 'agent',
-        content: delta,
-        conversationId: convId,
+      buffer.thinkingBuffer = delta;
+      buffer.thinkingMessageId = messageId;
+      _setStreamingThinkingForConversation(
+        convId,
+        ThinkingMessage(
+          messageId: messageId,
+          role: 'agent',
+          content: delta,
+          conversationId: convId,
+        ),
       );
     } else {
-      _thinkingBuffer += delta;
-      _thinkingBufferMsgId = messageId;
+      buffer.thinkingBuffer += delta;
+      buffer.thinkingMessageId = messageId;
       if (_enableDebounce) {
-        _thinkingFlushTimer?.cancel();
-        _thinkingFlushTimer = Timer(
-          Duration(milliseconds: _throttleMs(_thinkingBuffer.length)),
-          _flushThinkingBuffer,
+        buffer.thinkingFlushTimer?.cancel();
+        buffer.thinkingFlushTimer = Timer(
+          Duration(milliseconds: _throttleMs(buffer.thinkingBuffer.length)),
+          () => _flushThinkingBuffer(convId),
         );
       } else {
-        _flushThinkingBuffer();
+        _flushThinkingBuffer(convId);
       }
     }
   }
 
-  void _flushThinkingBuffer() {
-    if (_thinkingBufferMsgId == null) return;
-    final existing = _ref.read(streamingThinkingProvider);
-    _ref.read(streamingThinkingProvider.notifier).state = ThinkingMessage(
-      messageId: _thinkingBufferMsgId!,
-      role: 'agent',
-      content: _thinkingBuffer,
-      conversationId: existing?.conversationId ?? _streamingConversationId,
+  void _flushThinkingBuffer(String conversationId) {
+    final buffer = _streamBuffers[conversationId];
+    if (buffer == null || buffer.thinkingMessageId == null) return;
+    _setStreamingThinkingForConversation(
+      conversationId,
+      ThinkingMessage(
+        messageId: buffer.thinkingMessageId!,
+        role: 'agent',
+        content: buffer.thinkingBuffer,
+        conversationId: conversationId,
+      ),
     );
   }
 
@@ -1219,7 +1510,7 @@ class WsMessageHandler with WidgetsBindingObserver {
   String? _lastFinalizedServerMsgId;
 
   /// 防止不同 text_done 在同一事件循环内并发 finalize 同一条流式消息。
-  String? _finalizingStreamMessageId;
+  final Set<String> _finalizingStreamKeys = {};
 
   Future<void> _finalizeStreaming(Map<String, dynamic> json) async {
     // 去重：同一个 serverMsgId 只 finalize 一次
@@ -1232,17 +1523,25 @@ class WsMessageHandler with WidgetsBindingObserver {
     }
     _lastFinalizedServerMsgId = serverMsgId;
 
-    // 强制刷新缓冲区，确保最后的 delta 不丢失
-    _textFlushTimer?.cancel();
-    _flushTextBuffer();
-    _thinkingFlushTimer?.cancel();
-    _flushThinkingBuffer();
+    final convId = _resolveConversationId(
+      json['conversation_id'] as String?,
+      json['account_id'] as String?,
+      messageId: json['message_id'] as String?,
+    );
+    final buffer = _streamBuffers[convId];
 
-    final msg = _ref.read(streamingMessageProvider);
-    final thinkingMsg = _ref.read(streamingThinkingProvider);
+    // 强制刷新缓冲区，确保最后的 delta 不丢失
+    buffer?.textFlushTimer?.cancel();
+    _flushTextBuffer(convId);
+    buffer?.thinkingFlushTimer?.cancel();
+    _flushThinkingBuffer(convId);
+
+    final runtime = _runtimeFor(convId);
+    final msg = runtime.streamingMessage;
+    final thinkingMsg = runtime.streamingThinking;
     final streamMessageId = msg?.messageId ?? thinkingMsg?.messageId;
-    if (streamMessageId != null &&
-        _finalizingStreamMessageId == streamMessageId) {
+    final streamKey = '$convId:${streamMessageId ?? ''}';
+    if (streamMessageId != null && _finalizingStreamKeys.contains(streamKey)) {
       debugPrint(
         '[WsHandler] ⏭️ _finalizeStreaming SKIP concurrent stream: $streamMessageId',
       );
@@ -1250,40 +1549,25 @@ class WsMessageHandler with WidgetsBindingObserver {
     }
 
     if (msg != null || thinkingMsg != null) {
-      _finalizingStreamMessageId = streamMessageId;
+      if (streamMessageId != null) {
+        _finalizingStreamKeys.add(streamKey);
+      }
       try {
-        // conversationId 优先级：
-        // 1. text_done JSON 中的 conversation_id（服务端权威值）
-        // 2. 流式消息本身携带的 conversationId（首个 delta 设置，最可靠）
-        // 3. _streamingConversationId（delta 过程中跟踪，可能被覆盖）
-        // 4. JSON 中的 account_id
-        // 5. 当前选中的会话（最后手段，极易出错）
-        final convId =
-            json['conversation_id'] as String? ??
-            msg?.conversationId ??
-            thinkingMsg?.conversationId ??
-            _streamingConversationId ??
-            json['account_id'] as String? ??
-            _ref.read(selectedConversationIdProvider) ??
-            'default';
         final accountId =
-            json['account_id'] as String? ?? _streamingAccountId ?? convId;
+            json['account_id'] as String? ?? buffer?.accountId ?? convId;
 
         debugPrint(
           '[WsHandler] ✅ _finalizeStreaming: msgId=${msg?.messageId ?? thinkingMsg?.messageId}, '
           'convId=$convId, jsonConvId=${json['conversation_id']}, '
-          'streamConvId=$_streamingConversationId, '
+          'streamConvId=${buffer?.conversationId}, '
           'msgConvId=${msg?.conversationId}, selected=${_ref.read(selectedConversationIdProvider)}',
         );
         _fl.log(
           '[ROUTE] FINALIZE: msgId=${msg?.messageId ?? thinkingMsg?.messageId}, '
           'convId=$convId, jsonConvId=${json['conversation_id']}, '
-          'streamConvId=$_streamingConversationId, '
+          'streamConvId=${buffer?.conversationId}, '
           'msgConvId=${msg?.conversationId}, selected=${_ref.read(selectedConversationIdProvider)}',
         );
-
-        _streamingAccountId = null;
-        _streamingConversationId = null;
 
         // 尝试从 provider 提取回退的 messageId
         final safeMessageId =
@@ -1337,8 +1621,8 @@ class WsMessageHandler with WidgetsBindingObserver {
           yieldBeforeClearingThinking: true,
         );
       } finally {
-        if (_finalizingStreamMessageId == streamMessageId) {
-          _finalizingStreamMessageId = null;
+        if (streamMessageId != null) {
+          _finalizingStreamKeys.remove(streamKey);
         }
       }
     }
@@ -1533,10 +1817,10 @@ class WsMessageHandler with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _sub?.cancel();
-    _textFlushTimer?.cancel();
-    _thinkingFlushTimer?.cancel();
-    _streamingAccountId = null;
-    _streamingConversationId = null;
+    for (final buffer in _streamBuffers.values) {
+      buffer.cancelTimers();
+    }
+    _streamBuffers.clear();
     _ws.onConnected = null;
   }
 }

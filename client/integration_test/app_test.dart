@@ -22,12 +22,6 @@ void main() {
     testWidgets('Flow 1: connect and render SDUI MarkdownWidget', (
       tester,
     ) async {
-      final sduiComponent = {
-        'widget_name': 'MarkdownView',
-        'props': {'content': '# Welcome to Clawke'},
-        'actions': <Map<String, dynamic>>[],
-      };
-
       // Build chat screen with a cup_component message already in DB
       final messages = [
         makeMessage(

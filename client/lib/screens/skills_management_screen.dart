@@ -12,6 +12,7 @@ import 'package:client/providers/gateway_provider.dart';
 import 'package:client/providers/skills_provider.dart';
 import 'package:client/widgets/app_notice_bar.dart';
 import 'package:client/widgets/app_snack_bar.dart';
+import 'package:client/widgets/copyable_text.dart';
 import 'package:client/widgets/empty_state_panel.dart';
 import 'package:client/widgets/gateway_selector_pane.dart';
 import 'package:client/widgets/gateway_unavailable_panel.dart';
@@ -35,6 +36,8 @@ class SkillsManagementScreen extends ConsumerStatefulWidget {
 class _SkillsManagementScreenState
     extends ConsumerState<SkillsManagementScreen> {
   final _searchController = TextEditingController();
+  String _searchQuery = '';
+  bool _searchComposing = false;
   _SkillStatusFilter _statusFilter = _SkillStatusFilter.all;
   _SkillSourceFilter _sourceFilter = _SkillSourceFilter.all;
   _SkillPage _page = _SkillPage.list;
@@ -44,6 +47,7 @@ class _SkillsManagementScreenState
   @override
   void initState() {
     super.initState();
+    _searchController.addListener(_handleSearchChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refreshGatewayCache();
       _syncGateways();
@@ -52,8 +56,26 @@ class _SkillsManagementScreenState
 
   @override
   void dispose() {
+    _searchController.removeListener(_handleSearchChanged);
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _handleSearchChanged() {
+    final value = _searchController.value;
+    final isComposing = value.composing.isValid && !value.composing.isCollapsed;
+    if (isComposing) {
+      _searchComposing = true;
+      return;
+    }
+
+    final nextQuery = value.text.trim().toLowerCase();
+    if (!_searchComposing && nextQuery == _searchQuery) return;
+
+    setState(() {
+      _searchComposing = false;
+      _searchQuery = nextQuery;
+    });
   }
 
   @override
@@ -158,7 +180,7 @@ class _SkillsManagementScreenState
   }
 
   List<ManagedSkill> _filtered(List<ManagedSkill> skills) {
-    final query = _searchController.text.trim().toLowerCase();
+    final query = _searchQuery;
     return skills.where((skill) {
       final matchesStatus = switch (_statusFilter) {
         _SkillStatusFilter.all => true,
@@ -339,7 +361,7 @@ class _SkillsManagementScreenState
     final showLoadingPanel =
         !showUnavailablePanel && state.isLoading && state.skills.isEmpty;
     final showEmptyPanel =
-        !showUnavailablePanel && !showLoadingPanel && filteredSkills.isEmpty;
+        !showUnavailablePanel && !showLoadingPanel && state.skills.isEmpty;
     final hasMobileScopeSelector = compact && gateways.isNotEmpty;
     if (!showUnavailablePanel && (showLoadingPanel || showEmptyPanel)) {
       return _buildSkillsStateList(
@@ -409,7 +431,6 @@ class _SkillsManagementScreenState
             onFilterChanged: (filter) => setState(() => _statusFilter = filter),
             onSourceFilterChanged: (filter) =>
                 setState(() => _sourceFilter = filter),
-            onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 18),
           if (showUnavailablePanel)
@@ -466,7 +487,12 @@ class _SkillsManagementScreenState
                 right: padding,
                 bottom: padding,
               ),
-              sliver: columnCount == 2
+              sliver: filteredSkills.isEmpty
+                  ? const SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: _EmptyPanel(),
+                    )
+                  : columnCount == 2
                   ? SliverGrid.builder(
                       itemCount: filteredSkills.length,
                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -570,7 +596,6 @@ class _SkillsManagementScreenState
         onFilterChanged: (filter) => setState(() => _statusFilter = filter),
         onSourceFilterChanged: (filter) =>
             setState(() => _sourceFilter = filter),
-        onChanged: (_) => setState(() {}),
       ),
       const SizedBox(height: 18),
     ];
@@ -856,7 +881,6 @@ class _Toolbar extends StatelessWidget {
   final int enabled;
   final ValueChanged<_SkillStatusFilter> onFilterChanged;
   final ValueChanged<_SkillSourceFilter> onSourceFilterChanged;
-  final ValueChanged<String> onChanged;
 
   const _Toolbar({
     required this.controller,
@@ -867,7 +891,6 @@ class _Toolbar extends StatelessWidget {
     required this.enabled,
     required this.onFilterChanged,
     required this.onSourceFilterChanged,
-    required this.onChanged,
   });
 
   @override
@@ -901,7 +924,6 @@ class _Toolbar extends StatelessWidget {
                 width: searchWidth,
                 child: TextField(
                   controller: controller,
-                  onChanged: onChanged,
                   style: searchTextStyle,
                   decoration: InputDecoration(
                     hintText: context.l10n.searchSkills,
@@ -1431,7 +1453,7 @@ class _SkillDetailPage extends StatelessWidget {
               const SizedBox(height: 16),
               _SkillDetailPanel(
                 title: context.l10n.skillsFieldDescription,
-                child: SelectableText(skill.displayDescription),
+                child: CopyableText(skill.displayDescription),
               ),
               const SizedBox(height: 16),
               _SkillDetailPanel(
@@ -1449,7 +1471,7 @@ class _SkillDetailPage extends StatelessWidget {
                   ),
                   child: bodyText.trim().isEmpty && isLoadingBody
                       ? _SkillBodyLoading()
-                      : SelectableText(
+                      : CopyableText(
                           bodyText,
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(fontFamily: 'monospace'),
@@ -2090,7 +2112,7 @@ class _SkillKeyValueList extends StatelessWidget {
               children: [
                 SizedBox(
                   width: 96,
-                  child: Text(
+                  child: CopyableText(
                     row.$1,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: colorScheme.onSurfaceVariant,
@@ -2099,7 +2121,7 @@ class _SkillKeyValueList extends StatelessWidget {
                   ),
                 ),
                 Expanded(
-                  child: Text(
+                  child: CopyableText(
                     row.$2,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       fontWeight: FontWeight.w600,

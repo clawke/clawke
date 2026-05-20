@@ -6,6 +6,10 @@ export interface GatewayInfo {
   gateway_type: string;
   status: GatewayStatus;
   capabilities: string[];
+  clawke_home?: string | null;
+  managed_skills_root?: string | null;
+  shared_skill_root?: string | null;
+  local_to_server?: boolean | null;
   last_error_code?: string | null;
   last_error_message?: string | null;
   last_connected_at?: number | null;

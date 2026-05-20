@@ -96,3 +96,7 @@ test('UI E2E human report includes test objective, coverage, and reproducible st
   assert.match(runner, /<tr><th>所属模块\/页面<\/th><td>\$\{escapeHtml\(caseModule\(\)\)\}<\/td><\/tr>/);
   assert.match(runner, /<tr><th>测试内容<\/th><td>\$\{escapeHtml\(testCase\.title\)\}<\/td><\/tr>/);
 });
+
+test('UI E2E runner can inject SkillHub API base URL for live catalog cases', () => {
+  assert.match(runner, /apiBaseUrl: setup\.skillHubApiBaseUrl \|\| 'https:\/\/api\.clawke\.ai'/);
+});

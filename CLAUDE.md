@@ -80,6 +80,14 @@ clawke/
 
 **决策原则**：涉及内部实现细节、调试过程、竞品分析等敏感内容放 `docs/private/`；产品架构、协议规范、使用说明等适合公开的放 `docs/`。
 
+## 模块级规则索引
+
+根 `CLAUDE.md` 只保留跨模块总纲和红线。修改具体模块前必须读取对应模块规则：
+
+- 修改 `client/**`：先读取 `client/AGENTS.md`
+- 修改 `server/**`：先读取 `server/AGENTS.md`
+- 修改 `gateways/**`：先读取 `gateways/AGENTS.md`
+
 ## 整体架构思路
 
 遵循 **SDUI（Server-Driven UI）** 设计思路：服务端掌控 UI 逻辑，客户端仅负责渲染。具体通过 **CUP（Clawke UI Protocol）** 协议实现——Server 下发标准化 JSON 描述 UI 组件树，Client 解析后动态组装原生 Widget。这意味着：
@@ -304,44 +312,11 @@ Flutter Client ←ws:8765→ Clawke Server ←ws:8766→ OpenClaw Gateway（192.
 - **🟡 测试服务器（192.168.0.7）**：局域网 Mac mini 测试服务器，即"OpenClaw 服务端"。可自由 SSH 登录**只读查看**（日志、DB 查询等）。**修改操作**（文件写入、配置变更、服务重启等）必须经用户同意。
 - **🔴 生产数据红线**：**严禁测试代码操作 `server/data/clawke.db` 生产数据库**。测试必须通过 `:memory:` 内存数据库隔离。修改 `reset()` 等数据清理函数时，严禁重置 `globalSeq`（客户端依赖此值做增量同步）。详见「自动化测试准则」章节。
 
-## Gateway 编码规范
+## 模块细则
 
-适用于 `gateways/openclaw/clawke/src/` 下所有 TypeScript 文件。
-
-- **模块导入**：使用 ESM `import`，禁止 `require()`。Node.js 内置模块使用 `node:` 前缀：
-
-  ```typescript
-  // ✅ 正确
-  import { readFileSync, existsSync } from "node:fs";
-  import { join } from "node:path";
-  import { homedir } from "node:os";
-
-  // ❌ 禁止
-  const fs = require("fs");
-  ```
-- **日志输出**：统一使用 `ctx.log?.info/error/warn`，禁止 `console.log/error`
-- **错误处理**：`catch` 中必须记录日志（`ctx.log?.error`），禁止空 `catch {}`
-- **全局状态**：模块级变量仅用于生命周期级状态（如 `ws`），每次请求入口处必须重置请求级状态
-
-## 字体规范
-
-- **基准字体：`bodyMedium` = 16sp**，所有其他文本样式基于此按比例放大/缩小
-- **新代码禁止硬编码 `fontSize`**，必须通过 `Theme.of(context).textTheme.bodyMedium` 等 textTheme 引用
-- 现有硬编码字号逐步迁移，修改前需用户审核
-- 用户可通过设置调整 `fontScale`（70%–130%），所有 textTheme 字号自动乘以该系数
-- 详细字号对照表见 `docs/font-spec.md`
-
-## UI 调整工作流
-
-使用 UI-UX-Pro-Max skill 进行 UI 调整时，必须遵循**预览优先**流程：
-
-1. **先更新 `docs/ui-preview.html`**：用 HTML/CSS 模拟目标效果
-2. **等待用户确认**：用户在浏览器中预览并确认效果
-3. **再实施 Flutter 代码修改**：确认通过后才修改 `client/` 下的 Dart 代码
-
-### 顶部操作按钮规范
-
-- **右上角主操作按钮必须统一为“图标 + 文字”**：移动端和 PC / 大屏都必须同时显示图标与文字，不使用纯图标按钮。适用于详情页、编辑页、设置页等顶部 AppBar / Toolbar 右侧主操作（如编辑、保存、新建、刷新）。
+- Client / Flutter / UI 细则见 `client/AGENTS.md`
+- Server / Node.js / DB 测试细则见 `server/AGENTS.md`
+- Gateways / OpenClaw / Hermes 细则见 `gateways/AGENTS.md`
 
 ## 文档规范
 

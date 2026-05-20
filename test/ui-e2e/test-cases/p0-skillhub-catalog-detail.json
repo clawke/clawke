@@ -1,0 +1,72 @@
+{
+  "id": "p0-skillhub-catalog-detail",
+  "title": "SkillHub 可打开详情并展示安装进度",
+  "module": "SkillHub",
+  "objective": "验证 SkillHub 主路径：进入列表、按 Tag 筛选、打开详情、点击安装，并通过 WebSocket 状态更新详情页安装状态。",
+  "coverage": [
+    "进入 SkillHub 页面",
+    "通过 Coding Tag 筛选 Skill 列表",
+    "展示 Skill 卡片",
+    "打开详情并展示 SKILL.md、安装入口和包信息",
+    "点击安装后展示安装任务已提交",
+    "WebSocket 安装状态变更后详情页状态同步更新"
+  ],
+  "tags": ["p0", "skillhub", "catalog", "detail", "ui"],
+  "setup": {
+    "serverMode": "openclaw",
+    "accountId": "e2e_mock",
+    "agentName": "E2E Mock Gateway",
+    "httpPort": 18780,
+    "upstreamPort": 18766,
+    "mediaPort": 18781,
+    "controlPort": 18782,
+    "skillHubApiBaseUrl": "https://local.clawke.ai",
+    "skillHubFake": true
+  },
+  "steps": [
+    { "action": "launch_app" },
+    { "action": "tap_text", "text": "SkillHub", "exact": true },
+    { "action": "wait_for_text", "text": "安装Skill，给Agent插上翅膀。", "timeoutMs": 20000 },
+    { "action": "tap_filter_chip", "text": "Coding" },
+    { "action": "wait_for_text", "text": "Github", "timeoutMs": 30000 },
+    { "action": "tap_text", "text": "Github", "exact": true },
+    { "action": "wait_for_text", "text": "SKILL.md", "timeoutMs": 30000 },
+    { "action": "wait_for_text", "text": "Interact with GitHub", "timeoutMs": 30000 },
+    { "action": "wait_for_text", "text": "安装", "timeoutMs": 10000 },
+    { "action": "tap_text", "text": "安装", "exact": true, "preferLast": true },
+    { "action": "wait_for_text", "text": "安装任务已提交", "timeoutMs": 10000 },
+    {
+      "action": "mock_gateway_push",
+      "replies": [
+        {
+          "type": "skillhub_install_status",
+          "install_id": "skillhub_e2e",
+          "slug": "github",
+          "status": "downloading",
+          "message": "正在从 ClawHub 下载"
+        }
+      ]
+    },
+    { "action": "wait_for_text", "text": "正在从 ClawHub 下载", "timeoutMs": 10000 },
+    {
+      "action": "mock_gateway_push",
+      "replies": [
+        {
+          "type": "skillhub_install_status",
+          "install_id": "skillhub_e2e",
+          "slug": "github",
+          "status": "installed",
+          "message": "安装完成"
+        }
+      ]
+    },
+    { "action": "wait_for_text", "text": "已安装", "timeoutMs": 10000 }
+  ],
+  "mockGateway": {},
+  "assert": [
+    { "uiTextVisible": "Github" },
+    { "uiTextVisible": "SKILL.md" },
+    { "uiTextVisible": "Interact with GitHub" },
+    { "uiTextVisible": "已安装" }
+  ]
+}
