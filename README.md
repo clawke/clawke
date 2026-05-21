@@ -132,6 +132,11 @@ clawke/
 ## Changelog
 
 <!-- README_CHANGELOG_START -->
+### v1.1.33 (2026-05-21)
+
+**[New Feature]** Added server-client version compatibility checks and clearer version visibility during update flows.
+**[Bug Fix]** Fixed internal macOS DMG packaging metadata and improved SkillHub built-in path hints on touch devices.
+
 ### v1.1.32 (2026-05-21)
 
 **[New Feature]** Added SkillHub browsing, filtering, and managed installation with gateway-aware refresh.

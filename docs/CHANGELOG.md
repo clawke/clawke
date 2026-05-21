@@ -4,6 +4,20 @@
 
 <!-- CHANGELOG_START -->
 
+## v1.1.33 (2026-05-21)
+
+**[New Feature]** Release compatibility and update visibility.
+- Added server-client version compatibility checks so clients can surface update guidance based on the running server version.
+- Added visible version information during update flows to make release state easier to verify.
+
+**[Enhancement]** README product presentation.
+- Updated README product screenshots with the current desktop and mobile UI.
+- Refreshed the community QR image and tightened the public feature summary.
+
+**[Bug Fix]** macOS internal DMG packaging and SkillHub detail hints.
+- Fixed internal macOS DMG creation so filesystem event metadata is removed before compression.
+- Added a tap-triggered SkillHub status hint so built-in skill paths are accessible on touch devices.
+
 ## v1.1.32 (2026-05-21)
 
 **[New Feature]** SkillHub management and installation flow.
