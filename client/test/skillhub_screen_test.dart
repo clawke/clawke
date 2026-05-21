@@ -510,6 +510,29 @@ void main() {
     },
   );
 
+  testWidgets('detail shows built-in path when tapping status hint', (
+    tester,
+  ) async {
+    final api = _FakeSkillHubApiService();
+    const builtInPath = '/tmp/openclaw/skills/github-helper/SKILL.md';
+    final skillsApi = _FakeSkillsApiService(
+      installedSlugs: {'github-helper'},
+      installedGatewayId: 'openclaw-local',
+      pathPrefix: '/tmp/openclaw/skills',
+    );
+    await tester.pumpWidget(_testApp(api, skillsApi: skillsApi));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('GitHub Helper'));
+    await tester.pumpAndSettle();
+
+    expect(find.text(builtInPath), findsNothing);
+    await tester.tap(find.byIcon(Icons.info_outline));
+    await tester.pumpAndSettle();
+
+    expect(find.text(builtInPath), findsOneWidget);
+  });
+
   testWidgets('detail can show built-in and SkillHub installed together', (
     tester,
   ) async {

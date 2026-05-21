@@ -158,21 +158,24 @@ DMG_SIZE_MB="$((APP_SIZE_MB + 180))"
 rm -f "$OUTPUT_DMG"
 hdiutil create \
   -volname "$VOLUME_NAME" \
-  -srcfolder "$STAGE_DIR" \
   -ov \
-  -format UDRW \
-  -fs HFS+ \
+  -fs APFS \
   -size "${DMG_SIZE_MB}m" \
   "$RW_DMG" >/dev/null
 
 ATTACH_LOG="$SCRIPT_TMP_DIR/attach.log"
-hdiutil attach "$RW_DMG" -readwrite -noverify -noautoopen | tee "$ATTACH_LOG"
-DEVICE="$(awk '/Apple_HFS/ {print $1; exit}' "$ATTACH_LOG")"
-MOUNT_POINT="$(awk '/Apple_HFS/ {for (i=3; i<=NF; i++) printf "%s%s", (i == 3 ? "" : " "), $i; print ""; exit}' "$ATTACH_LOG")"
+hdiutil attach "$RW_DMG" -readwrite -noverify -noautoopen -owners off | tee "$ATTACH_LOG"
+DEVICE="$(awk '/\/Volumes\// {print $1; exit}' "$ATTACH_LOG")"
+MOUNT_POINT="$(awk '/\/Volumes\// {for (i=3; i<=NF; i++) printf "%s%s", (i == 3 ? "" : " "), $i; print ""; exit}' "$ATTACH_LOG")"
 if [ -z "$MOUNT_POINT" ]; then
   MOUNT_POINT="/Volumes/$VOLUME_NAME"
 fi
 FINDER_VOLUME_NAME="$(basename "$MOUNT_POINT")"
+
+mkdir -p "$MOUNT_POINT/$APP_NAME"
+rsync -a "$STAGE_DIR/$APP_NAME/" "$MOUNT_POINT/$APP_NAME/"
+ditto "$STAGE_DIR/.background" "$MOUNT_POINT/.background"
+ln -s /Applications "$MOUNT_POINT/Applications"
 
 osascript <<APPLESCRIPT
 tell application "Finder"
@@ -193,6 +196,7 @@ tell application "Finder"
 end tell
 APPLESCRIPT
 
+rm -rf "$MOUNT_POINT/.fseventsd"
 sync
 sleep 2
 hdiutil detach "$MOUNT_POINT" -quiet
