@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Mermaid 图表测试</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+  body { font-family: -apple-system, sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; background: #1a1a2e; color: #e0e0e0; }
+  h2 { color: #7c83ff; margin-top: 40px; border-bottom: 1px solid #333; padding-bottom: 8px; }
+  .mermaid { background: #16213e; border-radius: 12px; padding: 24px; margin: 16px 0; }
+</style>
+</head>
+<body>
+<h1 style="text-align:center;color:#7c83ff;">📊 Mermaid 图表测试集</h1>
+
+<h2>1. 折线图 — 月度营收趋势</h2>
+<pre class="mermaid">
+xychart-beta
+    title "2025年月度营收 (万元)"
+    x-axis ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"]
+    y-axis "营收" 0 --> 200
+    line [12, 18, 15, 25, 30, 28, 45, 52, 48, 60, 55, 72]
+    line [8, 10, 12, 20, 22, 25, 35, 40, 38, 48, 50, 58]
+</pre>
+
+<h2>2. 流程图 — 用户认证</h2>
+<pre class="mermaid">
+flowchart TD
+    A[用户请求] --> B{是否登录?}
+    B -->|是| C[校验权限]
+    B -->|否| D[跳转登录页]
+    D --> E[输入账号密码]
+    E --> F{验证通过?}
+    F -->|是| C
+    F -->|否| D
+    C --> G{有缓存?}
+    G -->|是| H[返回缓存数据]
+    G -->|否| I[查询数据库]
+    I --> J[写入缓存]
+    J --> H
+    H --> K[返回响应]
+</pre>
+
+<h2>3. 时序图 — API 调用链</h2>
+<pre class="mermaid">
+sequenceDiagram
+    actor U as 用户
+    participant W as Web前端
+    participant G as API网关
+    participant S as 业务服务
+    participant D as 数据库
+    U->>W: 点击查询按钮
+    W->>G: POST /api/search
+    G->>G: 鉴权 & 限流
+    G->>S: 转发请求
+    S->>D: SELECT * FROM items
+    D-->>S: 返回结果集
+    S-->>G: 处理后的数据
+    G-->>W: JSON 响应
+    W-->>U: 渲染列表
+</pre>
+
+<h2>4. 甘特图 — 项目排期</h2>
+<pre class="mermaid">
+gantt
+    title 项目开发排期
+    dateFormat  YYYY-MM-DD
+    axisFormat  %m/%d
+    section 需求阶段
+    需求调研           :a1, 2025-06-01, 5d
+    PRD评审           :a2, after a1, 3d
+    section 开发阶段
+    后端API           :b1, after a2, 10d
+    前端页面           :b2, after a2, 10d
+    联调测试           :b3, after b1, 5d
+    section 上线
+    UAT验收           :c1, after b3, 3d
+    灰度发布           :c2, after c1, 2d
+    全量上线           :c3, after c2, 1d
+</pre>
+
+<h2>5. 饼图 — 流量来源</h2>
+<pre class="mermaid">
+pie title 流量来源分布
+    "搜索引擎" : 42
+    "直接访问" : 28
+    "社交媒体" : 18
+    "邮件营销" : 8
+    "其他" : 4
+</pre>
+
+<h2>6. 类图 — 电商领域模型</h2>
+<pre class="mermaid">
+classDiagram
+    class User {
+        +String id
+        +String name
+        +String email
+        +login()
+        +logout()
+    }
+    class Order {
+        +String orderId
+        +Float amount
+        +String status
+        +create()
+        +cancel()
+    }
+    class Product {
+        +String sku
+        +String name
+        +Float price
+        +Int stock
+    }
+    User "1" --> "*" Order : places
+    Order "*" --> "*" Product : contains
+</pre>
+
+<script>mermaid.initialize({ startOnLoad: true, theme: 'dark' });</script>
+</body>
+</html>

@@ -1358,6 +1358,7 @@ class _StatusRow extends StatelessWidget {
                 ? valueText
                 : Tooltip(
                     message: tooltipMessage,
+                    triggerMode: TooltipTriggerMode.tap,
                     child: MouseRegion(
                       cursor: SystemMouseCursors.help,
                       child: Row(
