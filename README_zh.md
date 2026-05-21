@@ -133,6 +133,11 @@ clawke/
 ## 版本演进
 
 <!-- README_CHANGELOG_START -->
+### v1.1.32 (2026-05-21)
+
+**[新功能]** 新增 SkillHub 浏览、筛选和托管安装，并支持按 Gateway 刷新安装状态。
+**[问题修复]** 修复 SkillHub category 请求、托管技能安装元数据、Hermes/OpenClaw 技能搜索和 release/development token 状态处理。
+
 ### v1.1.31 (2026-05-12)
 
 **[新功能]** 新增 Gateway 使用情况可视化、Gateway 更新自动重启和本地 Server 连接提示。

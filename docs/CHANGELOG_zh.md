@@ -4,6 +4,20 @@
 
 <!-- CHANGELOG_START -->
 
+## v1.1.32 (2026-05-21)
+
+**[新功能]** SkillHub 管理与安装流程。
+- 新增 SkillHub 浏览、搜索、筛选和托管安装支持。
+- 新增按 Gateway 刷新的 SkillHub 安装状态，安装后的技能可直接出现在技能管理中，不需要第二次手动搜索。
+
+**[问题修复]** 托管技能安装与 Gateway 技能发现稳定性。
+- 修复 SkillHub 目录请求，统一使用小写 `category` 参数，并提高网络请求超时容忍度。
+- 修复 Clawke 托管安装，固定使用 Clawke skills 目录，同时保留合法的技能元数据和显示名称。
+- 加固 Hermes 和 OpenClaw 技能列表，避免单个异常或被遮蔽的本地技能导致已安装技能搜索不到。
+
+**[问题修复]** 客户端环境与 token 恢复。
+- 修复 release/development API host 处理和登出标记保留逻辑，避免切换 profile 后误用错误 token 状态。
+
 ## v1.1.31 (2026-05-12)
 
 **[新功能]** Gateway 使用情况可视化与更新自动化。

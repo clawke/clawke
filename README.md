@@ -134,6 +134,11 @@ clawke/
 ## Changelog
 
 <!-- README_CHANGELOG_START -->
+### v1.1.32 (2026-05-21)
+
+**[New Feature]** Added SkillHub browsing, filtering, and managed installation with gateway-aware refresh.
+**[Bug Fix]** Fixed SkillHub category requests, managed skill install metadata, Hermes/OpenClaw skill search, and release/development token state handling.
+
 ### v1.1.31 (2026-05-12)
 
 **[New Feature]** Added gateway usage visibility, automatic gateway restart handling, and clearer local server connection hints.

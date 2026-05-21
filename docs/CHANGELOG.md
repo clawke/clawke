@@ -4,6 +4,20 @@
 
 <!-- CHANGELOG_START -->
 
+## v1.1.32 (2026-05-21)
+
+**[New Feature]** SkillHub management and installation flow.
+- Added SkillHub browsing, search, filtering, and managed installation support.
+- Added gateway-aware SkillHub install state refresh so newly installed skills appear in Skills Management without a second manual search.
+
+**[Bug Fix]** Managed skill installation and gateway discovery stability.
+- Fixed SkillHub catalog requests to use normalized `category` parameters and longer network timeout handling.
+- Fixed Clawke managed installs to use the fixed Clawke skills directory while preserving valid skill metadata and display names.
+- Hardened Hermes and OpenClaw skill listing so malformed or shadowed local skills do not hide valid installed skills.
+
+**[Bug Fix]** Client environment and token recovery.
+- Fixed release/development API host handling and logout marker preservation so profile switches do not accidentally reuse the wrong token state.
+
 ## v1.1.31 (2026-05-12)
 
 **[New Feature]** Gateway usage visibility and update automation.
