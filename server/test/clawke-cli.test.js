@@ -66,6 +66,10 @@ const joined = args.join(' ');
 if (joined === 'fetch origin') {
   process.exit(0);
 }
+if (joined === 'show origin/main:server/package.json') {
+  console.log(JSON.stringify({ version: '9.9.9' }));
+  process.exit(0);
+}
 if (joined === 'rev-list HEAD..origin/main --count') {
   console.log('2');
   process.exit(0);
@@ -91,11 +95,14 @@ process.exit(0);
   });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, new RegExp(`Current version: v${packageJson.version}`));
+  assert.match(result.stdout, /GitHub version:\s+v9\.9\.9/);
   assert.match(result.stdout, /Update available: 2 commits behind origin\/main/);
 
   const commands = fs.readFileSync(logPath, 'utf-8').trim().split('\n');
   assert.deepEqual(commands, [
     'git fetch origin',
+    'git show origin/main:server/package.json',
     'git rev-list HEAD..origin/main --count',
   ]);
 });
@@ -202,6 +209,10 @@ const joined = args.join(' ');
 if (joined === 'fetch origin') {
   process.exit(0);
 }
+if (joined === 'show origin/main:server/package.json') {
+  console.log(JSON.stringify({ version: '9.9.9' }));
+  process.exit(0);
+}
 if (joined === 'rev-parse --abbrev-ref HEAD') {
   console.log('feature/local');
   process.exit(0);
@@ -266,16 +277,20 @@ process.exit(0);
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.match(result.stdout, /Updating Clawke/);
+  assert.match(result.stdout, new RegExp(`Current version: v${packageJson.version}`));
+  assert.match(result.stdout, /GitHub version:\s+v9\.9\.9/);
+  assert.match(result.stdout, new RegExp(`Version upgrade: v${packageJson.version} -> v9\\.9\\.9`));
   assert.match(result.stdout, /Found 1 new commit/);
   assert.match(result.stdout, /Update complete/);
 
   const commands = fs.readFileSync(logPath, 'utf-8').trim().split('\n');
   assert.equal(commands[0], 'git fetch origin');
-  assert.equal(commands[1], 'git rev-parse --abbrev-ref HEAD');
-  assert.equal(commands[2], 'git status --porcelain');
-  assert.equal(commands[3], 'git ls-files --unmerged');
-  assert.match(commands[4], /^git stash push --include-untracked -m clawke-update-autostash-/);
-  assert.deepEqual(commands.slice(5), [
+  assert.equal(commands[1], 'git show origin/main:server/package.json');
+  assert.equal(commands[2], 'git rev-parse --abbrev-ref HEAD');
+  assert.equal(commands[3], 'git status --porcelain');
+  assert.equal(commands[4], 'git ls-files --unmerged');
+  assert.match(commands[5], /^git stash push --include-untracked -m clawke-update-autostash-/);
+  assert.deepEqual(commands.slice(6), [
     'git rev-parse --verify refs/stash',
     'git checkout main',
     'git rev-list HEAD..origin/main --count',
@@ -302,6 +317,10 @@ const args = process.argv.slice(2);
 fs.appendFileSync(${quotedLogPath}, 'git ' + args.join(' ') + '\\n');
 const joined = args.join(' ');
 if (joined === 'fetch origin') {
+  process.exit(0);
+}
+if (joined === 'show origin/main:server/package.json') {
+  console.log(JSON.stringify({ version: '${packageJson.version}' }));
   process.exit(0);
 }
 if (joined === 'rev-parse --abbrev-ref HEAD') {
@@ -335,12 +354,15 @@ process.exit(1);
   });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, new RegExp(`Current version: v${packageJson.version}`));
+  assert.match(result.stdout, new RegExp(`GitHub version:\\s+v${packageJson.version}`));
   assert.match(result.stdout, /Already up to date/);
   assert.match(result.stdout, /No configured gateways found/);
 
   const commands = fs.readFileSync(logPath, 'utf-8').trim().split('\n');
   assert.deepEqual(commands, [
     'git fetch origin',
+    'git show origin/main:server/package.json',
     'git rev-parse --abbrev-ref HEAD',
     'git status --porcelain',
     'git checkout main',
@@ -362,6 +384,10 @@ const args = process.argv.slice(2);
 fs.appendFileSync(${quotedLogPath}, 'git ' + args.join(' ') + '\\n');
 const joined = args.join(' ');
 if (joined === 'fetch origin') process.exit(0);
+if (joined === 'show origin/main:server/package.json') {
+  console.log(JSON.stringify({ version: '9.9.9' }));
+  process.exit(0);
+}
 if (joined === 'rev-parse --abbrev-ref HEAD') {
   console.log('main');
   process.exit(0);
@@ -399,6 +425,7 @@ process.exit(0);
   const commands = fs.readFileSync(logPath, 'utf-8').trim().split('\n');
   assert.deepEqual(commands, [
     'git fetch origin',
+    'git show origin/main:server/package.json',
     'git rev-parse --abbrev-ref HEAD',
     'git status --porcelain',
     'git rev-list HEAD..origin/main --count',
@@ -422,6 +449,10 @@ const args = process.argv.slice(2);
 fs.appendFileSync(${quotedLogPath}, 'git ' + args.join(' ') + '\\n');
 const joined = args.join(' ');
 if (joined === 'fetch origin') process.exit(0);
+if (joined === 'show origin/main:server/package.json') {
+  console.log(JSON.stringify({ version: '9.9.9' }));
+  process.exit(0);
+}
 if (joined === 'rev-parse --abbrev-ref HEAD') {
   console.log('main');
   process.exit(0);

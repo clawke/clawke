@@ -158,6 +158,7 @@ function restoreStashedChanges(
 function runUpdateCheck(
   gitCmd: string[],
   projectRoot: string,
+  serverRoot: string,
   stdout: NodeJS.WriteStream,
   stderr: NodeJS.WriteStream,
 ): number {
@@ -166,6 +167,10 @@ function runUpdateCheck(
   stdout.write('[clawke] Fetching origin...\n');
   let result = runGit(gitCmd, ['fetch', 'origin'], projectRoot);
   if (result.status !== 0) return fail(stderr, 'Failed to fetch from origin.', result);
+
+  const currentVersion = readClawkeVersion(serverRoot);
+  const githubVersion = readRemoteClawkeVersion(gitCmd, projectRoot, serverRoot);
+  writeVersionInfo(stdout, currentVersion, githubVersion);
 
   result = runGit(gitCmd, ['rev-list', `HEAD..origin/${MAIN_BRANCH}`, '--count'], projectRoot);
   if (result.status !== 0) return fail(stderr, `Failed to compare with origin/${MAIN_BRANCH}.`, result);
@@ -184,6 +189,44 @@ function runUpdateCheck(
     stdout.write('[clawke] Run `clawke update` to install.\n');
   }
   return 0;
+}
+
+function parsePackageVersion(raw: string | Buffer | null | undefined): string | null {
+  try {
+    const parsed = JSON.parse(String(raw || ''));
+    return typeof parsed.version === 'string' && parsed.version.trim()
+      ? parsed.version.trim()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function formatDisplayVersion(version: string | null): string {
+  return version ? `v${version}` : 'unknown';
+}
+
+function packageJsonGitPath(projectRoot: string, serverRoot: string): string {
+  return path
+    .relative(projectRoot, path.join(serverRoot, 'package.json'))
+    .split(path.sep)
+    .join('/');
+}
+
+function readRemoteClawkeVersion(gitCmd: string[], projectRoot: string, serverRoot: string): string | null {
+  const packagePath = packageJsonGitPath(projectRoot, serverRoot);
+  const result = runGit(gitCmd, ['show', `origin/${MAIN_BRANCH}:${packagePath}`], projectRoot);
+  if (result.status !== 0) return null;
+  return parsePackageVersion(result.stdout);
+}
+
+function writeVersionInfo(
+  stdout: NodeJS.WriteStream,
+  currentVersion: string,
+  githubVersion: string | null,
+): void {
+  stdout.write(`[clawke] Current version: ${formatDisplayVersion(currentVersion)}\n`);
+  stdout.write(`[clawke] GitHub version:  ${formatDisplayVersion(githubVersion)}\n`);
 }
 
 function runNpmInstallDeterministic(
@@ -274,7 +317,7 @@ export function runClawkeUpdate(options: UpdateOptions = {}): number {
   const stderr = options.stderr || process.stderr;
   const gitCmd = gitCommand();
 
-  if (options.checkOnly) return runUpdateCheck(gitCmd, projectRoot, stdout, stderr);
+  if (options.checkOnly) return runUpdateCheck(gitCmd, projectRoot, serverRoot, stdout, stderr);
   if (!requireGitCheckout(projectRoot, stderr)) return 1;
 
   try {
@@ -286,6 +329,10 @@ export function runClawkeUpdate(options: UpdateOptions = {}): number {
     stdout.write('[clawke] Fetching updates...\n');
     let result = runGit(gitCmd, ['fetch', 'origin'], projectRoot);
     if (result.status !== 0) return fail(stderr, 'Failed to fetch updates from origin.', result);
+
+    const currentVersion = readClawkeVersion(serverRoot);
+    const githubVersion = readRemoteClawkeVersion(gitCmd, projectRoot, serverRoot);
+    writeVersionInfo(stdout, currentVersion, githubVersion);
 
     result = runGit(gitCmd, ['rev-parse', '--abbrev-ref', 'HEAD'], projectRoot);
     ensureOk(result, 'Failed to detect current branch.');
@@ -320,6 +367,7 @@ export function runClawkeUpdate(options: UpdateOptions = {}): number {
     }
 
     stdout.write(`[clawke] Found ${commitCount} new commit(s)\n`);
+    stdout.write(`[clawke] Version upgrade: ${formatDisplayVersion(currentVersion)} -> ${formatDisplayVersion(githubVersion)}\n`);
     stdout.write('[clawke] Pulling updates...\n');
     result = runGit(gitCmd, ['pull', '--ff-only', 'origin', MAIN_BRANCH], projectRoot);
     if (result.status !== 0) {
