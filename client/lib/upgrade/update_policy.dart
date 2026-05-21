@@ -12,16 +12,11 @@ class AppUpdatePolicy {
     required String arch,
     bool? inAppUpdatesEnabled,
   }) {
-    final updatesEnabled =
-        inAppUpdatesEnabled ?? AppUpdatePolicy.inAppUpdatesEnabled;
-    final data = <String, dynamic>{'last_seq': lastSeq};
-    if (!updatesEnabled) return data;
-
-    data.addAll({
+    return <String, dynamic>{
+      'last_seq': lastSeq,
       'app_version': appVersion,
       'platform': platform,
       'arch': arch,
-    });
-    return data;
+    };
   }
 }

@@ -1034,6 +1034,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get later => 'Later';
 
   @override
+  String get upgradeAcknowledge => 'Got it';
+
+  @override
   String get reLogin => 'Log In Again';
 
   @override

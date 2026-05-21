@@ -16,7 +16,7 @@
 - 客户端启动后自动检查当前客户端和当前服务端是否兼容。
 - 设置页手动“检查更新”复用同一套检查结果。
 - 版本判断由服务端完成，客户端保持瘦客户端。
-- 客户端和服务端运行时版本必须完全一致。
+- 客户端和服务端 `major.minor` 不一致时阻断；patch/build 差异只提示风险，不阻断。
 - 客户端和 GitHub 最新客户端比较时，按 ICU 风格区分强制升级和可选升级。
 - Android 支持应用内下载 APK 并调用系统安装器。
 - macOS、Windows、Linux 支持下载对应安装包后打开系统安装流程。
@@ -34,11 +34,11 @@
 
 ### 客户端和当前服务端
 
-客户端版本和服务端版本必须完全一致，才允许正常使用。
+客户端版本和服务端版本按 `major.minor` 判断运行兼容线。`major.minor` 不一致时阻断；patch 差异只提示“可能不兼容或出现异常”，用户可点“知道了”继续。
 
 ```text
 Client 3.8.1 + Server 3.8.1 = 兼容
-Client 3.8.1 + Server 3.8.2 = 不兼容，必须升级客户端或回退服务端
+Client 3.8.1 + Server 3.8.2 = 可继续使用，但提示建议升级客户端
 Client 3.9.0 + Server 3.8.1 = 不兼容，必须先升级服务端
 ```
 
@@ -67,9 +67,9 @@ Client 3.8.1 + Latest 3.9.0 = 强制升级
 Client 3.8.1 + Latest 4.0.0 = 强制升级
 ```
 
-由于运行兼容要求客户端和服务端版本完全一致，客户端升级必须和服务端升级顺序配合：
+由于运行兼容要求客户端和服务端处在同一 `major.minor` 兼容线，客户端升级必须和服务端升级顺序配合：
 
-- 如果当前 Server 和 Client 不一致，优先处理运行兼容问题。
+- 如果当前 Server 和 Client 的 `major.minor` 不一致，优先处理运行兼容问题。
 - 如果当前 Server 和 Client 一致，但 GitHub 有新版本，提示先运行 `clawke update` 升级服务端，再升级客户端。
 
 ## 总体方案
@@ -100,7 +100,7 @@ sequenceDiagram
 服务端负责：
 
 - 读取当前服务端版本。
-- 比较客户端和服务端是否完全一致。
+- 比较客户端和服务端是否处在同一 `major.minor` 兼容线。
 - 查询并缓存 GitHub 最新 Release。
 - 按平台和架构选择下载资产。
 - 判断强制升级、可选升级、服务端先升级或客户端先升级。
@@ -142,10 +142,11 @@ sequenceDiagram
 {
   "payload_type": "system_status",
   "status": "version_check_result",
-  "action": "required_client_update",
+  "action": "recommended_client_update",
   "compatibility": {
-    "compatible": false,
-    "reason": "client_server_mismatch",
+    "compatible": true,
+    "warning": "patch_mismatch",
+    "reason": "client_server_patch_mismatch",
     "client_version": "3.8.1",
     "server_version": "3.8.2",
     "required_client_version": "3.8.2"
@@ -158,9 +159,9 @@ sequenceDiagram
   },
   "presentation": {
     "title": "需要升级客户端",
-    "message": "当前服务端版本为 3.8.2，客户端版本为 3.8.1。请升级客户端到 3.8.2 后继续使用。",
+    "message": "当前服务端版本为 3.8.2，客户端版本为 3.8.1。版本不完全一致，可能不兼容或出现异常；建议升级客户端到 3.8.2。",
     "primary_label": "立即升级",
-    "secondary_label": ""
+    "secondary_label": "知道了"
   },
   "installer": {
     "method": "download_and_install",
@@ -176,17 +177,20 @@ sequenceDiagram
 | Action | 含义 | UI 行为 |
 | --- | --- | --- |
 | `ok` | 当前客户端和服务端一致，且没有需要提示的新版本 | 不提示 |
-| `required_client_update` | 服务端版本比客户端新，当前客户端不能继续使用 | 阻断主流程，只允许升级 |
-| `required_server_update` | 客户端版本比服务端新，当前服务端太旧 | 阻断主流程，提示运行 `clawke update` |
+| `recommended_client_update` | 服务端和客户端同 `major.minor`，但服务端 patch 更新 | 可选提示，显示“知道了”和“立即升级” |
+| `recommended_server_update` | 服务端和客户端同 `major.minor`，但客户端 patch 更新 | 可选提示，显示“知道了”和“重新检查” |
+| `required_client_update` | 服务端和客户端 `major.minor` 不同，且客户端较旧 | 阻断主流程，只允许升级 |
+| `required_server_update` | 服务端和客户端 `major.minor` 不同，且服务端较旧 | 阻断主流程，提示运行 `clawke update` |
 | `optional_server_then_client_update` | 当前客户端和服务端一致，GitHub 有同 major.minor 的新 patch | 可选提示，建议先升级服务端再升级客户端 |
 | `required_server_then_client_update` | 当前客户端和服务端一致，但 GitHub 最新版 major.minor 更高 | 强制提示先升级服务端，再升级客户端 |
 | `check_failed` | GitHub 查询失败，但本地兼容检查可完成 | 不阻断使用，只提示无法确认最新版本 |
 
 优先级：
 
-1. 客户端和当前服务端不一致时，先返回 `required_client_update` 或 `required_server_update`。
-2. 客户端和当前服务端一致后，再判断 GitHub 最新版本。
-3. GitHub 不可访问时，不影响本地兼容判断。
+1. 客户端和当前服务端 `major.minor` 不一致时，先返回 `required_client_update` 或 `required_server_update`。
+2. 客户端和当前服务端只有 patch 差异时，先返回 `recommended_client_update` 或 `recommended_server_update`。
+3. 客户端和当前服务端一致后，再判断 GitHub 最新版本。
+4. GitHub 不可访问时，不影响本地兼容判断。
 
 ## 平台安装策略
 
@@ -257,7 +261,7 @@ server/src/services/version-service.ts
 - 读取 `server/package.json` 的版本。
 - 缓存 GitHub latest release。
 - 解析和比较语义版本。
-- 判断 client-server exact match。
+- 判断 client-server 是否处于同一 `major.minor` 兼容线。
 - 判断 client-latest 的 ICU 风格升级级别。
 - 根据 platform、arch、install_channel 匹配 release asset。
 - 生成客户端展示用的 `presentation` 和 `installer`。
@@ -296,8 +300,8 @@ Clawke-3.8.2-android-arm64.apk
 新增 `server/test/version-service.test.js`：
 
 - client/server 完全一致返回 `ok`。
-- server 新于 client 返回 `required_client_update`。
-- client 新于 server 返回 `required_server_update`。
+- client/server 只有 patch 差异返回 `recommended_client_update` 或 `recommended_server_update`。
+- client/server `major.minor` 不一致返回 `required_client_update` 或 `required_server_update`。
 - client/server 一致但 latest patch 更新返回可选升级。
 - client/server 一致但 latest major.minor 更新返回强制 server-then-client 升级。
 - GitHub 缓存为空时仍能完成本地兼容判断。
@@ -317,8 +321,9 @@ Clawke-3.8.2-android-arm64.apk
 ### 手动验证
 
 - Server 和 Client 同版本：正常进入应用。
-- Server 比 Client 新：启动后阻断并提示升级客户端。
-- Client 比 Server 新：启动后阻断并提示运行 `clawke update`。
+- Server 比 Client 新但同 `major.minor`：启动后提示升级客户端，并允许点“知道了”继续。
+- Client 比 Server 新但同 `major.minor`：启动后提示升级服务端，并允许点“知道了”继续。
+- Server/Client `major.minor` 不一致：启动后阻断并提示升级客户端或服务端。
 - GitHub latest patch 新：显示可选升级。
 - GitHub latest major.minor 新：强制提示先升级服务端。
 - Android 下载 APK 后进入系统安装确认页。
@@ -349,7 +354,8 @@ Clawke-3.8.2-android-arm64.apk
 
 ## 验收标准
 
-- 客户端和服务端版本不一致时，客户端必须阻断主流程。
+- 客户端和服务端 `major.minor` 不一致时，客户端必须阻断主流程。
+- 客户端和服务端只有 patch 差异时，客户端必须提示风险，但允许点“知道了”关闭弹窗。
 - 客户端和服务端版本一致时，不能因为 GitHub 网络失败而阻断使用。
 - 服务端返回的 action 足以驱动客户端 UI，客户端不内置业务判断。
 - 手动检查和启动自动检查结果一致。

@@ -481,9 +481,7 @@ class WsMessageHandler with WidgetsBindingObserver {
     }
 
     final ws = _ref.read(wsServiceProvider);
-    final appVersion = AppUpdatePolicy.inAppUpdatesEnabled
-        ? await _resolveAppVersion()
-        : '';
+    final appVersion = await _resolveAppVersion();
     ws.sendJson({
       'id': 'sync_${DateTime.now().millisecondsSinceEpoch}',
       'protocol': 'cup_v2',
@@ -496,7 +494,7 @@ class WsMessageHandler with WidgetsBindingObserver {
       ),
     });
     debugPrint(
-      '[WsMessageHandler] Sent sync, last_seq=$lastSeq, updates=${AppUpdatePolicy.inAppUpdatesEnabled ? "enabled" : "disabled"}',
+      '[WsMessageHandler] Sent sync, last_seq=$lastSeq, compatibility_check=enabled, in_app_updates=${AppUpdatePolicy.inAppUpdatesEnabled ? "enabled" : "disabled"}',
     );
   }
 
@@ -654,12 +652,6 @@ class WsMessageHandler with WidgetsBindingObserver {
   }
 
   void sendCheckUpdate() {
-    if (!AppUpdatePolicy.inAppUpdatesEnabled) {
-      debugPrint(
-        '[WsMessageHandler] check_update skipped: in-app updates disabled',
-      );
-      return;
-    }
     unawaited(_sendCheckUpdate());
   }
 
@@ -829,15 +821,11 @@ class WsMessageHandler with WidgetsBindingObserver {
 
       // 升级通知 — 直接从 raw JSON 处理（SystemMessage model 不含升级字段）
       if (status == 'update_available' || status == 'up_to_date') {
-        if (!AppUpdatePolicy.inAppUpdatesEnabled) {
-          debugPrint(
-            '[WsMessageHandler] Update status ignored: in-app updates disabled',
-          );
-          return;
-        }
         if (status == 'update_available') {
           UpgradeHandler.handleSystemStatusFromRef(json, _ref);
           debugPrint('[WsMessageHandler] 🚀 Update available');
+        } else {
+          _ref.read(upgradeInfoProvider.notifier).state = null;
         }
         return;
       }

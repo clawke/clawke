@@ -18,6 +18,21 @@ class UpgradeInfo {
   /// Android 应用市场包名（可选）
   final String? marketPackage;
 
+  /// 服务端下发的标题 — Title provided by the server.
+  final String title;
+
+  /// 服务端下发的说明 — Message provided by the server.
+  final String message;
+
+  /// 服务端下发的升级动作 — Update action provided by the server.
+  final String action;
+
+  /// 客户端版本 — Client version reported in compatibility checks.
+  final String clientVersion;
+
+  /// 服务端版本 — Server version reported in compatibility checks.
+  final String serverVersion;
+
   const UpgradeInfo({
     required this.version,
     required this.changelog,
@@ -25,6 +40,11 @@ class UpgradeInfo {
     required this.downloadUrl,
     required this.upgradeLevel,
     this.marketPackage,
+    this.title = '',
+    this.message = '',
+    this.action = '',
+    this.clientVersion = '',
+    this.serverVersion = '',
   });
 
   /// 从 CUP system_status 消息解析
@@ -37,6 +57,11 @@ class UpgradeInfo {
       downloadUrl: updateInfo['download_url'] as String? ?? '',
       upgradeLevel: json['upgrade'] as int? ?? 0,
       marketPackage: updateInfo['market_package'] as String?,
+      title: updateInfo['title'] as String? ?? '',
+      message: updateInfo['message'] as String? ?? '',
+      action: updateInfo['action'] as String? ?? '',
+      clientVersion: updateInfo['client_version'] as String? ?? '',
+      serverVersion: updateInfo['server_version'] as String? ?? '',
     );
   }
 
@@ -45,4 +70,8 @@ class UpgradeInfo {
 
   /// 是否有升级可用
   bool get isAvailable => upgradeLevel > 0;
+
+  /// 弹窗去重使用的稳定键 — Stable key used to de-duplicate upgrade prompts.
+  String get notificationKey =>
+      '$upgradeLevel|$action|$version|$clientVersion|$serverVersion';
 }

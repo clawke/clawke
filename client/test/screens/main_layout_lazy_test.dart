@@ -11,12 +11,14 @@ import 'package:client/providers/database_providers.dart';
 import 'package:client/providers/gateway_provider.dart';
 import 'package:client/providers/nav_page_provider.dart';
 import 'package:client/providers/ws_state_provider.dart';
+import 'package:client/upgrade/upgrade_handler.dart';
+import 'package:client/upgrade/upgrade_model.dart';
+import 'package:client/widgets/app_notice_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:client/widgets/app_notice_bar.dart';
 
 import '../helpers/provider_overrides.dart';
 
@@ -182,6 +184,102 @@ void main() {
     await tester.pump();
 
     expect(container.read(activeNavPageProvider), NavPage.chat);
+  });
+
+  testWidgets('shows forced client update dialog for server version mismatch', (
+    tester,
+  ) async {
+    final container = ProviderContainer(overrides: _mainLayoutOverrides());
+
+    await _pumpMainLayoutWithContainer(
+      tester,
+      size: const Size(1280, 800),
+      container: container,
+    );
+
+    container
+        .read(upgradeInfoProvider.notifier)
+        .state = UpgradeInfo.fromSystemStatus({
+      'payload_type': 'system_status',
+      'status': 'update_available',
+      'upgrade': 2,
+      'update_info': {
+        'version': '3.8.2',
+        'title': '需要升级客户端',
+        'message': '当前服务端版本为 3.8.2，客户端版本为 3.8.1。请升级客户端到 3.8.2 后继续使用。',
+        'download_url': 'https://github.com/clawke/clawke/releases/tag/v3.8.2',
+        'action': 'required_client_update',
+        'client_version': '3.8.1',
+        'server_version': '3.8.2',
+      },
+    });
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('需要升级客户端'), findsOneWidget);
+    expect(find.textContaining('客户端版本为 3.8.1'), findsOneWidget);
+    expect(find.text('立即更新'), findsOneWidget);
+    expect(find.text('知道了'), findsNothing);
+  });
+
+  testWidgets('shows dismiss action for optional client update dialog', (
+    tester,
+  ) async {
+    final container = ProviderContainer(overrides: _mainLayoutOverrides());
+
+    await _pumpMainLayoutWithContainer(
+      tester,
+      size: const Size(1280, 800),
+      container: container,
+    );
+
+    container
+        .read(upgradeInfoProvider.notifier)
+        .state = UpgradeInfo.fromSystemStatus({
+      'payload_type': 'system_status',
+      'status': 'update_available',
+      'upgrade': 1,
+      'update_info': {
+        'version': '3.8.2',
+        'title': '建议升级客户端',
+        'message': '当前服务端版本为 3.8.2，客户端版本为 3.8.1。版本不完全一致，可能不兼容。',
+        'download_url': 'https://github.com/clawke/clawke/releases/tag/v3.8.2',
+        'action': 'recommended_client_update',
+        'client_version': '3.8.1',
+        'server_version': '3.8.2',
+      },
+    });
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('建议升级客户端'), findsOneWidget);
+    expect(find.text('知道了'), findsOneWidget);
+
+    await tester.tap(find.text('知道了'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('建议升级客户端'), findsNothing);
+
+    container
+        .read(upgradeInfoProvider.notifier)
+        .state = UpgradeInfo.fromSystemStatus({
+      'payload_type': 'system_status',
+      'status': 'update_available',
+      'upgrade': 1,
+      'update_info': {
+        'version': '3.8.2',
+        'title': '建议升级客户端',
+        'message': '当前服务端版本为 3.8.2，客户端版本为 3.8.1。版本不完全一致，可能不兼容。',
+        'download_url': 'https://github.com/clawke/clawke/releases/tag/v3.8.2',
+        'action': 'recommended_client_update',
+        'client_version': '3.8.1',
+        'server_version': '3.8.2',
+      },
+    });
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('建议升级客户端'), findsNothing);
   });
 
   testWidgets('does not show global gateway disconnected alert', (

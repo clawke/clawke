@@ -35,11 +35,15 @@ export class VersionChecker {
   private owner: string;
   private repo: string;
   private checkIntervalMs: number;
+  private serverVersion: string;
 
-  constructor(configDir?: string, checkIntervalMs = 30 * 60 * 1000) {
+  constructor(configDir?: string, checkIntervalMs = 30 * 60 * 1000, serverVersion?: string) {
     this.owner = process.env.GITHUB_OWNER || 'clawke';
     this.repo = process.env.GITHUB_REPO || 'clawke';
     this.checkIntervalMs = checkIntervalMs;
+    this.serverVersion = VersionChecker.normalizeSemanticVersion(
+      serverVersion || VersionChecker.readServerVersion(),
+    );
 
     // 加载 force-upgrade.json
     if (configDir) {
@@ -50,6 +54,25 @@ export class VersionChecker {
         console.warn('[VersionChecker] force-upgrade.json not found, using defaults');
       }
     }
+  }
+
+  /** 读取服务端版本 — Read the server package version. */
+  private static readServerVersion(): string {
+    try {
+      const raw = fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf-8');
+      const packageJson = JSON.parse(raw) as { version?: string };
+      return packageJson.version || '0.0.0';
+    } catch {
+      return '0.0.0';
+    }
+  }
+
+  /** 规范化语义版本，忽略 build number — Normalize semver and ignore build metadata. */
+  static normalizeSemanticVersion(version: string): string {
+    const raw = String(version || '').trim().replace(/^v/, '').split('+')[0];
+    const match = raw.match(/^(\d+)\.(\d+)\.(\d+)$/);
+    if (!match) return '';
+    return `${Number(match[1])}.${Number(match[2])}.${Number(match[3])}`;
   }
 
   /** 语义化版本比较 */
@@ -63,6 +86,14 @@ export class VersionChecker {
       if (na > nb) return 1;
     }
     return 0;
+  }
+
+  /** 兼容线使用 major.minor，patch 差异只提示 — Compatibility line is major.minor; patch differences only warn. */
+  static getCompatibilityLine(version: string): string {
+    const normalized = VersionChecker.normalizeSemanticVersion(version);
+    if (!normalized) return '';
+    const parts = normalized.split('.');
+    return `${parts[0]}.${parts[1]}`;
   }
 
   /** 匹配平台下载链接 */
@@ -114,30 +145,83 @@ export class VersionChecker {
     }
   }
 
-  /** 检查版本 */
-  checkVersion(clientVersion: string, platform?: string, arch?: string): Record<string, unknown> | null {
-    if (!this.cachedRelease || !clientVersion) return null;
-    const latest = this.cachedRelease.version;
-    if (VersionChecker.compareVersions(clientVersion, latest) >= 0) return null;
+  /** 检查客户端与当前服务端是否兼容 — Check client compatibility with the current server. */
+  private checkServerCompatibility(clientVersion: string): Record<string, unknown> | null {
+    const client = VersionChecker.normalizeSemanticVersion(clientVersion);
+    const server = this.serverVersion;
+    if (!client || !server) return null;
+    if (client === server) return null;
 
-    let upgradeLevel = 1;
-    if (VersionChecker.compareVersions(clientVersion, this.forceUpgradeConfig.force_upgrade_below) < 0) {
-      upgradeLevel = 2;
-    }
-    const downloadUrl = VersionChecker.matchDownloadUrl(this.cachedRelease.assets, platform, arch)
-      || this.cachedRelease.html_url;
+    const clientIsOlder = VersionChecker.compareVersions(client, server) < 0;
+    const sameCompatibilityLine = VersionChecker.getCompatibilityLine(client)
+      === VersionChecker.getCompatibilityLine(server);
+    const isForced = !sameCompatibilityLine;
+    const actionPrefix = isForced ? 'required' : 'recommended';
+    const action = clientIsOlder ? `${actionPrefix}_client_update` : `${actionPrefix}_server_update`;
+    const title = clientIsOlder
+      ? (isForced ? '需要升级客户端' : '建议升级客户端')
+      : (isForced ? '需要升级服务端' : '建议升级服务端');
+    const message = this.buildCompatibilityMessage({
+      client,
+      server,
+      clientIsOlder,
+      isForced,
+    });
+    const downloadUrl = clientIsOlder
+      ? `https://github.com/${this.owner}/${this.repo}/releases/tag/v${server}`
+      : '';
 
     return {
       payload_type: 'system_status',
       status: 'update_available',
-      upgrade: upgradeLevel,
+      upgrade: isForced ? 2 : 1,
       update_info: {
-        version: latest,
-        changelog: this.cachedRelease.changelog,
-        release_date: this.cachedRelease.release_date,
+        version: clientIsOlder ? server : client,
+        changelog: message,
+        release_date: '',
         download_url: downloadUrl,
+        title,
+        message,
+        action,
+        client_version: client,
+        server_version: server,
       },
     };
+  }
+
+  /** 构建兼容提示文案 — Build compatibility warning text. */
+  private buildCompatibilityMessage({
+    client,
+    server,
+    clientIsOlder,
+    isForced,
+  }: {
+    client: string;
+    server: string;
+    clientIsOlder: boolean;
+    isForced: boolean;
+  }): string {
+    if (clientIsOlder) {
+      if (isForced) {
+        return `当前服务端版本为 ${server}，客户端版本为 ${client}。请升级客户端到 ${server} 后继续使用。`;
+      }
+      return `当前服务端版本为 ${server}，客户端版本为 ${client}。版本不完全一致，可能不兼容或出现异常；建议升级客户端到 ${server}。`;
+    }
+
+    if (isForced) {
+      return `当前服务端版本为 ${server}，客户端版本为 ${client}。请先运行 clawke update 升级服务端后继续使用。`;
+    }
+    return `当前服务端版本为 ${server}，客户端版本为 ${client}。版本不完全一致，可能不兼容或出现异常；建议先运行 clawke update 升级服务端。`;
+  }
+
+  /** 检查版本 — Check version status. */
+  checkVersion(clientVersion: string, _platform?: string, _arch?: string): Record<string, unknown> | null {
+    const compatibilityMsg = this.checkServerCompatibility(clientVersion);
+    if (compatibilityMsg) return compatibilityMsg;
+
+    // 第一阶段只做本地 Client/Server 兼容比较，不做 GitHub latest 比较。
+    // Phase one only checks local Client/Server compatibility; GitHub latest comparison is deferred.
+    return null;
   }
 
   /** 启动定时轮询 */

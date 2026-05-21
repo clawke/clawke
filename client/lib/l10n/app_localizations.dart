@@ -2000,6 +2000,12 @@ abstract class AppLocalizations {
   /// **'稍后'**
   String get later;
 
+  /// No description provided for @upgradeAcknowledge.
+  ///
+  /// In zh, this message translates to:
+  /// **'知道了'**
+  String get upgradeAcknowledge;
+
   /// No description provided for @reLogin.
   ///
   /// In zh, this message translates to:

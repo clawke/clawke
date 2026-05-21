@@ -1001,6 +1001,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get later => '稍后';
 
   @override
+  String get upgradeAcknowledge => '知道了';
+
+  @override
   String get reLogin => '重新登录';
 
   @override

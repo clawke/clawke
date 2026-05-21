@@ -31,6 +31,9 @@ import 'package:client/core/notification_click_router.dart';
 import 'package:client/core/notification_event.dart';
 import 'package:client/core/notification_service.dart';
 import 'package:client/core/push_registration_service.dart';
+import 'package:client/upgrade/upgrade_dialog.dart';
+import 'package:client/upgrade/upgrade_handler.dart';
+import 'package:client/upgrade/upgrade_model.dart';
 
 /// Sidebar 宽度持久化 key
 const _kSidebarWidthKey = 'clawke_sidebar_width';
@@ -92,6 +95,8 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
   bool _serverDisconnectAlertReady = false;
 
   bool _notificationPermissionPromptOpen = false;
+  final Set<String> _dismissedOptionalUpgradeKeys = <String>{};
+  String? _activeUpgradeDialogKey;
 
   @override
   void initState() {
@@ -350,6 +355,30 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
     return MediaQuery.of(context).size.width < _kMobileBreakpoint;
   }
 
+  void _showUpgradeDialogOnce(UpgradeInfo info) {
+    final key = info.notificationKey;
+    if (_activeUpgradeDialogKey != null) return;
+    if (!info.isForced && _dismissedOptionalUpgradeKeys.contains(key)) return;
+
+    _activeUpgradeDialogKey = key;
+    unawaited(
+      UpgradeDialog.show(
+        context,
+        info,
+        onRetry: () async =>
+            ref.read(wsMessageHandlerProvider).sendCheckUpdate(),
+      ).whenComplete(() {
+        if (!mounted) return;
+        if (!info.isForced) {
+          _dismissedOptionalUpgradeKeys.add(key);
+        }
+        if (_activeUpgradeDialogKey == key) {
+          _activeUpgradeDialogKey = null;
+        }
+      }),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // 监听认证失败 → 弹窗提示重新登录（必须在 build 中调用，不能在 async 函数中）
@@ -364,6 +393,10 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
     ref.listen(conversationListProvider, (prev, next) {
       if (!next.hasValue) return;
       _flushPendingNotificationPayload();
+    });
+    ref.listen(upgradeInfoProvider, (prev, next) {
+      if (!mounted || next == null) return;
+      _showUpgradeDialogOnce(next);
     });
 
     // 监听连接状态变化（watch 仍触发 rebuild，但取同步值避免 AsyncValue 过渡态闪烁）

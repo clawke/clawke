@@ -1,0 +1,754 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Clawke 版本兼容与客户端自动升级设计</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #090d16;
+      --panel: #111827;
+      --panel-soft: #162033;
+      --panel-strong: #1a2740;
+      --text: #e6edf7;
+      --muted: #9aa8bd;
+      --line: #263247;
+      --blue: #6ea8ff;
+      --cyan: #5eead4;
+      --green: #45d39b;
+      --amber: #f5b76b;
+      --red: #ff7a8a;
+      --shadow: 0 18px 46px rgba(0, 0, 0, 0.34);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.62;
+    }
+
+    a {
+      color: var(--cyan);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .page {
+      width: min(1180px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 30px 0 56px;
+    }
+
+    header,
+    section,
+    aside {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+    }
+
+    header {
+      padding: 34px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    header::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(120deg, rgba(110, 168, 255, 0.16), transparent 46%),
+        linear-gradient(260deg, rgba(94, 234, 212, 0.10), transparent 42%);
+      pointer-events: none;
+    }
+
+    header > * {
+      position: relative;
+    }
+
+    h1,
+    h2,
+    h3 {
+      margin: 0;
+      color: var(--text);
+      letter-spacing: 0;
+    }
+
+    h1 {
+      max-width: 900px;
+      font-size: clamp(30px, 4vw, 52px);
+      line-height: 1.08;
+    }
+
+    h2 {
+      font-size: 22px;
+      margin-bottom: 18px;
+    }
+
+    h3 {
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    code {
+      padding: 2px 6px;
+      border-radius: 6px;
+      background: #1d2a3f;
+      color: #d8e7ff;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 0.92em;
+    }
+
+    pre {
+      margin: 0;
+      padding: 18px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #0c1424;
+      color: #dce8ff;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    section {
+      margin-top: 22px;
+      padding: 28px;
+    }
+
+    .lead {
+      max-width: 860px;
+      margin-top: 18px;
+      font-size: 17px;
+      color: #c7d3e5;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 22px;
+    }
+
+    .pill,
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 4px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(22, 32, 51, 0.82);
+      color: #cdd9eb;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .tag.ok {
+      border-color: rgba(69, 211, 155, 0.42);
+      color: var(--green);
+    }
+
+    .tag.warn {
+      border-color: rgba(245, 183, 107, 0.42);
+      color: var(--amber);
+    }
+
+    .tag.no {
+      border-color: rgba(255, 122, 138, 0.42);
+      color: var(--red);
+    }
+
+    .tag.info {
+      border-color: rgba(110, 168, 255, 0.42);
+      color: var(--blue);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 250px minmax(0, 1fr);
+      gap: 22px;
+      align-items: start;
+    }
+
+    aside {
+      position: sticky;
+      top: 18px;
+      padding: 18px;
+    }
+
+    aside strong {
+      display: block;
+      margin-bottom: 10px;
+      color: var(--text);
+    }
+
+    nav {
+      display: grid;
+      gap: 6px;
+    }
+
+    nav a {
+      display: block;
+      padding: 7px 9px;
+      border-radius: 8px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    nav a:hover {
+      background: var(--panel-soft);
+      color: var(--text);
+      text-decoration: none;
+    }
+
+    .grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    .grid.two {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .grid.three {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .card {
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel-soft);
+    }
+
+    .card.emphasis {
+      background: var(--panel-strong);
+      border-color: rgba(110, 168, 255, 0.42);
+    }
+
+    .card p + p,
+    .card .tag {
+      margin-top: 10px;
+    }
+
+    .matrix {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+    }
+
+    .matrix th,
+    .matrix td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .matrix th {
+      background: #152036;
+      color: var(--text);
+      font-weight: 650;
+    }
+
+    .matrix tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .flow {
+      display: grid;
+      gap: 12px;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 38px minmax(0, 1fr);
+      gap: 12px;
+      align-items: start;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel-soft);
+    }
+
+    .num {
+      display: inline-grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: #21314e;
+      color: var(--cyan);
+      font-weight: 700;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 14px;
+    }
+
+    .callout {
+      padding: 16px 18px;
+      border-left: 4px solid var(--amber);
+      border-radius: 12px;
+      background: rgba(245, 183, 107, 0.09);
+    }
+
+    .callout strong {
+      color: var(--amber);
+    }
+
+    .compact-list {
+      margin: 12px 0 0;
+      padding-left: 20px;
+      color: var(--muted);
+    }
+
+    .compact-list li {
+      margin: 6px 0;
+    }
+
+    @media (max-width: 980px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      aside {
+        position: static;
+      }
+
+      .grid.two,
+      .grid.three,
+      .split {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .page {
+        width: min(100% - 24px, 680px);
+        padding-top: 18px;
+      }
+
+      header,
+      section,
+      aside {
+        padding: 18px;
+        border-radius: 14px;
+      }
+
+      h1 {
+        font-size: 30px;
+      }
+
+      .matrix {
+        display: block;
+        overflow-x: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <div class="meta">
+        <span class="pill">设计文档</span>
+        <span class="pill">版本兼容</span>
+        <span class="pill">客户端自动升级</span>
+        <span class="pill">来源：2026-05-21 spec</span>
+      </div>
+      <h1>Clawke 版本兼容与客户端自动升级设计</h1>
+      <p class="lead">核心决策：<strong>客户端和当前服务端的 <code>major.minor</code> 必须一致</strong>；patch 差异只提示风险并允许继续，只有兼容线变化才阻断主流程。</p>
+    </header>
+
+    <div class="layout">
+      <aside>
+        <strong>目录</strong>
+        <nav>
+          <a href="#decision">核心决策</a>
+          <a href="#rules">版本规则</a>
+          <a href="#api">API 契约</a>
+          <a href="#actions">Action 语义</a>
+          <a href="#platforms">平台安装</a>
+          <a href="#flow">流程边界</a>
+          <a href="#testing">测试与验收</a>
+        </nav>
+      </aside>
+
+      <div>
+        <section id="decision">
+          <h2>核心决策</h2>
+          <div class="grid three">
+            <div class="card emphasis">
+              <h3>运行兼容优先</h3>
+              <p>客户端启动后先检查本地 Server 版本。Client 与 Server 的 <code>major.minor</code> 不一致时，不进入聊天主流程。</p>
+              <span class="tag no">兼容线强约束</span>
+            </div>
+            <div class="card">
+              <h3>服务端做判断</h3>
+              <p>客户端只上报版本、build、平台、架构、安装渠道。兼容判断、GitHub latest、下载资产匹配都由 Server 负责。</p>
+              <span class="tag ok">瘦客户端</span>
+            </div>
+            <div class="card">
+              <h3><code>clawke update</code> 边界不变</h3>
+              <p><code>clawke update</code> 只升级 Server/Gateway。客户端升级由客户端 UI 引导，按平台触发安装流程。</p>
+              <span class="tag info">职责清晰</span>
+            </div>
+          </div>
+        </section>
+
+        <section id="rules">
+          <h2>版本规则</h2>
+          <div class="split">
+            <div class="card">
+              <h3>Client ↔ 当前 Server</h3>
+              <p><code>major.minor</code> 必须一致；patch 差异只提示“可能不兼容或出现异常”。build number 不参与运行兼容。</p>
+              <table class="matrix">
+                <thead>
+                  <tr>
+                    <th>组合</th>
+                    <th>结果</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><code>Client 3.8.1</code> + <code>Server 3.8.1</code></td>
+                    <td><span class="tag ok">兼容</span></td>
+                  </tr>
+                  <tr>
+                    <td><code>Client 3.8.1</code> + <code>Server 3.8.2</code></td>
+                    <td><span class="tag warn">可选提示，知道了可关闭</span></td>
+                  </tr>
+                  <tr>
+                    <td><code>Client 3.9.0</code> + <code>Server 3.8.1</code></td>
+                    <td><span class="tag no">阻断，先升级服务端</span></td>
+                  </tr>
+                  <tr>
+                    <td><code>Client 3.8.1+84</code> + <code>Server 3.8.1</code></td>
+                    <td><span class="tag ok">兼容</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="card">
+              <h3>Client ↔ GitHub Latest</h3>
+              <p>按 ICU 风格判断升级级别。</p>
+              <table class="matrix">
+                <thead>
+                  <tr>
+                    <th>比较</th>
+                    <th>结果</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><code>major.minor</code> 不同</td>
+                    <td><span class="tag no">强制升级</span></td>
+                  </tr>
+                  <tr>
+                    <td><code>major.minor</code> 相同，patch/build 不同</td>
+                    <td><span class="tag warn">可选升级</span></td>
+                  </tr>
+                  <tr>
+                    <td>完全相同</td>
+                    <td><span class="tag ok">无需提示</span></td>
+                  </tr>
+                </tbody>
+              </table>
+              <div class="callout" style="margin-top: 14px;">
+                <strong>顺序：</strong>
+                <p>当前 Client/Server 一致后，如果 GitHub 有新版本，提示先运行 <code>clawke update</code> 升级服务端，再升级客户端。</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="api">
+          <h2>API 契约</h2>
+          <p>复用现有 WebSocket <code>check_update</code>，通过 <code>version_check_protocol: 2</code> 启用新协议。旧客户端继续走旧结构。</p>
+          <div class="split" style="margin-top: 16px;">
+            <div>
+              <h3>请求</h3>
+              <pre>{
+  "event_type": "check_update",
+  "data": {
+    "version_check_protocol": 2,
+    "app_version": "3.8.1",
+    "app_build": "83",
+    "platform": "macos",
+    "arch": "arm64",
+    "install_channel": "direct",
+    "protocol_version": "cup_v2"
+  }
+}</pre>
+            </div>
+            <div>
+              <h3>响应</h3>
+              <pre>{
+  "payload_type": "system_status",
+  "status": "version_check_result",
+  "action": "recommended_client_update",
+  "compatibility": {
+    "compatible": true,
+    "warning": "patch_mismatch",
+    "client_version": "3.8.1",
+    "server_version": "3.8.2",
+    "required_client_version": "3.8.2"
+  },
+  "presentation": {
+    "title": "建议升级客户端",
+    "message": "当前服务端版本为 3.8.2，客户端版本为 3.8.1。版本不完全一致，可能不兼容或出现异常；建议升级客户端到 3.8.2。",
+    "primary_label": "立即升级",
+    "secondary_label": "知道了"
+  },
+  "installer": {
+    "method": "download_and_install",
+    "url": "https://github.com/.../Clawke-3.8.2.apk",
+    "sha256": ""
+  }
+}</pre>
+            </div>
+          </div>
+          <div class="grid three" style="margin-top: 14px;">
+            <div class="card">
+              <h3>客户端职责</h3>
+              <p>上报版本和平台，展示服务端返回的文案，执行安装动作。</p>
+            </div>
+            <div class="card">
+              <h3>服务端职责</h3>
+              <p>读取 Server 版本，查 GitHub Release，匹配资产，生成 action。</p>
+            </div>
+            <div class="card">
+              <h3>兼容策略</h3>
+              <p>旧客户端不带 v2 字段时保持旧响应，避免破坏已发布版本。</p>
+            </div>
+          </div>
+        </section>
+
+        <section id="actions">
+          <h2>Action 语义</h2>
+          <table class="matrix">
+            <thead>
+              <tr>
+                <th>Action</th>
+                <th>含义</th>
+                <th>UI 行为</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>ok</code></td>
+                <td>Client/Server 一致，没有需要提示的新版本。</td>
+                <td>不提示。</td>
+              </tr>
+              <tr>
+                <td><code>recommended_client_update</code></td>
+                <td>Server 和 Client 同 <code>major.minor</code>，但 Server patch 更新。</td>
+                <td>可选提示，显示“知道了”和“立即升级”。</td>
+              </tr>
+              <tr>
+                <td><code>recommended_server_update</code></td>
+                <td>Server 和 Client 同 <code>major.minor</code>，但 Client patch 更新。</td>
+                <td>可选提示，显示“知道了”和“重新检查”。</td>
+              </tr>
+              <tr>
+                <td><code>required_client_update</code></td>
+                <td>Server 和 Client 的 <code>major.minor</code> 不同，且 Client 较旧。</td>
+                <td>阻断主流程，只允许升级客户端。</td>
+              </tr>
+              <tr>
+                <td><code>required_server_update</code></td>
+                <td>Server 和 Client 的 <code>major.minor</code> 不同，且 Server 较旧。</td>
+                <td>阻断主流程，提示运行 <code>clawke update</code>。</td>
+              </tr>
+              <tr>
+                <td><code>optional_server_then_client_update</code></td>
+                <td>当前版本匹配，GitHub 有同 <code>major.minor</code> 的 patch 更新。</td>
+                <td>可关闭提示，建议先升级服务端再升级客户端。</td>
+              </tr>
+              <tr>
+                <td><code>required_server_then_client_update</code></td>
+                <td>当前版本匹配，但 GitHub latest 的 <code>major.minor</code> 更高。</td>
+                <td>强制提示先升级服务端，再升级客户端。</td>
+              </tr>
+              <tr>
+                <td><code>check_failed</code></td>
+                <td>GitHub 查询失败，但本地兼容检查已完成。</td>
+                <td>不阻断使用，只提示无法确认最新版本。</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="platforms">
+          <h2>平台安装策略</h2>
+          <div class="grid three">
+            <div class="card">
+              <h3>Android</h3>
+              <p>下载 APK 到应用私有外部目录，校验后通过 MethodChannel 调 Android 系统安装器。</p>
+              <span class="tag info">参考 rc-world 思路</span>
+            </div>
+            <div class="card">
+              <h3>iOS</h3>
+              <p>不做应用内安装，只跳 App Store 或 TestFlight。</p>
+              <span class="tag warn">平台限制</span>
+            </div>
+            <div class="card">
+              <h3>macOS direct</h3>
+              <p>下载 DMG/ZIP，校验后用系统打开。App Store 渠道跳商店。</p>
+              <span class="tag info">后续可评估 Sparkle</span>
+            </div>
+            <div class="card">
+              <h3>Windows</h3>
+              <p>下载 EXE 或 MSIX，校验后打开安装器。</p>
+              <span class="tag info">系统安装流程</span>
+            </div>
+            <div class="card">
+              <h3>Linux</h3>
+              <p>优先 AppImage：下载、校验、<code>chmod +x</code> 后打开。deb/rpm 用 <code>xdg-open</code>。</p>
+              <span class="tag info">不做 sudo 静默安装</span>
+            </div>
+            <div class="card">
+              <h3>资产命名</h3>
+              <p>发布包命名必须稳定，便于服务端按平台和架构匹配。</p>
+              <span class="tag ok">可自动选择</span>
+            </div>
+          </div>
+          <pre style="margin-top: 16px;">Clawke-3.8.2-macos-arm64.dmg
+Clawke-3.8.2-macos-x64.dmg
+Clawke-3.8.2-windows-x64.exe
+Clawke-3.8.2-linux-x64.AppImage
+Clawke-3.8.2-android-arm64.apk</pre>
+        </section>
+
+        <section id="flow">
+          <h2>流程边界</h2>
+          <div class="flow">
+            <div class="step">
+              <span class="num">1</span>
+              <div>
+                <h3>WebSocket 连接成功</h3>
+                <p>客户端先发送 <code>check_update v2</code>，不要直接进入主业务交互。</p>
+              </div>
+            </div>
+            <div class="step">
+              <span class="num">2</span>
+              <div>
+                <h3>服务端判断本地兼容</h3>
+                <p>Client/Server 的 <code>major.minor</code> 不一致时立即返回阻断 action；只有 patch 差异时返回可选提示。</p>
+              </div>
+            </div>
+            <div class="step">
+              <span class="num">3</span>
+              <div>
+                <h3>再判断 GitHub 最新版本</h3>
+                <p>本地匹配后，才判断是否需要提示先升级 Server 再升级 Client。</p>
+              </div>
+            </div>
+            <div class="step">
+              <span class="num">4</span>
+              <div>
+                <h3>客户端执行展示和安装动作</h3>
+                <p>服务端返回 <code>presentation</code> 和 <code>installer</code>，客户端不拼业务规则。</p>
+              </div>
+            </div>
+          </div>
+          <div class="callout" style="margin-top: 16px;">
+            <strong>App Store 构建注意：</strong>
+            <p>兼容检查不能被 <code>inAppUpdatesEnabled</code> 禁用。商店渠道只禁用应用内安装，不禁用版本上报和兼容判断。</p>
+          </div>
+        </section>
+
+        <section id="testing">
+          <h2>测试与验收</h2>
+          <div class="grid two">
+            <div class="card">
+              <h3>Node.js 测试</h3>
+              <ul class="compact-list">
+                <li>Client/Server 完全一致返回 <code>ok</code>。</li>
+                <li>Client/Server 只有 patch 差异返回 <code>recommended_client_update</code> 或 <code>recommended_server_update</code>。</li>
+                <li>Client/Server 的 <code>major.minor</code> 不一致返回 <code>required_client_update</code> 或 <code>required_server_update</code>。</li>
+                <li>GitHub latest patch 更新返回可选 server-then-client 升级。</li>
+                <li>GitHub latest major.minor 更新返回强制 server-then-client 升级。</li>
+                <li>旧版 <code>check_update</code> 请求保持旧响应。</li>
+              </ul>
+            </div>
+            <div class="card">
+              <h3>Flutter 测试</h3>
+              <ul class="compact-list">
+                <li>新响应模型解析正确。</li>
+                <li>required action 进入强制升级状态。</li>
+                <li>optional action 可关闭。</li>
+                <li>App Store 构建仍发送兼容检查字段。</li>
+                <li>Android installer 可用 mock MethodChannel 验证调用参数。</li>
+              </ul>
+            </div>
+          </div>
+          <table class="matrix" style="margin-top: 16px;">
+            <thead>
+              <tr>
+                <th>验收项</th>
+                <th>必须满足</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>兼容线不一致</td>
+                <td>客户端阻断主流程。</td>
+              </tr>
+              <tr>
+                <td>只有 patch 差异</td>
+                <td>客户端提示风险，并允许点“知道了”关闭。</td>
+              </tr>
+              <tr>
+                <td>GitHub 不可达</td>
+                <td>不影响本地兼容检查，不阻断匹配版本继续使用。</td>
+              </tr>
+              <tr>
+                <td>服务端 action</td>
+                <td>足以驱动客户端 UI，客户端不内置业务判断。</td>
+              </tr>
+              <tr>
+                <td>Android</td>
+                <td>完成确认升级、下载、调起系统安装器闭环。</td>
+              </tr>
+              <tr>
+                <td>生产数据</td>
+                <td>新增测试不得访问 <code>server/data/clawke.db</code>。</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+      </div>
+    </div>
+  </main>
+</body>
+</html>
