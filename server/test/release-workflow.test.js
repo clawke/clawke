@@ -56,6 +56,10 @@ describe('release workflow guardrails', () => {
     path.join(repoRoot, 'client', 'macos', 'Podfile'),
     'utf8',
   );
+  const macosDmgScript = fs.readFileSync(
+    path.join(repoRoot, 'scripts', 'create_macos_dmg.sh'),
+    'utf8',
+  );
   it('requires Android release signing and rejects debug-signed APKs', () => {
     assert.match(workflow, /ANDROID_KEYSTORE_BASE64/);
     assert.match(workflow, /ANDROID_RELEASE_CERT_SHA256/);
@@ -76,6 +80,21 @@ describe('release workflow guardrails', () => {
   it('keeps Android signing report out of public GitHub Release assets', () => {
     assert.match(workflow, /name: android-signing-report/);
     assert.doesNotMatch(workflow, /release\/Clawke-\$\{TAG\}-android-signing\.txt/);
+  });
+
+  it('removes macOS DMG filesystem event metadata before compression', () => {
+    assert.match(macosDmgScript, /-fs APFS/);
+    assert.match(macosDmgScript, /-owners off/);
+    assert.match(macosDmgScript, /rsync -a "\$STAGE_DIR\/\$APP_NAME\/"/);
+    assert.doesNotMatch(macosDmgScript, /hdiutil create[\s\S]*-srcfolder/);
+    assert.doesNotMatch(macosDmgScript, /hdiutil create[\s\S]*-format UDRW/);
+    assert.match(macosDmgScript, /awk '\/\\\/Volumes\\\//);
+    assert.match(macosDmgScript, /rm -rf "\$MOUNT_POINT\/\.fseventsd"/);
+    assert.ok(
+      macosDmgScript.indexOf('rm -rf "$MOUNT_POINT/.fseventsd"') <
+        macosDmgScript.lastIndexOf('hdiutil detach "$MOUNT_POINT"'),
+      'DMG metadata cleanup must run before detach',
+    );
   });
 
   it('keeps Android release builds free of dev-only integration_test registration', () => {
