@@ -240,6 +240,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get skillHubLoadRetry => 'Load failed, retry';
 
   @override
+  String get skillHubRequestTimeout =>
+      'SkillHub is responding slowly. Please try again later.';
+
+  @override
+  String get skillHubNetworkError =>
+      'SkillHub network request failed. Please try again later.';
+
+  @override
   String get skillHubSearchHint => 'Search name, summary, slug';
 
   @override

@@ -81,6 +81,8 @@
   "skillHubEmptyTitle": "暂无 Skill",
   "skillHubEmptyMessage": "换一个搜索条件后再试。",
   "skillHubLoadRetry": "加载失败，重试",
+  "skillHubRequestTimeout": "SkillHub 服务响应较慢，请稍后重试。",
+  "skillHubNetworkError": "SkillHub 网络请求失败，请稍后重试。",
   "skillHubSearchHint": "搜索名称、摘要、slug",
   "skillHubSearch": "搜索",
   "skillHubNotFoundTitle": "未找到 Skill",

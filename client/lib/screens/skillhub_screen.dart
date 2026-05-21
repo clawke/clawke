@@ -20,10 +20,22 @@ enum _SkillHubPage { catalog, detail }
 
 const _skillHubCatalogPageSize = 30;
 
-const _tagOptions = <_TagOption>[
-  _TagOption(kind: _TagOptionKind.all, value: null, featured: null),
-  _TagOption(kind: _TagOptionKind.featured, value: null, featured: true),
-  _TagOption(kind: _TagOptionKind.coding, value: 'Coding', featured: null),
+const _categoryOptions = <_CategoryOption>[
+  _CategoryOption(
+    kind: _CategoryOptionKind.all,
+    category: null,
+    featured: null,
+  ),
+  _CategoryOption(
+    kind: _CategoryOptionKind.featured,
+    category: null,
+    featured: true,
+  ),
+  _CategoryOption(
+    kind: _CategoryOptionKind.coding,
+    category: 'coding',
+    featured: null,
+  ),
 ];
 
 final _skillHubBuiltInInstallsProvider =
@@ -131,7 +143,7 @@ class _SkillHubScreenState extends ConsumerState<SkillHubScreen> {
   final _searchController = TextEditingController();
   final _catalogScrollController = ScrollController();
   _SkillHubPage _page = _SkillHubPage.catalog;
-  int _selectedTagIndex = 0;
+  int _selectedCategoryIndex = 0;
 
   @override
   void initState() {
@@ -216,7 +228,7 @@ class _SkillHubScreenState extends ConsumerState<SkillHubScreen> {
                     if (state.errorMessage != null) ...[
                       const SizedBox(height: 16),
                       AppNoticeBar.error(
-                        message: state.errorMessage!,
+                        message: _localizedSkillHubMessage(state.errorMessage!),
                         onDismiss: () => ref
                             .read(skillHubControllerProvider.notifier)
                             .clearError(),
@@ -366,16 +378,16 @@ class _SkillHubScreenState extends ConsumerState<SkillHubScreen> {
       scrollDirection: Axis.horizontal,
       child: Row(
         children: [
-          for (var i = 0; i < _tagOptions.length; i++) ...[
+          for (var i = 0; i < _categoryOptions.length; i++) ...[
             Padding(
               padding: EdgeInsets.only(
-                right: i == _tagOptions.length - 1 ? 0 : 8,
+                right: i == _categoryOptions.length - 1 ? 0 : 8,
               ),
               child: FilterChip(
-                label: Text(_tagOptionLabel(context, _tagOptions[i])),
-                selected: _selectedTagIndex == i,
+                label: Text(_categoryOptionLabel(context, _categoryOptions[i])),
+                selected: _selectedCategoryIndex == i,
                 onSelected: (_) {
-                  setState(() => _selectedTagIndex = i);
+                  setState(() => _selectedCategoryIndex = i);
                   unawaited(_loadCatalog());
                 },
               ),
@@ -473,13 +485,13 @@ class _SkillHubScreenState extends ConsumerState<SkillHubScreen> {
   }
 
   Future<void> _loadCatalog({bool force = false}) async {
-    final tag = _tagOptions[_selectedTagIndex];
+    final option = _categoryOptions[_selectedCategoryIndex];
     await ref
         .read(skillHubControllerProvider.notifier)
         .load(
           query: _searchController.text.trim(),
-          tag: tag.value,
-          featured: tag.featured,
+          category: option.category,
+          featured: option.featured,
           limit: _skillHubCatalogPageSize,
         );
     if (!mounted || _page != _SkillHubPage.catalog) return;
@@ -539,13 +551,24 @@ class _SkillHubScreenState extends ConsumerState<SkillHubScreen> {
     if (!mounted) return;
     state = ref.read(skillHubControllerProvider);
     final status = state.installStatuses[item.id];
+    final errorMessage = state.errorMessage;
     final message = submitted
         ? _messageForInstallStatus(status)
-        : state.errorMessage ?? context.l10n.skillHubInstallFailed;
+        : errorMessage == null
+        ? context.l10n.skillHubInstallFailed
+        : _localizedSkillHubMessage(errorMessage);
     _showSnack(message);
     if (_isSkillHubItemInstalled(item, state)) {
       ref.invalidate(_skillHubBuiltInInstallsProvider(item.slug));
     }
+  }
+
+  String _localizedSkillHubMessage(String message) {
+    return switch (message) {
+      skillHubReceiveTimeoutUiCode => context.l10n.skillHubRequestTimeout,
+      skillHubNetworkErrorUiCode => context.l10n.skillHubNetworkError,
+      _ => message,
+    };
   }
 
   Future<SkillHubFallbackGateway?> _selectFallbackGateway(
@@ -1386,26 +1409,26 @@ class _GatewaySkillInstall {
   String get displayPath => skill.displayPath;
 }
 
-enum _TagOptionKind { all, featured, coding }
+enum _CategoryOptionKind { all, featured, coding }
 
-class _TagOption {
-  final _TagOptionKind kind;
-  final String? value;
+class _CategoryOption {
+  final _CategoryOptionKind kind;
+  final String? category;
   final bool? featured;
 
-  const _TagOption({
+  const _CategoryOption({
     required this.kind,
-    required this.value,
+    required this.category,
     required this.featured,
   });
 }
 
-String _tagOptionLabel(BuildContext context, _TagOption option) {
+String _categoryOptionLabel(BuildContext context, _CategoryOption option) {
   final l10n = context.l10n;
   return switch (option.kind) {
-    _TagOptionKind.all => l10n.skillHubTagAll,
-    _TagOptionKind.featured => l10n.skillHubTagFeatured,
-    _TagOptionKind.coding => 'Coding',
+    _CategoryOptionKind.all => l10n.skillHubTagAll,
+    _CategoryOptionKind.featured => l10n.skillHubTagFeatured,
+    _CategoryOptionKind.coding => 'Coding',
   };
 }
 

@@ -35,8 +35,23 @@ void main() {
     await tester.tap(find.text('Coding'));
     await tester.pumpAndSettle();
 
-    expect(api.lastTag, 'Coding');
-    expect(api.lastCategory, isNull);
+    expect(api.lastCategory, 'coding');
+    expect(api.lastTag, isNull);
+  });
+
+  testWidgets('shows localized SkillHub timeout error', (tester) async {
+    final api = _FakeSkillHubApiService(
+      listError: const SkillHubApiException(
+        'SkillHub request timed out',
+        actionError: 'receive_timeout',
+      ),
+    );
+    await tester.pumpWidget(_testApp(api));
+    await tester.pumpAndSettle();
+
+    expect(find.text('SkillHub 服务响应较慢，请稍后重试。'), findsOneWidget);
+    expect(find.textContaining('The request took longer'), findsNothing);
+    expect(find.text('SkillHub request timed out'), findsNothing);
   });
 
   testWidgets('uses English localized SkillHub labels', (tester) async {
@@ -900,6 +915,7 @@ class _FakeSkillHubApiService extends SkillHubApiService {
   final int itemCount;
   final List<SkillHubListResult>? listResults;
   final SkillHubInstallResult installResult;
+  final SkillHubApiException? listError;
   String? lastQuery;
   String? lastCategory;
   String? lastTag;
@@ -922,6 +938,7 @@ class _FakeSkillHubApiService extends SkillHubApiService {
       status: 'installed',
       message: '安装完成',
     ),
+    this.listError,
     this.installError,
   });
 
@@ -940,6 +957,7 @@ class _FakeSkillHubApiService extends SkillHubApiService {
     lastTag = tag;
     lastGatewayType = gatewayType;
     requestedCursors.add(cursor);
+    if (listError != null) throw listError!;
     final results = listResults;
     if (results != null && requestedCursors.length <= results.length) {
       return results[requestedCursors.length - 1];

@@ -155,9 +155,10 @@ test('installSkillHubSkill starts managed install with slug-only ClawHub request
   });
 });
 
-test('installSkillHubSkill falls back to gateway native install when managed root is unavailable', async () => {
+test('installSkillHubSkill uses managed install by default even when managed root check is unavailable', async () => {
   const routes = require('../dist/routes/skillhub-routes');
   const gatewayCalls = [];
+  const managedCalls = [];
   routes.initSkillHubRoutes({
     canUseManagedSkillHubInstall: () => false,
     getConnectedAccountIds: () => ['hermes'],
@@ -168,6 +169,14 @@ test('installSkillHubSkill falls back to gateway native install when managed roo
       status: 'online',
       capabilities: ['skills'],
     }],
+    startManagedSkillHubInstall: async (payload) => {
+      managedCalls.push(payload);
+      return {
+        installed: false,
+        status: 'accepted',
+        message: '安装任务已提交',
+      };
+    },
     sendSkillRequest: async (payload) => {
       gatewayCalls.push(payload);
       return {
@@ -190,26 +199,27 @@ test('installSkillHubSkill falls back to gateway native install when managed roo
   }), res);
 
   assert.equal(res.statusCode, 202);
-  assert.equal(gatewayCalls.length, 1);
-  assert.equal(gatewayCalls[0].account_id, 'hermes');
-  assert.equal(gatewayCalls[0].package.slug, 'weather');
-  assert.equal(gatewayCalls[0].package.source, 'clawhub');
-  assert.equal(gatewayCalls[0].install_mode, 'gateway_native');
+  assert.equal(gatewayCalls.length, 0);
+  assert.equal(managedCalls.length, 1);
+  assert.equal(managedCalls[0].installMode, 'managed');
+  assert.equal(managedCalls[0].installPackage.slug, 'weather');
+  assert.equal(managedCalls[0].installPackage.source, 'clawhub');
+  assert.equal(managedCalls[0].fallbackGatewayId, undefined);
+  assert.equal(managedCalls[0].fallbackToGateway, undefined);
   assert.deepEqual(res.body, {
     success: true,
     value: {
       installId: res.body.value.installId,
       installed: false,
       status: 'accepted',
-      message: 'Gateway 原生安装已提交',
-      accountId: 'hermes',
-      installMode: 'gateway_native',
+      message: '安装任务已提交',
+      installMode: 'managed',
       slug: 'weather',
     },
   });
 });
 
-test('installSkillHubSkill asks client to choose gateway when fallback has multiple candidates', async () => {
+test('installSkillHubSkill asks client to choose gateway when explicit native install has multiple candidates', async () => {
   const routes = require('../dist/routes/skillhub-routes');
   routes.initSkillHubRoutes({
     canUseManagedSkillHubInstall: () => false,
@@ -240,6 +250,7 @@ test('installSkillHubSkill asks client to choose gateway when fallback has multi
     body: {
       slug: 'github',
       source: 'clawhub',
+      installMode: 'gateway_native',
     },
   }), res);
 
@@ -257,7 +268,7 @@ test('installSkillHubSkill asks client to choose gateway when fallback has multi
   });
 });
 
-test('installSkillHubSkill resolves a single compatible gateway type when selection is all', async () => {
+test('installSkillHubSkill resolves a single compatible gateway type for explicit native install', async () => {
   const routes = require('../dist/routes/skillhub-routes');
   const calls = [];
   routes.initSkillHubRoutes({
@@ -298,6 +309,7 @@ test('installSkillHubSkill resolves a single compatible gateway type when select
       slug: 'github',
       name: 'Github',
       source: 'clawhub',
+      installMode: 'gateway_native',
       sourceOwner: 'steipete',
       packageType: 'single',
       compatibleGateways: ['openclaw'],

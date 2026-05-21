@@ -23,6 +23,31 @@ enum _SkillSourceFilter { all, managed, external, readonly }
 
 enum _SkillPage { list, detail, edit }
 
+bool _skillMatchesSearch(ManagedSkill skill, String query) {
+  final normalizedQuery = _normalizeSkillSearch(query);
+  return [
+    skill.displayName,
+    skill.displayDescription,
+    skill.name,
+    skill.description,
+    skill.category,
+    skill.id,
+    skill.path,
+    skill.root,
+    skill.displayPath,
+    skill.sourceLabel,
+  ].any((field) {
+    final lowerField = field.toLowerCase();
+    if (lowerField.contains(query)) return true;
+    return normalizedQuery.isNotEmpty &&
+        _normalizeSkillSearch(field).contains(normalizedQuery);
+  });
+}
+
+String _normalizeSkillSearch(String value) {
+  return value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9\u4e00-\u9fff]+'), '');
+}
+
 class SkillsManagementScreen extends ConsumerStatefulWidget {
   final bool showAppBar;
 
@@ -196,11 +221,7 @@ class _SkillsManagementScreenState
       };
       if (!matchesSource) return false;
       if (query.isEmpty) return true;
-      return skill.displayName.toLowerCase().contains(query) ||
-          skill.displayDescription.toLowerCase().contains(query) ||
-          skill.name.toLowerCase().contains(query) ||
-          skill.description.toLowerCase().contains(query) ||
-          skill.category.toLowerCase().contains(query);
+      return _skillMatchesSearch(skill, query);
     }).toList();
   }
 

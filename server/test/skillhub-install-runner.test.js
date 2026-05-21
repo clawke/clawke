@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const { execFileSync } = require('node:child_process');
 const os = require('node:os');
 const path = require('node:path');
 
@@ -32,11 +33,110 @@ test('canUseManagedSkillHubInstall rejects remote gateways without shared root e
   }), false);
 });
 
+test('canUseManagedSkillHubInstall does not use another gateway root for an OpenClaw install', () => {
+  const runner = require('../dist/services/skillhub-install-runner');
+  const store = require('../dist/store/skillhub-install-store');
+  assert.equal(runner.canUseManagedSkillHubInstall({
+    installPackage: {
+      slug: 'openclaw-github-assistant',
+      source: 'clawhub',
+      gatewayType: 'openclaw',
+    },
+    gateways: [
+      {
+        gateway_id: 'hermes',
+        display_name: 'Hermes',
+        gateway_type: 'hermes',
+        status: 'online',
+        capabilities: ['skills'],
+        shared_skill_root: store.SKILLHUB_SKILLS_DIR,
+      },
+      {
+        gateway_id: 'OpenClaw',
+        display_name: 'OpenClaw',
+        gateway_type: 'openclaw',
+        status: 'online',
+        capabilities: ['skills'],
+        local_to_server: true,
+      },
+    ],
+  }), false);
+});
+
+test('canUseManagedSkillHubInstall does not infer profile skill visibility from local loopback alone', () => {
+  const runner = require('../dist/services/skillhub-install-runner');
+  assert.equal(runner.canUseManagedSkillHubInstall({
+    installPackage: {
+      slug: 'openclaw-github-assistant',
+      source: 'clawhub',
+      gatewayType: 'openclaw',
+    },
+    gateways: [{
+      gateway_id: 'OpenClaw',
+      display_name: 'OpenClaw',
+      gateway_type: 'openclaw',
+      status: 'online',
+      capabilities: ['skills'],
+      local_to_server: true,
+    }],
+  }), false);
+});
+
+test('SkillHub managed install directory stays in base home when a profile is active', () => {
+  const baseHome = fs.mkdtempSync(path.join(os.tmpdir(), 'clawke-profile-home-'));
+  try {
+    const output = execFileSync(process.execPath, [
+      '-e',
+      [
+        'const store = require("./dist/store/skillhub-install-store");',
+        'const runner = require("./dist/services/skillhub-install-runner");',
+        'const gateway = { gateway_id: "OpenClaw", display_name: "OpenClaw", gateway_type: "openclaw", status: "online", capabilities: ["skills"], shared_skill_root: store.SKILLHUB_SKILLS_DIR };',
+        'process.stdout.write(JSON.stringify({ dir: store.SKILLHUB_SKILLS_DIR, canUse: runner.canUseManagedSkillHubInstall({ installPackage: { slug: "github", gatewayType: "openclaw" }, gateways: [gateway] }) }));',
+      ].join(' '),
+    ], {
+      cwd: path.join(__dirname, '..'),
+      env: {
+        ...process.env,
+        CLAWKE_DATA_DIR: baseHome,
+        CLAWKE_PROFILE: 'dev',
+      },
+      encoding: 'utf8',
+    });
+    assert.deepEqual(JSON.parse(output), {
+      dir: path.join(baseHome, 'skills'),
+      canUse: true,
+    });
+  } finally {
+    fs.rmSync(baseHome, { recursive: true, force: true });
+  }
+});
+
 test('validateSkillHubSlug blocks unsafe slugs before file operations', () => {
   const runner = require('../dist/services/skillhub-install-runner');
   assert.throws(() => runner.validateSkillHubSlug('../github'), /Invalid skill slug/);
   assert.throws(() => runner.validateSkillHubSlug('天气'), /Invalid skill slug/);
   assert.equal(runner.validateSkillHubSlug('github-helper'), 'github-helper');
+});
+
+test('rewriteSkillFrontmatter canonicalizes unsafe SkillHub display names to slug', () => {
+  const runner = require('../dist/services/skillhub-install-runner');
+  const content = [
+    '---',
+    'name: Word / DOCX',
+    'description: Create Word documents.',
+    '---',
+    '',
+    '# Word / DOCX',
+    '',
+  ].join('\n');
+
+  const rewritten = runner.rewriteSkillFrontmatter(content, 'word-docx', 'Word / DOCX');
+
+  assert.match(rewritten, /^name: word-docx$/m);
+  assert.match(rewritten, /^slug: word-docx$/m);
+  assert.match(rewritten, /^displayName: "Word \/ DOCX"$/m);
+  assert.doesNotMatch(rewritten, /^name: Word \/ DOCX$/m);
+  assert.match(rewritten, /^---\n\n# Word \/ DOCX/m);
 });
 
 test('managed SkillHub install runner has no Docker command dependency', () => {

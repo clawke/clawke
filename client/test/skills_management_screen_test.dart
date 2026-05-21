@@ -596,6 +596,33 @@ class _OverflowStressSkillsApiService extends _FakeSkillsApiService {
   }
 }
 
+class _OpenClawGithubAssistantApiService extends _FakeSkillsApiService {
+  static const githubAssistant = ManagedSkill(
+    id: 'openclaw-workspace/github',
+    name: 'github',
+    description: 'Query and manage GitHub repositories',
+    category: 'openclaw-workspace',
+    enabled: true,
+    source: 'external',
+    sourceLabel: 'OpenClaw workspace skills',
+    writable: true,
+    deletable: true,
+    path:
+        '/Users/samy/.openclaw/workspace/skills/openclaw-github-assistant/SKILL.md',
+    root: '/Users/samy/.openclaw/workspace/skills/openclaw-github-assistant',
+    updatedAt: 0,
+    hasConflict: false,
+  );
+
+  @override
+  Future<List<ManagedSkill>> listSkills({
+    SkillScope? scope,
+    String? locale,
+  }) async {
+    return const [githubAssistant];
+  }
+}
+
 void main() {
   Widget buildSubject({
     Locale? locale,
@@ -951,6 +978,33 @@ void main() {
       find.textContaining('Describe what this skill does'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('skills search matches installed package slug from path', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      buildSubject(
+        locale: const Locale('en'),
+        api: _OpenClawGithubAssistantApiService(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byType(TextField).first,
+      'OpenClaw GitHub Assistant',
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('github'), findsOneWidget);
   });
 
   testWidgets(

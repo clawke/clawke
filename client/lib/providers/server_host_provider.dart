@@ -64,7 +64,6 @@ Future<void> applyForcedServerConfig(
     // 调试直连认证 token，适用于本地 dev Server — Debug-only auth token for local dev Server.
     await prefs.setString(_kTokenKey, forcedToken);
   }
-  await prefs.remove(_kLoggedOutKey);
 }
 
 String deriveWsUrlFromServerAddress(String url) {

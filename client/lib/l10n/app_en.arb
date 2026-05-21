@@ -73,6 +73,8 @@
   "skillHubEmptyTitle": "No Skills",
   "skillHubEmptyMessage": "Try another search filter.",
   "skillHubLoadRetry": "Load failed, retry",
+  "skillHubRequestTimeout": "SkillHub is responding slowly. Please try again later.",
+  "skillHubNetworkError": "SkillHub network request failed. Please try again later.",
   "skillHubSearchHint": "Search name, summary, slug",
   "skillHubSearch": "Search",
   "skillHubNotFoundTitle": "Skill not found",

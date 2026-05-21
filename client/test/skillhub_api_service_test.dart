@@ -9,6 +9,11 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('uses longer receive timeout for cloud SkillHub catalog calls', () {
+    expect(skillHubCloudReceiveTimeout, const Duration(seconds: 60));
+    expect(skillHubLocalReceiveTimeout, const Duration(seconds: 10));
+  });
+
   test('loads config locally then lists SkillHub items from Nirvana', () async {
     MediaResolver.setToken('relay-token');
     addTearDown(() => MediaResolver.setToken(''));
@@ -85,6 +90,32 @@ void main() {
     expect(cloudRequests.single.headers['Authorization'], 'Bearer relay-token');
   });
 
+  test(
+    'lowercases category query parameter for SkillHub catalog calls',
+    () async {
+      final cloudRequests = <RequestOptions>[];
+      final service = SkillHubApiService(
+        localDio: _dioWithJson({
+          'provider': 'nirvana',
+          'apiBaseUrl': 'https://local.clawke.ai',
+          'skillsPath': '/api/skillhub/v1/skills.json',
+          'skillPath': '/api/skillhub/v1/skill.json',
+        }),
+        cloudDio: _dioWithHandler((options) async {
+          cloudRequests.add(options);
+          return _jsonResponse({
+            'success': true,
+            'value': {'list': []},
+          });
+        }),
+      );
+
+      await service.listSkills(category: 'Coding', limit: 30);
+
+      expect(cloudRequests.single.uri.queryParameters['category'], 'coding');
+    },
+  );
+
   test('throws readable error when Nirvana JsonResult fails', () async {
     final service = SkillHubApiService(
       localDio: _dioWithJson({
@@ -104,6 +135,41 @@ void main() {
           'message',
           'rate_limited',
         ),
+      ),
+    );
+  });
+
+  test('maps cloud receive timeout to stable SkillHub error', () async {
+    final service = SkillHubApiService(
+      localDio: _dioWithJson({
+        'provider': 'nirvana',
+        'apiBaseUrl': 'https://local.clawke.ai',
+        'skillsPath': '/api/skillhub/v1/skills.json',
+        'skillPath': '/api/skillhub/v1/skill.json',
+      }),
+      cloudDio: _dioWithHandler((options) async {
+        throw DioException(
+          requestOptions: options,
+          type: DioExceptionType.receiveTimeout,
+          message: 'The request took longer than 0:00:20.000000',
+        );
+      }),
+    );
+
+    await expectLater(
+      service.listSkills(),
+      throwsA(
+        isA<SkillHubApiException>()
+            .having(
+              (error) => error.actionError,
+              'actionError',
+              'receive_timeout',
+            )
+            .having(
+              (error) => error.message,
+              'message',
+              'SkillHub request timed out',
+            ),
       ),
     );
   });

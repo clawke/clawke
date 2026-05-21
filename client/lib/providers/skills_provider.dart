@@ -154,6 +154,14 @@ class SkillsController extends StateNotifier<SkillsState> {
     return _loadScopedList(state.scopes, selectedScope);
   }
 
+  void applyExternalRefresh(Map<String, List<ManagedSkill>> skillsByGateway) {
+    final gatewayId = state.selectedScope?.gatewayId;
+    if (gatewayId == null) return;
+    final skills = skillsByGateway[gatewayId];
+    if (skills == null) return;
+    state = state.copyWith(skills: skills);
+  }
+
   void clearError() {
     if (state.errorMessage == null) return;
     state = state.copyWith(clearError: true);

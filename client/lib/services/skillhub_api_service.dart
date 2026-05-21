@@ -5,6 +5,9 @@ import 'package:client/services/media_resolver.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
+const skillHubLocalReceiveTimeout = Duration(seconds: 10);
+const skillHubCloudReceiveTimeout = Duration(seconds: 60);
+
 class SkillHubApiException implements Exception {
   final String message;
   final String actionError;
@@ -63,7 +66,7 @@ class SkillHubApiService {
         Dio(
           BaseOptions(
             connectTimeout: const Duration(seconds: 10),
-            receiveTimeout: const Duration(seconds: 10),
+            receiveTimeout: skillHubLocalReceiveTimeout,
           ),
         );
     _cloudDio =
@@ -71,7 +74,7 @@ class SkillHubApiService {
         Dio(
           BaseOptions(
             connectTimeout: const Duration(seconds: 10),
-            receiveTimeout: const Duration(seconds: 20),
+            receiveTimeout: skillHubCloudReceiveTimeout,
           ),
         );
     _localDio.interceptors.add(
@@ -177,8 +180,10 @@ class SkillHubApiService {
   }) {
     final result = <String, dynamic>{};
     if (query != null && query.isNotEmpty) result['query'] = query;
-    if (category != null && category.isNotEmpty) result['category'] = category;
-    if (tag != null && tag.isNotEmpty) result['tag'] = tag;
+    if (category != null && category.isNotEmpty) {
+      result['category'] = category.toLowerCase();
+    }
+    if (tag != null && tag.isNotEmpty) result['tag'] = tag.toLowerCase();
     if (featured != null) result['featured'] = featured;
     if (gatewayType != null && gatewayType.isNotEmpty) {
       result['gatewayType'] = gatewayType;
@@ -227,6 +232,21 @@ class SkillHubApiService {
     final data = response?.data;
     final json = _mapFromResponseData(data);
     if (json != null) return _exceptionFromJson(json);
+
+    if (error.type == DioExceptionType.receiveTimeout) {
+      return const SkillHubApiException(
+        'SkillHub request timed out',
+        actionError: 'receive_timeout',
+      );
+    }
+    if (error.type == DioExceptionType.connectionTimeout ||
+        error.type == DioExceptionType.sendTimeout ||
+        error.type == DioExceptionType.connectionError) {
+      return const SkillHubApiException(
+        'SkillHub network request failed',
+        actionError: 'network_error',
+      );
+    }
 
     final statusCode = response?.statusCode;
     final message = statusCode == null

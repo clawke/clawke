@@ -50,17 +50,31 @@ export class ManagedSkillHubInstallError extends Error {
 }
 
 export function canUseManagedSkillHubInstall(input: {
+  installPackage?: SkillHubInstallPackage;
   gateways: GatewayInfo[];
 }): boolean {
-  const gateways = input.gateways.filter((gateway) => gateway.status === 'online');
+  const gateways = input.gateways
+    .filter((gateway) => gateway.status === 'online')
+    .filter((gateway) => gateway.capabilities.includes('skills'))
+    .filter((gateway) => gatewayMatchesInstallPackage(gateway, input.installPackage));
   if (gateways.length === 0) return true;
   const expected = normalizePath(SKILLHUB_SKILLS_DIR);
   return gateways.some((gateway) => {
-    if (gateway.local_to_server === true) return true;
     return [gateway.shared_skill_root, gateway.managed_skills_root]
       .map((item) => normalizePath(item))
       .some((item) => item === expected);
   });
+}
+
+function gatewayMatchesInstallPackage(gateway: GatewayInfo, installPackage?: SkillHubInstallPackage): boolean {
+  const explicitType = installPackage?.gatewayType?.trim().toLowerCase();
+  if (explicitType) return gateway.gateway_type.trim().toLowerCase() === explicitType;
+
+  const compatibleTypes = (installPackage?.compatibleGateways || [])
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+  if (compatibleTypes.length === 0) return true;
+  return compatibleTypes.includes(gateway.gateway_type.trim().toLowerCase());
 }
 
 export async function startManagedSkillHubInstall(input: {
@@ -132,6 +146,7 @@ async function runManagedSkillHubInstall(input: {
       emitStatus(input.installId, slug, 'installing', '正在安装 Skill');
       await fs.mkdir(dirname(targetDir), { recursive: true });
       await fs.cp(extractedRoot, targetDir, { recursive: true, force: false, errorOnExist: true });
+      await canonicalizeInstalledSkillMetadata(targetDir, slug, detail.skill.displayName);
 
       emitStatus(input.installId, slug, 'recording', '正在记录安装信息');
       await recordSkillHubInstall({
@@ -346,6 +361,73 @@ async function findSkillMarkerPath(root: string): Promise<string> {
   return join(root, 'SKILL.md');
 }
 
+async function canonicalizeInstalledSkillMetadata(
+  root: string,
+  slug: string,
+  displayName?: string,
+): Promise<void> {
+  const markerPath = await findSkillMarkerPath(root);
+  let content: string;
+  try {
+    content = await fs.readFile(markerPath, 'utf8');
+  } catch {
+    return;
+  }
+  const next = rewriteSkillFrontmatter(content, slug, displayName);
+  if (next !== content) {
+    await fs.writeFile(markerPath, next, 'utf8');
+  }
+}
+
+export function rewriteSkillFrontmatter(
+  content: string,
+  slug: string,
+  displayName?: string,
+): string {
+  const match = /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(\r?\n?)/.exec(content);
+  if (!match) return content;
+
+  const display = stringValue(displayName);
+  const lines = match[1].split(/\r?\n/);
+  const nextLines: string[] = [];
+  let sawName = false;
+  let sawSlug = false;
+  let sawDisplayName = false;
+
+  for (const line of lines) {
+    if (/^name\s*:/.test(line)) {
+      nextLines.push(`name: ${slug}`);
+      sawName = true;
+      continue;
+    }
+    if (/^slug\s*:/.test(line)) {
+      nextLines.push(`slug: ${slug}`);
+      sawSlug = true;
+      continue;
+    }
+    if (/^displayName\s*:/.test(line)) {
+      if (display) {
+        nextLines.push(`displayName: ${JSON.stringify(display)}`);
+        sawDisplayName = true;
+      }
+      continue;
+    }
+    nextLines.push(line);
+  }
+
+  if (!sawName) nextLines.unshift(`name: ${slug}`);
+  if (!sawSlug) {
+    const nameIndex = nextLines.findIndex((line) => /^name\s*:/.test(line));
+    nextLines.splice(nameIndex >= 0 ? nameIndex + 1 : 0, 0, `slug: ${slug}`);
+  }
+  if (display && display !== slug && !sawDisplayName) {
+    const slugIndex = nextLines.findIndex((line) => /^slug\s*:/.test(line));
+    nextLines.splice(slugIndex >= 0 ? slugIndex + 1 : nextLines.length, 0, `displayName: ${JSON.stringify(display)}`);
+  }
+
+  return `---\n${nextLines.join('\n')}\n---${match[2] || '\n'}${content.slice(match[0].length)}`;
+}
+
 async function assertInside(baseDir: string, targetDir: string): Promise<void> {
   const base = resolve(baseDir);
   const target = resolve(targetDir);
@@ -364,6 +446,10 @@ function normalizePath(value: string | null | undefined): string | null {
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
 export function createInstallId(): string {

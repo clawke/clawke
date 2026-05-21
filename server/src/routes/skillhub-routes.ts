@@ -4,9 +4,7 @@ import type { GatewayInfo } from '../types/gateways.js';
 import type { SkillGatewayRequest, SkillGatewayResponse, SkillHubInstallPackage } from '../types/skills.js';
 import { loadConfig } from '../config.js';
 import { sendSkillGatewayRequest, SkillGatewayError } from '../upstream/skill-gateway-client.js';
-import { broadcastToClients } from '../downstream/client-server.js';
 import {
-  canUseManagedSkillHubInstall,
   startManagedSkillHubInstall,
   type ManagedSkillHubInstallResult,
 } from '../services/skillhub-install-runner.js';
@@ -20,24 +18,16 @@ interface SkillHubRoutesDeps {
   getConnectedAccountIds?: () => string[];
   getConnectedGateways?: () => GatewayInfo[];
   sendSkillRequest?: (payload: SkillGatewayRequest) => Promise<SkillGatewayResponse>;
-  canUseManagedSkillHubInstall?: (input: ManagedInstallCapabilityInput) => boolean;
   startManagedSkillHubInstall?: (input: ManagedInstallStartInput) => Promise<ManagedSkillHubInstallResult> | ManagedSkillHubInstallResult;
 }
 
 type SkillHubInstallMode = 'auto' | 'managed' | 'gateway_native';
 
-interface ManagedInstallCapabilityInput {
-  installPackage: SkillHubInstallPackage;
-  gateways: GatewayInfo[];
-}
-
 interface ManagedInstallStartInput {
   installId: string;
   installMode: 'managed';
   installPackage: SkillHubInstallPackage;
-  fallbackGatewayId?: string;
   refreshGateways?: (slug: string) => Promise<void>;
-  fallbackToGateway?: (err: unknown) => Promise<void>;
 }
 
 let deps: SkillHubRoutesDeps = {};
@@ -67,25 +57,16 @@ export async function installSkillHubSkill(req: Request, res: Response): Promise
   const installId = `skillhub_${randomUUID()}`;
   const installMode = installModeFromBody(req.body);
 
-  if (installMode !== 'gateway_native' && shouldUseManagedInstall(installPackage)) {
+  if (installMode !== 'gateway_native') {
     try {
       const starter = deps.startManagedSkillHubInstall || startManagedSkillHubInstall;
-      const fallbackGatewayId = resolveBackgroundFallbackAccountId(req, installPackage);
       const response = await starter({
         installId,
         installMode: 'managed',
         installPackage,
-        fallbackGatewayId,
         refreshGateways: async () => {
           await refreshConnectedSkillGateways();
         },
-        ...(fallbackGatewayId
-          ? {
-              fallbackToGateway: async () => {
-                await sendGatewayNativeInstallStatus(installPackage, installId, fallbackGatewayId);
-              },
-            }
-          : {}),
       });
       sendInstallAccepted(res, response, {
         installId,
@@ -94,11 +75,9 @@ export async function installSkillHubSkill(req: Request, res: Response): Promise
       });
       return;
     } catch (err) {
-      if (installMode === 'managed' || !isManagedInstallFallbackAllowed(err)) {
-        const message = err instanceof Error ? err.message : String(err);
-        sendJsonResultError(res, 500, 'managed_install_failed', message);
-        return;
-      }
+      const message = err instanceof Error ? err.message : String(err);
+      sendJsonResultError(res, 500, 'managed_install_failed', message);
+      return;
     }
   }
 
@@ -158,42 +137,6 @@ async function installSkillHubSkillViaGateway(
   }
 }
 
-async function sendGatewayNativeInstallStatus(
-  installPackage: SkillHubInstallPackage,
-  installId: string,
-  accountId: string,
-): Promise<void> {
-  broadcastToClients({
-    payload_type: 'skillhub_install_status',
-    installId,
-    slug: installPackage.slug,
-    installMode: 'gateway_native',
-    gatewayId: accountId,
-    status: 'gateway_installing',
-    message: 'Gateway 原生安装中',
-  });
-  const sender = deps.sendSkillRequest || sendSkillGatewayRequest;
-  const response = await sender({
-    type: 'skillhub_install',
-    request_id: installId,
-    install_id: installId,
-    account_id: accountId,
-    install_mode: 'gateway_native',
-    package: installPackage,
-  });
-  if (response.status && response.status !== 'accepted') {
-    broadcastToClients({
-      payload_type: 'skillhub_install_status',
-      installId,
-      slug: installPackage.slug,
-      installMode: 'gateway_native',
-      gatewayId: accountId,
-      status: response.status,
-      message: response.message || (response.installed === false ? '安装请求已提交' : '安装完成'),
-    });
-  }
-}
-
 function sendInstallAccepted(
   res: Response,
   response: ManagedSkillHubInstallResult,
@@ -217,24 +160,6 @@ function sendInstallAccepted(
 function normalizeBaseUrl(baseUrl: string | undefined): string {
   const value = (baseUrl || DEFAULT_SKILLHUB_API_BASE_URL).trim();
   return value.endsWith('/') ? value.slice(0, -1) : value;
-}
-
-function shouldUseManagedInstall(installPackage: SkillHubInstallPackage): boolean {
-  const checker = deps.canUseManagedSkillHubInstall || defaultCanUseManagedInstall;
-  return checker({
-    installPackage,
-    gateways: deps.getConnectedGateways?.() || [],
-  });
-}
-
-function defaultCanUseManagedInstall(input: ManagedInstallCapabilityInput): boolean {
-  return canUseManagedSkillHubInstall(input);
-}
-
-function isManagedInstallFallbackAllowed(err: unknown): boolean {
-  if (!err || typeof err !== 'object') return true;
-  const maybe = err as { fallbackAllowed?: unknown };
-  return maybe.fallbackAllowed !== false;
 }
 
 function resolveAccountId(req: Request, res: Response, installPackage: SkillHubInstallPackage): string | null {
@@ -283,20 +208,6 @@ function resolveFallbackAccountId(req: Request, res: Response, installPackage: S
 
   sendJsonResultError(res, 400, 'account_required', 'gateway_id is required when gateway native install is needed.');
   return null;
-}
-
-function resolveBackgroundFallbackAccountId(req: Request, installPackage: SkillHubInstallPackage): string | undefined {
-  const explicit = explicitAccountId(req);
-  if (explicit) return explicit;
-  const requestedGatewayType = stringValue(req.body?.gatewayType) || inferredGatewayType(installPackage);
-  const byGatewayType = resolveAccountIdByGatewayType(requestedGatewayType);
-  if (byGatewayType) return byGatewayType;
-
-  const skillGateways = (deps.getConnectedGateways?.() || [])
-    .filter((gateway) => gateway.status === 'online' && gateway.capabilities.includes('skills'));
-  if (skillGateways.length === 1) return skillGateways[0].gateway_id;
-  const connected = deps.getConnectedAccountIds?.() || [];
-  return connected.length === 1 ? connected[0] : undefined;
 }
 
 async function refreshConnectedSkillGateways(): Promise<void> {

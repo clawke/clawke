@@ -41,6 +41,11 @@ public final class GeneratedPluginRegistrant {
       Log.e(TAG, "Error registering plugin google_sign_in_android, io.flutter.plugins.googlesignin.GoogleSignInPlugin", e);
     }
     try {
+      flutterEngine.getPlugins().add(new dev.flutter.plugins.integration_test.IntegrationTestPlugin());
+    } catch (Exception e) {
+      Log.e(TAG, "Error registering plugin integration_test, dev.flutter.plugins.integration_test.IntegrationTestPlugin", e);
+    }
+    try {
       flutterEngine.getPlugins().add(new com.crazecoder.openfile.OpenFilePlugin());
     } catch (Exception e) {
       Log.e(TAG, "Error registering plugin open_filex, com.crazecoder.openfile.OpenFilePlugin", e);

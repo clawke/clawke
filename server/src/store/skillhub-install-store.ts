@@ -1,8 +1,8 @@
 import { promises as fs } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
-import { CLAWKE_HOME } from './clawke-home.js';
+import { CLAWKE_BASE_HOME } from './clawke-home.js';
 
-export const SKILLHUB_SKILLS_DIR = join(CLAWKE_HOME, 'skills');
+export const SKILLHUB_SKILLS_DIR = join(CLAWKE_BASE_HOME, 'skills');
 const SKILLHUB_DOT_DIR = '.skillhub';
 const CLAWHUB_DOT_DIR = '.clawhub';
 

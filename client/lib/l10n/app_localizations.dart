@@ -530,6 +530,18 @@ abstract class AppLocalizations {
   /// **'加载失败，重试'**
   String get skillHubLoadRetry;
 
+  /// No description provided for @skillHubRequestTimeout.
+  ///
+  /// In zh, this message translates to:
+  /// **'SkillHub 服务响应较慢，请稍后重试。'**
+  String get skillHubRequestTimeout;
+
+  /// No description provided for @skillHubNetworkError.
+  ///
+  /// In zh, this message translates to:
+  /// **'SkillHub 网络请求失败，请稍后重试。'**
+  String get skillHubNetworkError;
+
   /// No description provided for @skillHubSearchHint.
   ///
   /// In zh, this message translates to:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import shutil
@@ -16,6 +17,7 @@ import yaml
 
 
 SAFE_SEGMENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+logger = logging.getLogger("clawke.hermes.skills")
 
 
 class HermesSkillAdapter:
@@ -309,11 +311,15 @@ class HermesSkillAdapter:
     ) -> list[dict[str, Any]]:
         if not root.is_dir():
             return []
-        return [
-            self._read_skill(root, skill_md, enabled, source, source_label, writable, deletable)
-            for skill_md in root.rglob("SKILL.md")
-            if not any(part.startswith(".") for part in skill_md.relative_to(root).parts)
-        ]
+        skills: list[dict[str, Any]] = []
+        for skill_md in root.rglob("SKILL.md"):
+            if any(part.startswith(".") for part in skill_md.relative_to(root).parts):
+                continue
+            try:
+                skills.append(self._read_skill(root, skill_md, enabled, source, source_label, writable, deletable))
+            except Exception as exc:
+                logger.warning("Skipping invalid skill metadata: path=%s error=%s", skill_md, exc)
+        return skills
 
     def _read_skill(
         self,

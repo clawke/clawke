@@ -50,6 +50,27 @@ class NativeSkillHubInstallTest(unittest.TestCase):
                 self.assertTrue(adapter.delete_skill("general/weather"))
                 self.assertFalse(skill_dir.exists())
 
+    def test_list_skills_skips_invalid_skill_names(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            valid_dir = root / "skills" / "weather"
+            invalid_dir = root / "skills" / "word-docx"
+            valid_dir.mkdir(parents=True)
+            invalid_dir.mkdir(parents=True)
+            (valid_dir / "SKILL.md").write_text(
+                "---\nname: weather\ndescription: Weather lookup\n---\n",
+                encoding="utf-8",
+            )
+            (invalid_dir / "SKILL.md").write_text(
+                "---\nname: Word / DOCX\ndescription: Word documents\n---\n",
+                encoding="utf-8",
+            )
+            adapter = HermesSkillAdapter(clawke_home=root)
+
+            skills = adapter.list_skills()
+
+            self.assertEqual([skill["id"] for skill in skills], ["general/weather"])
+
 
 if __name__ == "__main__":
     unittest.main()

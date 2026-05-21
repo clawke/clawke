@@ -6,9 +6,14 @@ import 'package:client/models/skillhub_item.dart';
 import 'package:client/providers/database_providers.dart';
 import 'package:client/providers/gateway_provider.dart';
 import 'package:client/providers/locale_provider.dart';
+import 'package:client/providers/skills_provider.dart'
+    show skillsControllerProvider;
 import 'package:client/services/skillhub_api_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+const skillHubReceiveTimeoutUiCode = 'skillhub_receive_timeout';
+const skillHubNetworkErrorUiCode = 'skillhub_network_error';
 
 const _unset = Object();
 
@@ -29,10 +34,14 @@ Future<void> refreshSkillCaches(Ref ref) async {
 
     final cache = ref.read(skillCacheRepositoryProvider);
     final locale = ref.read(localeProvider)?.languageCode ?? 'en';
+    final refreshedSkills = <String, List<ManagedSkill>>{};
     await Future.wait(
       candidates.map((gateway) async {
         try {
-          await cache.syncGateway(_skillScopeForGateway(gateway), locale);
+          refreshedSkills[gateway.gatewayId] = await cache.syncGateway(
+            _skillScopeForGateway(gateway),
+            locale,
+          );
         } catch (error) {
           debugPrint(
             '[SkillHub] ⚠️ refreshSkillCaches failed: gateway=${gateway.gatewayId} error=$error',
@@ -40,6 +49,9 @@ Future<void> refreshSkillCaches(Ref ref) async {
         }
       }),
     );
+    ref
+        .read(skillsControllerProvider.notifier)
+        .applyExternalRefresh(refreshedSkills);
   } catch (error) {
     debugPrint('[SkillHub] ⚠️ refreshSkillCaches skipped: error=$error');
   }
@@ -418,7 +430,13 @@ class SkillHubController extends StateNotifier<SkillHubState> {
   }
 
   String _errorMessage(Object error) {
-    if (error is SkillHubApiException) return error.message;
+    if (error is SkillHubApiException) {
+      return switch (error.actionError) {
+        'receive_timeout' => skillHubReceiveTimeoutUiCode,
+        'network_error' => skillHubNetworkErrorUiCode,
+        _ => error.message,
+      };
+    }
     return error.toString();
   }
 

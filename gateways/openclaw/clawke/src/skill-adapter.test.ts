@@ -9,53 +9,58 @@ import { OpenClawSkillAdapter, LegacyLocalOpenClawSkillAdapter } from "./skill-a
 
 test("OpenClawSkillAdapter lists and toggles skills through OpenClaw Gateway RPC", async () => {
   const calls: Array<{ method: string; params?: unknown }> = [];
-  const adapter = new OpenClawSkillAdapter(undefined, {
-    rpc: async (method, params) => {
-      calls.push({ method, params });
-      if (method === "skills.status") {
-        return {
-          skills: [
-            {
-              skillKey: "web-search",
-              name: "web-search",
-              description: "Search the web",
-              source: "openclaw-bundled",
-              bundled: true,
-              filePath: "/opt/openclaw/skills/web-search/SKILL.md",
-              baseDir: "/opt/openclaw/skills/web-search",
-              disabled: false,
-              eligible: true,
-              always: false,
-              missing: {},
-            },
-          ],
-        };
-      }
-      if (method === "skills.update") {
-        assert.deepEqual(params, { skillKey: "web-search", enabled: false });
-        return { ok: true, skillKey: "web-search" };
-      }
-      throw new Error(`Unexpected method: ${method}`);
-    },
-  });
+  const root = await mkdtemp(join(tmpdir(), "openclaw-rpc-skill-list-"));
+  try {
+    const adapter = new OpenClawSkillAdapter(root, {
+      rpc: async (method, params) => {
+        calls.push({ method, params });
+        if (method === "skills.status") {
+          return {
+            skills: [
+              {
+                skillKey: "web-search",
+                name: "web-search",
+                description: "Search the web",
+                source: "openclaw-bundled",
+                bundled: true,
+                filePath: "/opt/openclaw/skills/web-search/SKILL.md",
+                baseDir: "/opt/openclaw/skills/web-search",
+                disabled: false,
+                eligible: true,
+                always: false,
+                missing: {},
+              },
+            ],
+          };
+        }
+        if (method === "skills.update") {
+          assert.deepEqual(params, { skillKey: "web-search", enabled: false });
+          return { ok: true, skillKey: "web-search" };
+        }
+        throw new Error(`Unexpected method: ${method}`);
+      },
+    });
 
-  const listed = await adapter.listSkills();
+    const listed = await adapter.listSkills();
 
-  assert.equal(listed.length, 1);
-  assert.equal(listed[0].id, "openclaw-bundled/web-search");
-  assert.equal(listed[0].enabled, true);
-  assert.equal(listed[0].writable, false);
-  assert.equal(listed[0].deletable, false);
-  assert.equal(listed[0].path, "/opt/openclaw/skills/web-search/SKILL.md");
+    assert.equal(listed.length, 1);
+    assert.equal(listed[0].id, "openclaw-bundled/web-search");
+    assert.equal(listed[0].enabled, true);
+    assert.equal(listed[0].writable, false);
+    assert.equal(listed[0].deletable, false);
+    assert.equal(listed[0].path, "/opt/openclaw/skills/web-search/SKILL.md");
 
-  const disabled = await adapter.setEnabled("openclaw-bundled/web-search", false);
+    const disabled = await adapter.setEnabled("openclaw-bundled/web-search", false);
 
-  assert.equal(disabled.id, "openclaw-bundled/web-search");
-  assert.equal(calls[0].method, "skills.status");
-  assert.deepEqual(calls[1], {
-    method: "skills.update",
-    params: { skillKey: "web-search", enabled: false },
-  });
+    assert.equal(disabled.id, "openclaw-bundled/web-search");
+    assert.equal(calls[0].method, "skills.status");
+    assert.deepEqual(calls[1], {
+      method: "skills.update",
+      params: { skillKey: "web-search", enabled: false },
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("OpenClawSkillAdapter gets duplicate skill names by full source id", async () => {
@@ -92,6 +97,70 @@ test("OpenClawSkillAdapter gets duplicate skill names by full source id", async 
   assert.equal(personal?.description, "Personal duplicate");
   assert.equal(bundled?.id, "openclaw-bundled/duplicate");
   assert.equal(bundled?.description, "Built-in duplicate");
+});
+
+test("OpenClawSkillAdapter falls back to local Clawke skills when RPC skill status fails", async () => {
+  const root = await mkdtemp(join(tmpdir(), "openclaw-rpc-local-fallback-"));
+  try {
+    writeSkill(join(root, "skills"), "weather", "weather", "Weather lookup");
+    writeSkill(join(root, "skills"), "word-docx", "Word / DOCX", "Word documents");
+    const adapter = new OpenClawSkillAdapter(root, {
+      rpc: async (method) => {
+        assert.equal(method, "skills.status");
+        throw new Error("Invalid skill name: Word / DOCX");
+      },
+    });
+
+    const listed = await adapter.listSkills();
+
+    assert.deepEqual(listed.map((skill) => skill.id), ["general/weather"]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("OpenClawSkillAdapter shows shadowed Clawke managed skills", async () => {
+  const root = await mkdtemp(join(tmpdir(), "openclaw-rpc-shadowed-skill-"));
+  try {
+    writeSkill(join(root, "skills"), "openclaw-github-assistant", "github", "Clawke GitHub helper");
+    const adapter = new OpenClawSkillAdapter(root, {
+      rpc: async (method) => {
+        assert.equal(method, "skills.status");
+        return {
+          skills: [
+            {
+              skillKey: "github",
+              name: "github",
+              description: "Built-in GitHub helper",
+              source: "openclaw-bundled",
+              bundled: true,
+              disabled: false,
+            },
+          ],
+        };
+      },
+    });
+
+    const listed = await adapter.listSkills();
+
+    assert.deepEqual(listed.map((skill) => skill.id), [
+      "openclaw-bundled/github",
+      "general/github",
+    ]);
+    const shadowed = listed.find((skill) => skill.id === "general/github");
+    assert.equal(shadowed?.sourceLabel, "Clawke skills (shadowed)");
+    assert.equal(shadowed?.hasConflict, true);
+    assert.equal(shadowed?.enabled, false);
+    assert.equal(shadowed?.writable, false);
+    assert.equal(shadowed?.deletable, true);
+    assert.equal(shadowed?.path, "openclaw-github-assistant/SKILL.md");
+    await assert.rejects(
+      () => adapter.setEnabled("general/github", true),
+      /shadowed/,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("OpenClawSkillAdapter edits and deletes file-backed non-bundled skills locally", async () => {
@@ -277,11 +346,8 @@ test("OpenClawSkillAdapter installs ClawHub-backed SkillHub package through nati
   });
 
   const installed = await adapter.installSkillHubPackage({
-    id: "204",
     slug: "github-helper",
-    name: "GitHub Helper",
     source: "clawhub",
-    packageType: "bundle",
   });
 
   assert.equal(installed?.id, "openclaw-workspace/github-helper");
@@ -330,6 +396,23 @@ test("OpenClawSkillAdapter manages gateway-host Clawke skills", async () => {
     assert.equal(restored.enabled, true);
     assert.equal(existsSync(join(root, "skills", "apple-notes", "SKILL.md")), true);
     assert.equal(readConfig(openClawConfigPath).skills.entries["apple-notes"].enabled, true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("LegacyLocalOpenClawSkillAdapter skips invalid skill names while listing", async () => {
+  const root = await mkdtemp(join(tmpdir(), "openclaw-skill-adapter-invalid-"));
+  try {
+    writeSkill(join(root, "skills"), "weather", "weather", "Weather lookup");
+    writeSkill(join(root, "skills"), "word-docx", "Word / DOCX", "Word documents");
+    const adapter = new LegacyLocalOpenClawSkillAdapter(root, {
+      openClawConfigPath: join(root, "openclaw.json"),
+    });
+
+    const listed = adapter.listSkills();
+
+    assert.deepEqual(listed.map((skill) => skill.id), ["general/weather"]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

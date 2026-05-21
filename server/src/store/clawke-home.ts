@@ -8,7 +8,10 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { resolveProfileContext } from '../profile.js';
 
-export const CLAWKE_HOME = resolveProfileContext().runtimeHome;
+const PROFILE_CONTEXT = resolveProfileContext();
+
+export const CLAWKE_BASE_HOME = PROFILE_CONTEXT.baseHome;
+export const CLAWKE_HOME = PROFILE_CONTEXT.runtimeHome;
 
 export const DATA_DIR = path.join(CLAWKE_HOME, 'data');
 export const UPLOAD_DIR = path.join(CLAWKE_HOME, 'uploads');

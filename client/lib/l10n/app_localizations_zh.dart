@@ -235,6 +235,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get skillHubLoadRetry => '加载失败，重试';
 
   @override
+  String get skillHubRequestTimeout => 'SkillHub 服务响应较慢，请稍后重试。';
+
+  @override
+  String get skillHubNetworkError => 'SkillHub 网络请求失败，请稍后重试。';
+
+  @override
   String get skillHubSearchHint => '搜索名称、摘要、slug';
 
   @override

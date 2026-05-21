@@ -28,9 +28,9 @@ export interface OpenClawSkillDraft {
 }
 
 export interface OpenClawSkillHubInstallPackage {
-  id: string;
+  id?: string;
   slug: string;
-  name: string;
+  name?: string;
   source?: string;
   sourceOwner?: string;
   version?: string;
@@ -131,11 +131,18 @@ export class OpenClawSkillAdapter {
   }
 
   async listSkills(): Promise<OpenClawManagedSkill[]> {
-    const result = await this.rpc("skills.status");
+    let result: unknown;
+    try {
+      result = await this.rpc("skills.status");
+    } catch (err) {
+      if (!this.isSkillMetadataError(err)) throw err;
+      return this.legacyLocal.listSkills().sort((a, b) => a.name.localeCompare(b.name));
+    }
     const byId = new Map<string, OpenClawManagedSkill>();
     for (const skill of this.extractSkills(result).map((item) => this.withLocalContent(this.toManagedSkill(item)))) {
       if (!this.hiddenLocalIds.has(skill.id)) byId.set(skill.id, skill);
     }
+    this.addShadowedClawkeManagedSkills(byId);
     for (const [id, skill] of this.localOverrides) {
       if (skill.absolutePath && existsSync(skill.absolutePath)) {
         byId.set(id, this.withLocalContent(skill));
@@ -241,6 +248,9 @@ export class OpenClawSkillAdapter {
   }
 
   async setEnabled(id: string, enabled: boolean): Promise<OpenClawManagedSkill> {
+    if (this.isClawkeManagedLocalSkill(id)) {
+      throw new Error(`Skill is shadowed and cannot be toggled: ${id}`);
+    }
     const skillKey = this.skillKeyFromId(id);
     await this.rpc("skills.update", { skillKey, enabled });
     return (await this.getSkill(id)) ?? this.placeholderSkill(id, skillKey, enabled);
@@ -360,6 +370,37 @@ export class OpenClawSkillAdapter {
     };
   }
 
+  private addShadowedClawkeManagedSkills(byId: Map<string, OpenClawManagedSkill>): void {
+    const returnedPaths = new Set(
+      [...byId.values()]
+        .map((skill) => skill.absolutePath ? resolve(skill.absolutePath) : "")
+        .filter(Boolean),
+    );
+    const returnedKeys = new Set([...byId.values()].map((skill) => this.skillKeyFromId(skill.id)));
+    for (const skill of this.legacyLocal.listSkills()) {
+      if (skill.sourceLabel !== "Clawke skills") continue;
+      if (byId.has(skill.id)) continue;
+      if (skill.absolutePath && returnedPaths.has(resolve(skill.absolutePath))) continue;
+      if (!returnedKeys.has(this.skillKeyFromId(skill.id))) continue;
+      byId.set(skill.id, this.withLocalContent({
+        ...skill,
+        enabled: false,
+        sourceLabel: "Clawke skills (shadowed)",
+        writable: false,
+        deletable: true,
+        hasConflict: true,
+        frontmatter: {
+          ...skill.frontmatter,
+          shadowed: true,
+        },
+      }));
+    }
+  }
+
+  private isClawkeManagedLocalSkill(id: string): boolean {
+    return this.legacyLocal.listSkills().some((skill) => skill.id === id && skill.sourceLabel === "Clawke skills");
+  }
+
   private placeholderSkill(id: string, skillKey: string, enabled: boolean): OpenClawManagedSkill {
     const category = this.categoryFromId(id);
     return {
@@ -452,11 +493,12 @@ export class OpenClawSkillAdapter {
   }
 
   private normalizeSkillHubPackage(installPackage: OpenClawSkillHubInstallPackage): OpenClawSkillHubInstallPackage {
+    const slug = this.normalizeSegment(installPackage.slug);
     const normalized = {
       ...installPackage,
-      id: installPackage.id.trim(),
-      slug: this.normalizeSegment(installPackage.slug),
-      name: installPackage.name.trim(),
+      id: installPackage.id?.trim() || "",
+      slug,
+      name: installPackage.name?.trim() || slug,
       source: installPackage.source?.trim() || undefined,
       sourceOwner: installPackage.sourceOwner?.trim() || undefined,
       version: installPackage.version?.trim() || undefined,
@@ -466,9 +508,9 @@ export class OpenClawSkillAdapter {
       gatewayType: installPackage.gatewayType?.trim() || undefined,
     };
     this.requireSafeSegment(normalized.slug, "SkillHub package slug");
+    if (normalized.source?.toLowerCase() === "clawhub") return normalized;
     if (!normalized.id) throw new Error("SkillHub package id is required");
     if (!normalized.name) throw new Error("SkillHub package name is required");
-    if (normalized.source?.toLowerCase() === "clawhub") return normalized;
     if (!normalized.version) throw new Error("SkillHub package version is required");
     if (!normalized.packageUrl) throw new Error("SkillHub packageUrl is required");
     if (!normalized.packageSha256 || !/^[a-fA-F0-9]{64}$/.test(normalized.packageSha256)) {
@@ -548,6 +590,11 @@ export class OpenClawSkillAdapter {
 
   private isRecord(value: unknown): value is Record<string, unknown> {
     return Boolean(value && typeof value === "object");
+  }
+
+  private isSkillMetadataError(err: unknown): boolean {
+    const message = err instanceof Error ? err.message : String(err);
+    return /\bInvalid skill (?:name|category|id|key)\b/.test(message);
   }
 
   private requireSafeSegment(value: string, label: string): void {
@@ -789,7 +836,15 @@ export class LegacyLocalOpenClawSkillAdapter {
   private scanRoot(root: SkillRoot): OpenClawManagedSkill[] {
     const rootPath = resolve(root.root);
     if (!existsSync(rootPath)) return [];
-    return this.findSkillFiles(rootPath).map((file) => this.readSkill(root, file));
+    const skills: OpenClawManagedSkill[] = [];
+    for (const file of this.findSkillFiles(rootPath)) {
+      try {
+        skills.push(this.readSkill(root, file));
+      } catch {
+        // 跳过单个坏 Skill，避免拖垮整个列表 — Skip one malformed skill instead of failing the whole list.
+      }
+    }
+    return skills;
   }
 
   private applyStateAndConfig(

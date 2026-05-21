@@ -38,6 +38,27 @@ def test_hermes_skill_adapter_manages_gateway_host_clawke_skills(tmp_path: Path)
     assert (tmp_path / "skills" / "apple-notes" / "SKILL.md").exists()
 
 
+def test_list_skills_skips_invalid_skill_names(tmp_path: Path):
+    managed = tmp_path / "skills"
+    valid_dir = managed / "weather"
+    invalid_dir = managed / "word-docx"
+    valid_dir.mkdir(parents=True)
+    invalid_dir.mkdir(parents=True)
+    (valid_dir / "SKILL.md").write_text(
+        "---\nname: weather\ndescription: Weather lookup\n---\n",
+        encoding="utf-8",
+    )
+    (invalid_dir / "SKILL.md").write_text(
+        "---\nname: Word / DOCX\ndescription: Word documents\n---\n",
+        encoding="utf-8",
+    )
+    adapter = HermesSkillAdapter(clawke_home=tmp_path)
+
+    skills = adapter.list_skills()
+
+    assert [skill["id"] for skill in skills] == ["general/weather"]
+
+
 def test_ensure_hermes_extra_dir_keeps_managed_root_under_skills_block(
     tmp_path: Path,
     monkeypatch,

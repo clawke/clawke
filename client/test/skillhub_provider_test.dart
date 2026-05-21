@@ -4,10 +4,10 @@ import 'package:client/data/repositories/skill_cache_repository.dart';
 import 'package:client/models/gateway_info.dart';
 import 'package:client/models/managed_skill.dart';
 import 'package:client/models/skillhub_item.dart';
-import 'package:client/providers/database_providers.dart';
 import 'package:client/providers/gateway_provider.dart';
 import 'package:client/providers/locale_provider.dart';
 import 'package:client/providers/skillhub_provider.dart';
+import 'package:client/providers/skills_provider.dart';
 import 'package:client/services/skillhub_api_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -44,6 +44,26 @@ void main() {
     expect(state.items.single.name, 'GitHub Helper');
     expect(state.isLoading, isFalse);
     expect(state.errorMessage, isNull);
+  });
+
+  test('maps receive timeout to stable UI error code', () async {
+    final api = _FakeSkillHubApiService(
+      listError: const SkillHubApiException(
+        'SkillHub request timed out',
+        actionError: 'receive_timeout',
+      ),
+    );
+    final container = ProviderContainer(
+      overrides: [skillHubApiServiceProvider.overrideWithValue(api)],
+    );
+    addTearDown(container.dispose);
+
+    await container.read(skillHubControllerProvider.notifier).load();
+
+    final state = container.read(skillHubControllerProvider);
+    expect(state.items, isEmpty);
+    expect(state.isLoading, isFalse);
+    expect(state.errorMessage, skillHubReceiveTimeoutUiCode);
   });
 
   test('loadMore appends the next cursor page with current filters', () async {
@@ -151,6 +171,42 @@ void main() {
     expect(cache.syncedGatewayIds, ['openclaw-local']);
     expect(cache.syncedLocales, ['zh']);
   });
+
+  test(
+    'installed status refreshes the current skills management list',
+    () async {
+      final api = _FakeSkillHubApiService();
+      final cache = _RecordingSkillCacheRepository();
+      const gateways = [
+        GatewayInfo(
+          gatewayId: 'hermes',
+          displayName: 'Hermes',
+          gatewayType: 'hermes',
+          status: GatewayConnectionStatus.online,
+          capabilities: ['chat', 'skills'],
+        ),
+      ];
+      final container = _skillHubContainer(api, cache, gateways: gateways);
+      addTearDown(container.dispose);
+
+      await container
+          .read(skillsControllerProvider.notifier)
+          .syncGateways(gateways, force: true);
+      expect(container.read(skillsControllerProvider).skills, isEmpty);
+
+      cache.skillsByGateway['hermes'] = [_managedSkill()];
+      container.read(skillHubControllerProvider.notifier).handleInstallStatus({
+        'installId': 'skillhub_1',
+        'status': 'installed',
+        'slug': 'openclaw-github-assistant',
+      });
+      await _pumpSkillRefresh();
+
+      final skillsState = container.read(skillsControllerProvider);
+      expect(skillsState.selectedScope?.gatewayId, 'hermes');
+      expect(skillsState.skills.map((skill) => skill.id), ['general/github']);
+    },
+  );
 
   test(
     'keeps accepted SkillHub install pending until websocket status',
@@ -295,36 +351,40 @@ Future<void> _pumpSkillRefresh() async {
 
 ProviderContainer _skillHubContainer(
   _FakeSkillHubApiService api,
-  _RecordingSkillCacheRepository cache,
-) {
+  _RecordingSkillCacheRepository cache, {
+  List<GatewayInfo>? gateways,
+}) {
   return ProviderContainer(
     overrides: [
       skillHubApiServiceProvider.overrideWithValue(api),
       skillCacheRepositoryProvider.overrideWithValue(cache),
       onlineGatewayListProvider.overrideWith((ref) {
-        return Stream.value(const [
-          GatewayInfo(
-            gatewayId: 'openclaw-local',
-            displayName: 'OpenClaw',
-            gatewayType: 'openclaw',
-            status: GatewayConnectionStatus.online,
-            capabilities: ['chat', 'skills'],
-          ),
-          GatewayInfo(
-            gatewayId: 'chat-only',
-            displayName: 'Chat Only',
-            gatewayType: 'openclaw',
-            status: GatewayConnectionStatus.online,
-            capabilities: ['chat'],
-          ),
-          GatewayInfo(
-            gatewayId: 'offline-hermes',
-            displayName: 'Hermes',
-            gatewayType: 'hermes',
-            status: GatewayConnectionStatus.disconnected,
-            capabilities: ['chat', 'skills'],
-          ),
-        ]);
+        return Stream.value(
+          gateways ??
+              const [
+                GatewayInfo(
+                  gatewayId: 'openclaw-local',
+                  displayName: 'OpenClaw',
+                  gatewayType: 'openclaw',
+                  status: GatewayConnectionStatus.online,
+                  capabilities: ['chat', 'skills'],
+                ),
+                GatewayInfo(
+                  gatewayId: 'chat-only',
+                  displayName: 'Chat Only',
+                  gatewayType: 'openclaw',
+                  status: GatewayConnectionStatus.online,
+                  capabilities: ['chat'],
+                ),
+                GatewayInfo(
+                  gatewayId: 'offline-hermes',
+                  displayName: 'Hermes',
+                  gatewayType: 'hermes',
+                  status: GatewayConnectionStatus.disconnected,
+                  capabilities: ['chat', 'skills'],
+                ),
+              ],
+        );
       }),
       localeProvider.overrideWith((ref) {
         return LocaleNotifier(
@@ -337,17 +397,18 @@ ProviderContainer _skillHubContainer(
 }
 
 class _RecordingSkillCacheRepository implements SkillCacheRepository {
+  final Map<String, List<ManagedSkill>> skillsByGateway = {};
   final List<String> syncedGatewayIds = [];
   final List<String> syncedLocales = [];
 
   @override
   Stream<List<ManagedSkill>> watchSkills(String gatewayId, String locale) {
-    return Stream.value(const []);
+    return Stream.value(skillsByGateway[gatewayId] ?? const []);
   }
 
   @override
   Future<List<ManagedSkill>> getSkills(String gatewayId, String locale) async {
-    return const [];
+    return skillsByGateway[gatewayId] ?? const [];
   }
 
   @override
@@ -355,9 +416,10 @@ class _RecordingSkillCacheRepository implements SkillCacheRepository {
     SkillScope scope,
     String locale,
   ) async {
-    syncedGatewayIds.add(scope.gatewayId ?? 'global');
+    final gatewayId = scope.gatewayId ?? 'global';
+    syncedGatewayIds.add(gatewayId);
     syncedLocales.add(locale);
-    return const [];
+    return skillsByGateway[gatewayId] ?? const [];
   }
 
   @override
@@ -409,6 +471,24 @@ class _RecordingSkillCacheRepository implements SkillCacheRepository {
   ) async {}
 }
 
+ManagedSkill _managedSkill() {
+  return const ManagedSkill(
+    id: 'general/github',
+    name: 'github',
+    description: 'Query and manage GitHub repositories.',
+    category: 'general',
+    enabled: true,
+    source: 'external',
+    sourceLabel: 'Clawke skills',
+    writable: true,
+    deletable: true,
+    path: 'openclaw-github-assistant/SKILL.md',
+    root: '/Users/samy/.clawke/skills',
+    updatedAt: 0,
+    hasConflict: false,
+  );
+}
+
 class _FakeSkillHubApiService extends SkillHubApiService {
   String? lastQuery;
   String? lastCategory;
@@ -421,6 +501,7 @@ class _FakeSkillHubApiService extends SkillHubApiService {
   String? lastInstallMode;
   final SkillHubInstallResult installResult;
   final SkillHubApiException? installError;
+  final SkillHubApiException? listError;
   final List<SkillHubListResult>? listResults;
   final List<String?> cursors = [];
   final List<int?> limits = [];
@@ -436,6 +517,7 @@ class _FakeSkillHubApiService extends SkillHubApiService {
       message: '安装完成',
     ),
     this.installError,
+    this.listError,
     this.listResults,
   });
 
@@ -460,6 +542,7 @@ class _FakeSkillHubApiService extends SkillHubApiService {
     tags.add(tag);
     featuredFlags.add(featured);
     gatewayTypes.add(gatewayType);
+    if (listError != null) throw listError!;
     final results = listResults;
     if (results != null && cursors.length <= results.length) {
       return results[cursors.length - 1];
