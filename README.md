@@ -30,11 +30,9 @@ Manage OpenClaw, Hermes, Codex and Claude Code from your phone or desktop.
   🤖 <strong>Android</strong>
 </p>
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/readme-hero-dark.png">
-  <source media="(prefers-color-scheme: light)" srcset=".github/readme-hero-light.png">
-  <img width="1800" alt="Clawke native mobile workspace" src=".github/readme-hero-light.png">
-</picture>
+<p align="center">
+  <img width="1400" alt="Clawke desktop and mobile workspace screenshots" src=".github/readme-showcase-en.png" />
+</p>
 
 ## Features
 

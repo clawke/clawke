@@ -30,11 +30,9 @@ AI Agent 原生移动工作空间
   🤖 <strong>Android</strong>
 </p>
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/readme-hero-dark.png">
-  <source media="(prefers-color-scheme: light)" srcset=".github/readme-hero-light.png">
-  <img width="1800" alt="Clawke AI Agent 原生移动工作空间" src=".github/readme-hero-light.png">
-</picture>
+<p align="center">
+  <img width="1400" alt="Clawke 桌面端和移动端工作空间截图" src=".github/readme-showcase-zh.png" />
+</p>
 
 ## 功能特性
 
