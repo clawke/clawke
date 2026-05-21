@@ -704,6 +704,51 @@ describe('TS: VersionChecker', () => {
     assert.equal(VersionChecker.matchDownloadUrl(assets, 'windows', 'x64'), null);
   });
 
+  it('recommends client update when only the patch version differs', () => {
+    const result = new VersionChecker(undefined, 1, '3.8.2').checkVersion('3.8.1+84', 'macos', 'arm64');
+
+    assert.equal(result.payload_type, 'system_status');
+    assert.equal(result.status, 'update_available');
+    assert.equal(result.upgrade, 1);
+    assert.equal(result.update_info.action, 'recommended_client_update');
+    assert.equal(result.update_info.version, '3.8.2');
+    assert.equal(result.update_info.client_version, '3.8.1');
+    assert.equal(result.update_info.server_version, '3.8.2');
+    assert.match(result.update_info.message, /服务端版本为 3\.8\.2，客户端版本为 3\.8\.1/);
+    assert.match(result.update_info.message, /可能不兼容/);
+  });
+
+  it('requires client update when the client and server compatibility line differs', () => {
+    const result = new VersionChecker(undefined, 1, '3.9.0').checkVersion('3.8.1+84', 'macos', 'arm64');
+
+    assert.equal(result.payload_type, 'system_status');
+    assert.equal(result.status, 'update_available');
+    assert.equal(result.upgrade, 2);
+    assert.equal(result.update_info.action, 'required_client_update');
+    assert.equal(result.update_info.version, '3.9.0');
+    assert.equal(result.update_info.client_version, '3.8.1');
+    assert.equal(result.update_info.server_version, '3.9.0');
+    assert.match(result.update_info.message, /服务端版本为 3\.9\.0，客户端版本为 3\.8\.1/);
+  });
+
+  it('requires server update when client semantic version is newer than server', () => {
+    const result = new VersionChecker(undefined, 1, '3.8.1').checkVersion('3.9.0', 'macos', 'arm64');
+
+    assert.equal(result.payload_type, 'system_status');
+    assert.equal(result.status, 'update_available');
+    assert.equal(result.upgrade, 2);
+    assert.equal(result.update_info.action, 'required_server_update');
+    assert.equal(result.update_info.client_version, '3.9.0');
+    assert.equal(result.update_info.server_version, '3.8.1');
+    assert.match(result.update_info.message, /当前服务端版本为 3\.8\.1，客户端版本为 3\.9\.0/);
+  });
+
+  it('ignores client build number for server compatibility', () => {
+    const result = new VersionChecker(undefined, 1, '3.8.1').checkVersion('3.8.1+84', 'macos', 'arm64');
+
+    assert.equal(result, null);
+  });
+
   it('fetchLatestRelease defaults to the Clawke release API and logs failed URL', async () => {
     const originalFetch = global.fetch;
     const originalError = console.error;

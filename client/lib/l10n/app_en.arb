@@ -334,6 +334,7 @@
   "connectionAuthFailed": "Connection Auth Failed",
   "relayConnectionRefused": "Relay connection refused, token may have expired.\nPlease log in again to get new credentials.",
   "later": "Later",
+  "upgradeAcknowledge": "Got it",
   "reLogin": "Log In Again",
   "showToken": "Show Token",
   "hideToken": "Hide Token",

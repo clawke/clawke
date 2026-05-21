@@ -355,6 +355,7 @@
   "connectionAuthFailed": "连接认证失败",
   "relayConnectionRefused": "Relay 连接被拒绝，Token 可能已过期。\n请重新登录获取新的凭证。",
   "later": "稍后",
+  "upgradeAcknowledge": "知道了",
   "reLogin": "重新登录",
   "showToken": "显示 Token",
   "hideToken": "隐藏 Token",

@@ -249,7 +249,8 @@ export async function startClawkeServer() {
   });
   const configDir = path.join(serverDir, 'config');
   const versionChecker = new VersionChecker(configDir);
-  versionChecker.startPeriodicCheck();
+  // 第一阶段只做 Client/Server 本地兼容检查，暂不轮询 GitHub Release。
+  // Phase one only checks local Client/Server compatibility and does not poll GitHub releases.
   statsCollector.startPeriodicSave();
   // ━━━ 通信层 ━━━
   const { server: unifiedServer, wss: clientWss } = startUnifiedServer(HTTP_PORT);
