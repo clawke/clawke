@@ -26,7 +26,33 @@ void main() {
 
     // 无配置时应显示 WelcomeScreen（登录/配置页）
     expect(find.byType(WelcomeScreen), findsOneWidget);
+    expect(find.text('登录'), findsOneWidget);
+    expect(find.text('登录 Clawke 账号'), findsNothing);
+    expect(find.text('手动配置服务器'), findsOneWidget);
+
+    final loginCenter = tester.getCenter(find.text('登录'));
+    expect((loginCenter.dx - 640).abs(), lessThan(2));
+    expect(loginCenter.dy, greaterThan(360));
   });
+
+  testWidgets(
+    'WelcomeScreen scrolls on compact height without overlaying footer',
+    (WidgetTester tester) async {
+      SharedPreferences.setMockInitialValues({});
+
+      tester.view.physicalSize = const Size(390, 520);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      await tester.pumpWidget(const ProviderScope(child: ClawkeApp()));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(WelcomeScreen), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('ClawkeApp honors logout marker in forced direct mode', (
     WidgetTester tester,

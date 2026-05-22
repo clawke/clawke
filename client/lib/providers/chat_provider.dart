@@ -823,7 +823,12 @@ class WsMessageHandler with WidgetsBindingObserver {
       if (status == 'update_available' || status == 'up_to_date') {
         if (status == 'update_available') {
           UpgradeHandler.handleSystemStatusFromRef(json, _ref);
-          debugPrint('[WsMessageHandler] 🚀 Update available');
+          final upgradeInfo = _ref.read(upgradeInfoProvider);
+          debugPrint(
+            upgradeInfo == null
+                ? '[WsMessageHandler] Update status ignored'
+                : '[WsMessageHandler] 🚀 Update available',
+          );
         } else {
           _ref.read(upgradeInfoProvider.notifier).state = null;
         }

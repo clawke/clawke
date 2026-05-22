@@ -77,5 +77,17 @@ void main() {
 
       expect(first.notificationKey, second.notificationKey);
     });
+
+    test('matches current semantic version while ignoring build number', () {
+      final info = UpgradeInfo.fromSystemStatus({
+        'payload_type': 'system_status',
+        'status': 'update_available',
+        'upgrade': 1,
+        'update_info': {'version': 'v1.1.33'},
+      });
+
+      expect(info.targetsSameSemanticVersionAs('1.1.33+84'), isTrue);
+      expect(info.targetsSameSemanticVersionAs('1.1.34+1'), isFalse);
+    });
   });
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:client/providers/app_version_provider.dart';
 import 'upgrade_model.dart';
 import 'upgrade_dialog.dart';
 
@@ -22,6 +23,13 @@ class UpgradeHandler {
 
     final info = UpgradeInfo.fromSystemStatus(msg);
     if (!info.isAvailable) return false;
+    final currentVersion = ref
+        .read(appVersionProvider)
+        .maybeWhen(data: (value) => value.fullVersion, orElse: () => '');
+    if (_shouldIgnoreCurrentVersionUpdate(info, currentVersion)) {
+      ref.read(upgradeInfoProvider.notifier).state = null;
+      return true;
+    }
 
     // 保存到 provider
     ref.read(upgradeInfoProvider.notifier).state = info;
@@ -38,9 +46,28 @@ class UpgradeHandler {
 
     final info = UpgradeInfo.fromSystemStatus(msg);
     if (!info.isAvailable) return false;
+    final currentVersion = ref
+        .read(appVersionProvider)
+        .maybeWhen(data: (value) => value.fullVersion, orElse: () => '');
+    if (_shouldIgnoreCurrentVersionUpdate(info, currentVersion)) {
+      ref.read(upgradeInfoProvider.notifier).state = null;
+      return true;
+    }
 
     // 保存到 provider（UI 层响应 provider 变化来弹窗）
     ref.read(upgradeInfoProvider.notifier).state = info;
+    return true;
+  }
+
+  static bool _shouldIgnoreCurrentVersionUpdate(
+    UpgradeInfo info,
+    String currentVersion,
+  ) {
+    if (!info.targetsSameSemanticVersionAs(currentVersion)) return false;
+
+    debugPrint(
+      '[Upgrade] Ignored update_available for current version: target=${info.version}, current=$currentVersion',
+    );
     return true;
   }
 }

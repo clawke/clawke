@@ -200,7 +200,7 @@
   "appearanceAndLanguage": "外观与语言",
   "fontSize": "字体大小",
   "fontSizePreview": "预览文字 AaBbCc 你好世界",
-  "welcomeLogin": "登录 Clawke 账号",
+  "welcomeLogin": "登录",
   "welcomeManualConfig": "手动配置服务器",
   "loginTabLogin": "登录",
   "loginTabRegister": "注册",

@@ -1229,7 +1229,7 @@ abstract class AppLocalizations {
   /// No description provided for @welcomeLogin.
   ///
   /// In zh, this message translates to:
-  /// **'登录 Clawke 账号'**
+  /// **'登录'**
   String get welcomeLogin;
 
   /// No description provided for @welcomeManualConfig.

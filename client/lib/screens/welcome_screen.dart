@@ -15,8 +15,6 @@ import 'package:client/l10n/app_localizations.dart';
 class WelcomeScreen extends ConsumerWidget {
   static const double _horizontalPadding = 32;
   static const double _maxContentWidth = 400;
-  static const double _footerReserveHeight = 72;
-  static const double _footerBottomPadding = 24;
 
   final bool showBackButton;
 
@@ -44,221 +42,214 @@ class WelcomeScreen extends ConsumerWidget {
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final contentMinHeight =
-                (constraints.maxHeight - _footerReserveHeight).clamp(
-                  0.0,
-                  double.infinity,
-                );
-
-            return Stack(
-              children: [
-                Positioned.fill(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(
-                      _horizontalPadding,
-                      0,
-                      _horizontalPadding,
-                      _footerReserveHeight,
-                    ),
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(minHeight: contentMinHeight),
-                      child: Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(
-                            maxWidth: _maxContentWidth,
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const SizedBox(height: 60),
-
-                              // Logo
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(20),
-                                child: Image.asset(
-                                  'assets/images/logo.png',
-                                  width: 80,
-                                  height: 80,
-                                  fit: BoxFit.cover,
+            return SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(
+                horizontal: _horizontalPadding,
+              ),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minWidth: constraints.maxWidth,
+                  minHeight: constraints.maxHeight,
+                ),
+                child: IntrinsicHeight(
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(
+                              maxWidth: _maxContentWidth,
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(20),
+                                  child: Image.asset(
+                                    'assets/images/logo.png',
+                                    width: 80,
+                                    height: 80,
+                                    fit: BoxFit.cover,
+                                  ),
                                 ),
-                              ),
 
-                              const SizedBox(height: 24),
+                                const SizedBox(height: 24),
 
-                              // App name
-                              Text(
-                                'Clawke',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .headlineMedium
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                      color: colorScheme.onSurface,
-                                      letterSpacing: -0.5,
-                                    ),
-                              ),
+                                Text(
+                                  'Clawke',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineMedium
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        color: colorScheme.onSurface,
+                                        letterSpacing: -0.5,
+                                      ),
+                                ),
 
-                              const SizedBox(height: 8),
+                                const SizedBox(height: 8),
 
-                              // Tagline
-                              Text(
-                                'Your AI workspace, anywhere.',
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(
-                                      color: colorScheme.onSurface.withValues(
-                                        alpha: 0.6,
+                                Text(
+                                  'Your AI workspace, anywhere.',
+                                  style: Theme.of(context).textTheme.bodyMedium
+                                      ?.copyWith(
+                                        color: colorScheme.onSurface.withValues(
+                                          alpha: 0.6,
+                                        ),
+                                      ),
+                                ),
+
+                                const SizedBox(height: 48),
+
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 52,
+                                  child: FilledButton(
+                                    onPressed: () => _navigateToLogin(context),
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: colorScheme.primary,
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
                                       ),
                                     ),
-                              ),
-
-                              const SizedBox(height: 48),
-
-                              // Login button
-                              SizedBox(
-                                width: double.infinity,
-                                height: 52,
-                                child: FilledButton(
-                                  onPressed: () => _navigateToLogin(context),
-                                  style: FilledButton.styleFrom(
-                                    backgroundColor: colorScheme.primary,
-                                    foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
+                                    child: Text(
+                                      t.welcomeLogin,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.white,
+                                          ),
                                     ),
                                   ),
-                                  child: Text(
-                                    t.welcomeLogin,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.white,
-                                        ),
-                                  ),
                                 ),
-                              ),
 
-                              const SizedBox(height: 16),
+                                const SizedBox(height: 12),
 
-                              // Manual config button
-                              SizedBox(
-                                width: double.infinity,
-                                height: 52,
-                                child: OutlinedButton(
+                                TextButton.icon(
                                   onPressed: () =>
                                       _navigateToManualConfig(context),
-                                  style: OutlinedButton.styleFrom(
-                                    side: BorderSide(
-                                      color: colorScheme.outline.withValues(
-                                        alpha: 0.5,
-                                      ),
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
+                                  icon: Icon(
+                                    Icons.tune,
+                                    size: 16,
+                                    color: colorScheme.onSurface.withValues(
+                                      alpha: 0.55,
                                     ),
                                   ),
-                                  child: Text(
+                                  label: Text(
                                     t.welcomeManualConfig,
                                     style: Theme.of(context)
                                         .textTheme
-                                        .bodyMedium
+                                        .labelMedium
                                         ?.copyWith(
-                                          fontWeight: FontWeight.w500,
+                                          fontWeight: FontWeight.w600,
                                           color: colorScheme.onSurface
-                                              .withValues(alpha: 0.8),
+                                              .withValues(alpha: 0.62),
                                         ),
                                   ),
+                                  style: TextButton.styleFrom(
+                                    minimumSize: const Size(0, 36),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                    ),
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                  ),
                                 ),
-                              ),
 
-                              const SizedBox(height: 32),
+                                const SizedBox(height: 24),
 
-                              // Language selector
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.language,
-                                    size: 18,
-                                    color: colorScheme.onSurface.withValues(
-                                      alpha: 0.5,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  SegmentedButton<String>(
-                                    segments: const [
-                                      ButtonSegment(
-                                        value: 'zh',
-                                        label: Text('中文'),
-                                      ),
-                                      ButtonSegment(
-                                        value: 'en',
-                                        label: Text('English'),
-                                      ),
-                                    ],
-                                    selected: {currentLang},
-                                    onSelectionChanged: (codes) {
-                                      ref
-                                          .read(localeProvider.notifier)
-                                          .setLocale(Locale(codes.first));
-                                    },
-                                    style: const ButtonStyle(
-                                      visualDensity: VisualDensity.compact,
-                                      tapTargetSize:
-                                          MaterialTapTargetSize.shrinkWrap,
-                                    ),
-                                  ),
-                                ],
-                              ),
-
-                              const SizedBox(height: 32),
-
-                              // Legal Footer
-                              Wrap(
-                                alignment: WrapAlignment.center,
-                                crossAxisAlignment: WrapCrossAlignment.center,
-                                children: [
-                                  _LegalLink(
-                                    label: t.termsOfService,
-                                    onTap: () => openTermsOfService(context),
-                                  ),
-                                  Text(
-                                    ' · ',
-                                    style: TextStyle(
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.language,
+                                      size: 18,
                                       color: colorScheme.onSurface.withValues(
-                                        alpha: 0.3,
+                                        alpha: 0.5,
                                       ),
                                     ),
-                                  ),
-                                  _LegalLink(
-                                    label: t.privacyPolicy,
-                                    onTap: () => openPrivacyPolicy(context),
-                                  ),
-                                ],
-                              ),
-                            ],
+                                    const SizedBox(width: 8),
+                                    SegmentedButton<String>(
+                                      segments: const [
+                                        ButtonSegment(
+                                          value: 'zh',
+                                          label: Text('中文'),
+                                        ),
+                                        ButtonSegment(
+                                          value: 'en',
+                                          label: Text('English'),
+                                        ),
+                                      ],
+                                      selected: {currentLang},
+                                      onSelectionChanged: (codes) {
+                                        ref
+                                            .read(localeProvider.notifier)
+                                            .setLocale(Locale(codes.first));
+                                      },
+                                      style: const ButtonStyle(
+                                        visualDensity: VisualDensity.compact,
+                                        tapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: _footerBottomPadding,
-                  child: Text(
-                    'Clawke v$appVersion',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant.withValues(
-                        alpha: 0.5,
+
+                      const SizedBox(height: 32),
+
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          maxWidth: _maxContentWidth,
+                        ),
+                        child: Wrap(
+                          alignment: WrapAlignment.center,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            _LegalLink(
+                              label: t.termsOfService,
+                              onTap: () => openTermsOfService(context),
+                            ),
+                            Text(
+                              ' · ',
+                              style: TextStyle(
+                                color: colorScheme.onSurface.withValues(
+                                  alpha: 0.3,
+                                ),
+                              ),
+                            ),
+                            _LegalLink(
+                              label: t.privacyPolicy,
+                              onTap: () => openPrivacyPolicy(context),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
+
+                      const SizedBox(height: 12),
+
+                      Text(
+                        'Clawke v$appVersion',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant.withValues(
+                            alpha: 0.5,
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 24),
+                    ],
                   ),
                 ),
-              ],
+              ),
             );
           },
         ),

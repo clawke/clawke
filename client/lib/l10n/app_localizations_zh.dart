@@ -590,7 +590,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get fontSizePreview => '预览文字 AaBbCc 你好世界';
 
   @override
-  String get welcomeLogin => '登录 Clawke 账号';
+  String get welcomeLogin => '登录';
 
   @override
   String get welcomeManualConfig => '手动配置服务器';

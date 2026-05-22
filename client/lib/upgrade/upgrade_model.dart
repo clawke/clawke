@@ -71,6 +71,21 @@ class UpgradeInfo {
   /// 是否有升级可用
   bool get isAvailable => upgradeLevel > 0;
 
+  /// 是否指向当前语义版本 — Whether this update targets the same semantic version.
+  bool targetsSameSemanticVersionAs(String currentVersion) {
+    final target = normalizeSemanticVersion(version);
+    final current = normalizeSemanticVersion(currentVersion);
+    return target.isNotEmpty && target == current;
+  }
+
+  /// 规范化语义版本，忽略 build number — Normalize semver and ignore build metadata.
+  static String normalizeSemanticVersion(String value) {
+    final raw = value.trim().replaceFirst(RegExp(r'^v'), '').split('+').first;
+    final match = RegExp(r'^(\d+)\.(\d+)\.(\d+)$').firstMatch(raw);
+    if (match == null) return '';
+    return '${int.parse(match.group(1)!)}.${int.parse(match.group(2)!)}.${int.parse(match.group(3)!)}';
+  }
+
   /// 弹窗去重使用的稳定键 — Stable key used to de-duplicate upgrade prompts.
   String get notificationKey =>
       '$upgradeLevel|$action|$version|$clientVersion|$serverVersion';

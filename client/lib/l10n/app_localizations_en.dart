@@ -608,7 +608,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get fontSizePreview => 'Preview text AaBbCc Hello World';
 
   @override
-  String get welcomeLogin => 'Log In to Clawke';
+  String get welcomeLogin => 'Log In';
 
   @override
   String get welcomeManualConfig => 'Configure Server Manually';
