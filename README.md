@@ -132,6 +132,11 @@ clawke/
 ## Changelog
 
 <!-- README_CHANGELOG_START -->
+### v1.1.34 (2026-05-22)
+
+**[Enhancement]** Centered and simplified the welcome screen across desktop and mobile.
+**[Bug Fix]** Prevented false update prompts when the server advertises the same semantic version as the installed client.
+
 ### v1.1.33 (2026-05-21)
 
 **[New Feature]** Added server-client version compatibility checks and clearer version visibility during update flows.

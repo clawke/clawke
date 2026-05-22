@@ -4,6 +4,15 @@
 
 <!-- CHANGELOG_START -->
 
+## v1.1.34 (2026-05-22)
+
+**[Enhancement]** Cleaner welcome and sign-in entry.
+- Refined the first-run welcome screen so the primary login path is centered on desktop and mobile while manual server configuration stays secondary.
+- Shortened the login call to action and kept the compact language selector and legal footer responsive on small screens.
+
+**[Bug Fix]** Same-version update prompt handling.
+- Ignored `update_available` notices when the server advertises the same semantic version as the running client, preventing false upgrade prompts like `v1.1.33` for `1.1.33+84`.
+
 ## v1.1.33 (2026-05-21)
 
 **[New Feature]** Release compatibility and update visibility.
